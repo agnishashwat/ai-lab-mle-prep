@@ -24,6 +24,7 @@ For every 2-hour block, answer:
 
 - `curriculum.md` - the canonical 10-week plan (source of truth, copied from the skill file).
 - `progress.md` - master tracker: current week/day, status table, review queue.
+- `HANDOFF.md` - living cross-chat state (a new chat is used per day); read it first, update it last.
 - `interview-bank/` - polished, reusable Q&A and project stories.
 - `shared/` - templates, references, and utilities (`new_day.py`).
 - `week-01-...` ... `week-10-...` - one folder per week.
