@@ -1,0 +1,24 @@
+---
+description: Git commit/push policy for this repo (agnishashwat-owned)
+alwaysApply: true
+---
+
+# Auto-commit policy (agnishashwat repos)
+
+The owner has granted standing permission to commit **and push automatically** in this
+repository without asking first.
+
+- Commit and push completed, coherent units of work to `origin/main` without prompting
+  for confirmation.
+- Use the `agnishashwat` GitHub identity. The repo's local git config is set to
+  `agnishashwat <277563858+agnishashwat@users.noreply.github.com>`. If `gh`'s active
+  account is not `agnishashwat`, switch it: `gh auth switch --user agnishashwat`.
+- Write clear commit messages: imperative subject line, with the "why" in the body.
+- Group related changes into one logical commit; keep unrelated changes in separate ones.
+
+## Still ask first for
+
+- Destructive/irreversible git operations (force push, hard reset, history rewrite,
+  branch or tag deletion).
+- Changing repo visibility or deleting the remote.
+- Committing files that may contain secrets (`.env`, credentials, tokens).
