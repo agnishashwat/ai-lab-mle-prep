@@ -3,14 +3,19 @@
 ## Current Status
 
 - Current week: Week 01
-- Current day: Day 01
+- Current day: Day 02 (Day 01 complete)
 - Current focus: LM foundations + PyTorch fluency
+
+### Diagnostic (Day 01)
+
+- Top gaps: (1) ML systems / memory-cost reasoning, (2) interview-crisp RL derivations.
+- Fluency-probe baseline: 5/5 in ~20 min (slow on `gather` + masking); target <10 min.
 
 ## Weekly Progress
 
 | Week | Theme | Status | Deliverable |
 |---|---|---|---|
-| 01 | LM foundations + PyTorch | Not started | Tiny LM harness |
+| 01 | LM foundations + PyTorch | In progress (Day 1/5) | Tiny LM harness |
 | 02 | Transformers + generation | Not started | Decoder-only mini-implementation |
 | 03 | RL foundations | Not started | Toy policy-gradient implementation |
 | 04 | RLHF + PPO | Not started | PPO/RLHF explainer notebook |
