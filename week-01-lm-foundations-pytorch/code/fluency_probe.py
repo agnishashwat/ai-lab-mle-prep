@@ -21,10 +21,8 @@ import torch.nn.functional as F
 #    Hint: subtract the row-max before exp.
 # ----------------------------------------------------------------------------------
 def softmax(logits: torch.Tensor) -> torch.Tensor:
-    maxval = torch.max(logits, dim=-1, keepdim=True)
-    res = torch.exp(logits-maxval.values)/torch.exp(logits-maxval.values).sum(dim=-1, keepdim=True)
-    return res
-
+    e = torch.exp(logits-torch.amax(logits, dim=-1, keepdim=True))
+    return e/e.sum(dim=-1,keepdim=True)
 
 # ----------------------------------------------------------------------------------
 # 2. Mean next-token cross-entropy.
@@ -32,18 +30,17 @@ def softmax(logits: torch.Tensor) -> torch.Tensor:
 #    Do it via log-softmax + gather (do NOT call F.cross_entropy).
 # ----------------------------------------------------------------------------------
 def cross_entropy(logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-    logprob_all = torch.log_softmax(logits, dim=-1)
-    logprob_targets = logprob_all.gather(dim=-1, index=targets.unsqueeze(1)).squeeze(1)
-    return -logprob_targets.mean()
-
-
+    log_softmax_all = torch.log_softmax(logits, dim=-1)
+    log_softmax_target = log_softmax_all.gather(dim=-1, index=targets.unsqueeze(dim=-1)).squeeze(dim=-1)
+    return -log_softmax_target.mean()
 # ----------------------------------------------------------------------------------
 # 3. Masked mean of `values` over positions where mask == 1.
 #    values: (B, T) float, mask: (B, T) in {0,1}. Return a scalar: the mean over
 #    UNMASKED entries only (correct denominator = number of 1s).
 # ----------------------------------------------------------------------------------
 def masked_mean(values: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-    return (values * mask).sum()/mask.sum()
+    masked_val = values * mask
+    return masked_val.sum()/mask.sum()
 
 # ----------------------------------------------------------------------------------
 # 4. One manual SGD step (no torch.optim). Update w in-place: w <- w - lr * w.grad.
@@ -53,8 +50,6 @@ def sgd_step(w: torch.Tensor, lr: float) -> torch.Tensor:
     with torch.no_grad():
         w -= lr * w.grad
     return w
-
-
 # ----------------------------------------------------------------------------------
 # 5. STRETCH: per-token log-probs for a batch of sequences (the real LM shape).
 #    logits:  (B, T, V) float  -- raw scores for each position over the vocab
@@ -64,11 +59,9 @@ def sgd_step(w: torch.Tensor, lr: float) -> torch.Tensor:
 #    (No unsqueeze/squeeze confusion: think about which dim is the vocab.)
 # ----------------------------------------------------------------------------------
 def seq_token_logprobs(logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-    logprob_all = torch.log_softmax(logits, dim=-1)
-    logprob_targets = logprob_all.gather(dim=-1, index=targets.unsqueeze(dim=-1)).squeeze(dim=-1)
-    return logprob_targets
-
-
+    seq_token_logprobs_all = torch.log_softmax(logits, dim=-1)
+    seq_token_logprobs_targets = seq_token_logprobs_all.gather(dim=-1, index=targets.unsqueeze(-1)).squeeze(-1)
+    return seq_token_logprobs_targets
 
 # ==================================================================================
 # Self-check harness -- do not edit.

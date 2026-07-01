@@ -7,16 +7,16 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
 ## Current position
 
 - **Week 01** — LM Foundations & PyTorch Fluency
-- **Next up: Day 02 — Token-Level Language Modeling** (Day 01 complete)
+- **Next up: Day 03 — Autograd / Shapes / Mixed Precision** (Days 01-02 complete)
 
 ## Next session
 
-Start with the prompt: **"Start Week 1 Day 2"**.
+Start with the prompt: **"Start Week 1 Day 3"**.
 
-Day 2 plan (`week-01-lm-foundations-pytorch/day-02-token-level-language-modeling/session.md`):
-derive `∂CE/∂z = softmax(z) − onehot(y)`, then build a from-scratch, unit-tested
-cross-entropy + perplexity module. The Day-1 `softmax`/`cross_entropy` probe functions are
-the warm-up. Gradient-check against autograd to ~1e-6.
+Day 3 plan (`week-01-lm-foundations-pytorch/day-03-.../session.md`): autograd mechanics,
+tensor-shape reasoning, and mixed-precision (bf16/fp16, fp32 master weights, loss scaling).
+Tie back to the D1 memory math — bf16 training keeps an fp32 master copy of params + fp32 Adam
+moments, so the "112 GB for 7B" number changes but isn't simply halved (re-derive it).
 
 ## Completed
 
@@ -25,6 +25,11 @@ the warm-up. Gradient-check against autograd to ~1e-6.
   (softmax, cross_entropy, masked_mean, sgd_step, + 3-D `seq_token_logprobs` stretch).
   Baseline: ~20 min, slow on `gather` + masking. Deliverable written; the derivation of
   `∂CE/∂z` was covered as a preview.
+- **W1 D2 — Token-Level Language Modeling.** Built `code/token_lm.py` (log_softmax via
+  logsumexp, cross_entropy, perplexity, analytic `ce_grad`) + `test_token_lm.py` (6/6 pass,
+  incl. autograd AND finite-difference gradient checks). Derived `∂CE/∂z = p − e_y` cleanly on
+  the whiteboard (fixed an `e^{z_k}` index slip and a gather-vs-scatter bug live). Quiz 3.5/4,
+  drill 0.9/1.
 
 ## Learner profile (quick facts)
 
@@ -54,4 +59,12 @@ the warm-up. Gradient-check against autograd to ~1e-6.
   `log_softmax(dim=-1).gather(-1, targets.unsqueeze(-1)).squeeze(-1)`.
 - Masked mean denominator is `mask.sum()`, not `numel()` (matters for variable-length seqs).
 - Optimizer memory: params + grads + **2 Adam moments**; 7B fp32 ≈ 28+28+56 ≈ 112 GB
-  before activations. **(D1 gap — re-derive until automatic.)**
+  before activations. (D1 gap — reproduced cold on D2. Adam `m`=1st moment, `v`=2nd moment.)
+- `log_softmax(z) = z − logsumexp(z)`; NEVER `softmax(z).log()` (underflow → −inf).
+- gather = *read* value at index (loss reads log p at target); scatter = *write* value at index
+  (build the one-hot for the gradient). `scatter` scalar form uses `value=`, not `src=`.
+- Mean-CE gradient carries a **1/N**: per-position grad is `p − e_y`, averaged over N positions.
+- Perplexity = exp(CE) = effective branching factor. Floor 1, uniform baseline = V,
+  **unbounded above** (PPL > V ⇒ worse than random). PPL 30 ⇔ CE ≈ 3.4 nats.
+- CE vs KL: identical gradient (H(q) const in θ), but KL is the right *metric* for soft targets
+  (distillation/label smoothing) — it reads 0 at a perfect match, CE bottoms out at H(q).
