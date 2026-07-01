@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# Notebooks
+.ipynb_checkpoints/
+
+# ML artifacts / data (keep the repo light)
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+wandb/
+runs/
+outputs/
+data/
+datasets/
+*.log
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
