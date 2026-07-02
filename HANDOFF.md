@@ -7,16 +7,18 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
 ## Current position
 
 - **Week 01** — LM Foundations & PyTorch Fluency
-- **Next up: Day 03 — Autograd / Shapes / Mixed Precision** (Days 01-02 complete)
+- **Next up: Day 04 — Minimal Training Loop** (Days 01-03 complete)
 
 ## Next session
 
-Start with the prompt: **"Start Week 1 Day 3"**.
+Start with the prompt: **"Start Week 1 Day 4"**.
 
-Day 3 plan (`week-01-lm-foundations-pytorch/day-03-.../session.md`): autograd mechanics,
-tensor-shape reasoning, and mixed-precision (bf16/fp16, fp32 master weights, loss scaling).
-Tie back to the D1 memory math — bf16 training keeps an fp32 master copy of params + fp32 Adam
-moments, so the "112 GB for 7B" number changes but isn't simply halved (re-derive it).
+Day 4 plan (`week-01-lm-foundations-pytorch/day-04-.../session.md`): a minimal end-to-end
+training loop that ties together D2 (cross-entropy) + D3 (autograd + AMP). Expect: dataset →
+forward → loss → `backward` → optimizer step → eval, with correct `zero_grad`, an AMP/`GradScaler`
+path, and grad-norm logging (reinforce the "NaN after stable steps = something grew" debug habit).
+Quiz D3 cold: `loss.backward()` narrative, the 16-bytes/param memory anchor, and masked-fill-before-max
+vs multiply-after.
 
 ## Completed
 
@@ -30,6 +32,12 @@ moments, so the "112 GB for 7B" number changes but isn't simply halved (re-deriv
   incl. autograd AND finite-difference gradient checks). Derived `∂CE/∂z = p − e_y` cleanly on
   the whiteboard (fixed an `e^{z_k}` index slip and a gather-vs-scatter bug live). Quiz 3.5/4,
   drill 0.9/1.
+- **W1 D3 — Autograd / Shapes / Mixed Precision.** Built `code/autograd_shapes_amp.py` +
+  test (5/5 self-check, 6/6 pytest): masked-mean drills, **manual backward** through
+  `Linear→ReLU→Linear→CE` (matched autograd first try), fp16 overflow repro + bf16-autocast fix.
+  Derived bf16 memory = **16 bytes/param = 112 GB for 7B (same as fp32)**; savings are activations +
+  throughput. Quiz 2.5/3, checkpoints 1.5/3, interview drills ~0.65. Live-caught 3 latent code bugs
+  (in-place input mutation, CPU-hardcoded zero guard, and a `-inf`-then-sum masking bug).
 
 ## Learner profile (quick facts)
 
@@ -68,3 +76,19 @@ moments, so the "112 GB for 7B" number changes but isn't simply halved (re-deriv
   **unbounded above** (PPL > V ⇒ worse than random). PPL 30 ⇔ CE ≈ 3.4 nats.
 - CE vs KL: identical gradient (H(q) const in θ), but KL is the right *metric* for soft targets
   (distillation/label smoothing) — it reads 0 at a perfect match, CE bottoms out at H(q).
+- Mixed-precision (bf16 Adam) = **16 bytes/param** (fp32 master 4 + fp32 m 4 + fp32 v 4 + bf16 W 2 +
+  bf16 grad 2) = **112 GB for 7B, identical to fp32**. Savings = activations (~½) + ~2× matmul throughput,
+  NOT optimizer/weight state. (D3 slip: forgot the 2nd bf16 grad copy → 98 vs 112.)
+- fp16: exponent 5 bits (range ~6e-5..65504), training-killer = gradient **underflow** → loss scaling /
+  `GradScaler`. bf16: exponent 8 bits (fp32 range), mantissa 7 → no loss scaling needed.
+- Two numerics safeguards: max-subtraction ⇒ no `exp` overflow; `z−logsumexp(z)` ⇒ no log-of-zero underflow.
+- Masking: `masked_fill(-inf)` **before** max/softmax (within reduction axis); multiply/boolean-index
+  **after** (exclude positions from a mean). **Never `-inf` a value you then sum.**
+- `detach` scopes by tensor (DPO reference logprobs); `no_grad` scopes by code region (inference,
+  optimizer step). `no_grad` on the branch you optimize ⇒ silent no-learning.
+- `.grad` populated only on **leaf** tensors; backward **accumulates** (`+=`) → need `zero_grad`; graph
+  freed after `.backward()` unless `retain_graph=True`.
+- `view` = zero-copy, raises on non-contiguous; `reshape` = copy-fallback. `x[bool_mask]` flattens to 1-D,
+  data-dependent (bad for compile); `(x*mask).sum()/mask.sum()` is the static-shape form.
+- Interview debug habit: **NaN at step 0 = config bug; NaN after stable steps = something grew** (check
+  grad norms first, `set_detect_anomaly`, then matched fix).
