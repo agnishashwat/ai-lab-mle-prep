@@ -3,7 +3,7 @@
 ## Current Status
 
 - Current week: Week 01
-- Current day: Day 04 (Days 01-03 complete)
+- Current day: Day 05 (Days 01-04 complete)
 - Current focus: LM foundations + PyTorch fluency
 
 ### Diagnostic (Day 01)
@@ -15,7 +15,7 @@
 
 | Week | Theme | Status | Deliverable |
 |---|---|---|---|
-| 01 | LM foundations + PyTorch | In progress (Day 3/5) | Tiny LM harness |
+| 01 | LM foundations + PyTorch | In progress (Day 4/5) | Tiny LM harness |
 | 02 | Transformers + generation | Not started | Decoder-only mini-implementation |
 | 03 | RL foundations | Not started | Toy policy-gradient implementation |
 | 04 | RLHF + PPO | Not started | PPO/RLHF explainer notebook |
@@ -38,6 +38,9 @@ Topics to revisit:
 - [ ] Mixed-precision memory (16 bytes/param; savings are activations + throughput)
 - [ ] fp16-NaN debugging narrative (temporal clue → hypotheses → matched fix)
 - [ ] Bootstrap confidence intervals
+- [ ] Training-loop eval hygiene (`no_grad` = memory + grad-leak; `eval()` = dropout/BN)
+- [ ] Masked-mean static form `(x*mask).sum(-1)/mask.sum(-1)` (soft spot, seen twice)
+- [ ] LR<->batch scaling rules (linear vs sqrt, critical batch size)
 
 ## Interview Bank Additions
 

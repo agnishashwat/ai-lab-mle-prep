@@ -7,18 +7,19 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
 ## Current position
 
 - **Week 01** — LM Foundations & PyTorch Fluency
-- **Next up: Day 04 — Minimal Training Loop** (Days 01-03 complete)
+- **Next up: Day 05 — Eval + Ablations** (Days 01-04 complete)
 
 ## Next session
 
-Start with the prompt: **"Start Week 1 Day 4"**.
+Start with the prompt: **"Start Week 1 Day 5"**.
 
-Day 4 plan (`week-01-lm-foundations-pytorch/day-04-.../session.md`): a minimal end-to-end
-training loop that ties together D2 (cross-entropy) + D3 (autograd + AMP). Expect: dataset →
-forward → loss → `backward` → optimizer step → eval, with correct `zero_grad`, an AMP/`GradScaler`
-path, and grad-norm logging (reinforce the "NaN after stable steps = something grew" debug habit).
-Quiz D3 cold: `loss.backward()` narrative, the 16-bytes/param memory anchor, and masked-fill-before-max
-vs multiply-after.
+Day 5 plan (`week-01-lm-foundations-pytorch/day-05-.../session.md`): eval + ablations on top of
+the Day-4 `train.py` harness. Natural extensions to build: an **AMP + GradScaler** training path
+(reuse D3 mixed-precision muscle — the fp16 loss-scaling story), a proper eval/validation split,
+and ablation sweeps (LR, warmup, grad-accum) with the loss/lr/eval history the loop already
+records. Quiz D4 cold: the five loop invariants + order; grad-accum `/N` scaling (why + where);
+the eval-hygiene split (`no_grad` = memory+grad-leak, `eval()` = dropout/BN); AdamW vs Adam decay;
+LR↔batch scaling rules.
 
 ## Completed
 
@@ -38,6 +39,15 @@ vs multiply-after.
   Derived bf16 memory = **16 bytes/param = 112 GB for 7B (same as fp32)**; savings are activations +
   throughput. Quiz 2.5/3, checkpoints 1.5/3, interview drills ~0.65. Live-caught 3 latent code bugs
   (in-place input mutation, CPU-hardcoded zero guard, and a `-inf`-then-sum masking bug).
+- **W1 D4 — Minimal Training Loop.** Built `code/train.py` + `test_train.py` (5/5 self-check,
+  5/5 pytest): `lr_at_step` (warmup→cosine), `evaluate` (no_grad + mode save/restore), and the
+  full `train` loop (seed-first, per-step LR, grad-accum, clip, AdamW, periodic eval, histories).
+  Toy successor task drives CE 2.82→0.022; two runs bit-identical. Quiz D3 ≈4.1/5 (masked-mean
+  static form still the soft spot). Loop coding was the hard part — needed heavy scaffolding and
+  hit every classic bug live: `AdamW(model)` not `.parameters()`, flat warmup (missing `*base_lr`),
+  inverted eval `%`, backward-inside-accum on a summed tensor, missing grad-accum `/N`, and the
+  **double-softmax** (feeding `softmax` to `F.cross_entropy`). Drill ≈3.6/5 — under-answered the
+  eval-hygiene split. This is his weakest area so far; wants more loop reps.
 
 ## Learner profile (quick facts)
 
@@ -92,3 +102,19 @@ vs multiply-after.
   data-dependent (bad for compile); `(x*mask).sum()/mask.sum()` is the static-shape form.
 - Interview debug habit: **NaN at step 0 = config bug; NaN after stable steps = something grew** (check
   grad norms first, `set_detect_anomaly`, then matched fix).
+- Training-loop five invariants + order: **seed→(model/opt)→ per step: set LR into param_groups →
+  accumulate (`backward` INSIDE accum loop) → clip → step → zero_grad → eval under `eval()`+`no_grad()`.**
+- `F.cross_entropy` eats **raw logits** (does log_softmax internally). Feeding `softmax(logits)` =
+  double-softmax = SILENT underfit (no crash). Flatten `(-1,V)` + class-id targets, no unsqueeze.
+- Grad-accum: divide each micro-loss by `grad_accum` (backward SUMS grads → "sum of means" must
+  become "mean of means"). Effective batch = micro × accum × world_size.
+- Eval hygiene = TWO bugs: `no_grad` off → activation graph kept (OOM) + `.grad` leaks into next
+  train step; `eval()` off → dropout stays on (noisy metric) + BatchNorm uses/corrupts running stats.
+- LR override lives in `opt.param_groups[i]['lr']` (optimizer reads it live each `step()`); the
+  constructor `lr=` is inert in a hand-rolled loop but becomes `base_lr` under `lr_scheduler`.
+- Reproducibility needs **data `torch.Generator`s seeded explicitly** (fresh Generator = system
+  entropy); `set_seed`/`torch.manual_seed` only covers global RNG (model init).
+- AdamW vs Adam: Adam folds L2 `λθ` into `g` so it passes through `1/√v̂` (uneven decay). AdamW
+  applies `−ηλθ` directly after the adaptive step → uniform decay. Warmup guards the step-0 spike
+  (Adam's `v̂` is garbage early); cosine anneals to settle. LR↔batch: `Var(g_B)=σ²/B` → linear rule
+  `η∝B` (Goyal) / sqrt rule `η∝√B`, up to a critical batch size.
