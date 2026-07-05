@@ -2,9 +2,9 @@
 
 ## Current Status
 
-- Current week: Week 01
-- Current day: Day 05 (Days 01-04 complete)
-- Current focus: LM foundations + PyTorch fluency
+- Current week: Week 01 COMPLETE -> Week 02 next
+- Current day: Week 1 done (Days 01-05 complete)
+- Current focus: transitioning to transformers + generation (Week 2)
 
 ### Diagnostic (Day 01)
 
@@ -15,8 +15,8 @@
 
 | Week | Theme | Status | Deliverable |
 |---|---|---|---|
-| 01 | LM foundations + PyTorch | In progress (Day 4/5) | Tiny LM harness |
-| 02 | Transformers + generation | Not started | Decoder-only mini-implementation |
+| 01 | LM foundations + PyTorch | Complete (5/5) | Tiny LM train/eval/ablation harness |
+| 02 | Transformers + generation | Next | Decoder-only mini-implementation |
 | 03 | RL foundations | Not started | Toy policy-gradient implementation |
 | 04 | RLHF + PPO | Not started | PPO/RLHF explainer notebook |
 | 05 | DPO + preference optimization | Not started | DPO trainer |
@@ -39,8 +39,11 @@ Topics to revisit:
 - [ ] fp16-NaN debugging narrative (temporal clue → hypotheses → matched fix)
 - [ ] Bootstrap confidence intervals
 - [ ] Training-loop eval hygiene (`no_grad` = memory + grad-leak; `eval()` = dropout/BN)
-- [ ] Masked-mean static form `(x*mask).sum(-1)/mask.sum(-1)` (soft spot, seen twice)
+- [ ] Masked-mean static form `(x*mask).sum(-1)/mask.sum(-1)` (soft spot, seen 3x)
 - [ ] LR<->batch scaling rules (linear vs sqrt, critical batch size)
+- [ ] Loop invariants cold: backward INSIDE grad-accum (memory, not math) - regressed on D5 quiz
+- [ ] `cross_entropy` K-dim shape bug is silent when T==V (always reshape to (-1,V)/(-1))
+- [ ] "Verify eval pipeline before diagnosing overfitting" reflex
 
 ## Interview Bank Additions
 

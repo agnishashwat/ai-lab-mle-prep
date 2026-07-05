@@ -6,20 +6,20 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
 
 ## Current position
 
-- **Week 01** — LM Foundations & PyTorch Fluency
-- **Next up: Day 05 — Eval + Ablations** (Days 01-04 complete)
+- **Week 01 — COMPLETE** (Days 01-05 done). LM Foundations & PyTorch Fluency.
+- **Next up: Week 02 Day 01 — Transformers + generation** (decoder-only mini-implementation).
 
 ## Next session
 
-Start with the prompt: **"Start Week 1 Day 5"**.
+Start with the prompt: **"Start Week 2 Day 1"** (or **"Generate Week 2 sessions"** first if the
+`week-02-.../day-*/session.md` files don't exist yet — check `curriculum.md` for the block list).
 
-Day 5 plan (`week-01-lm-foundations-pytorch/day-05-.../session.md`): eval + ablations on top of
-the Day-4 `train.py` harness. Natural extensions to build: an **AMP + GradScaler** training path
-(reuse D3 mixed-precision muscle — the fp16 loss-scaling story), a proper eval/validation split,
-and ablation sweeps (LR, warmup, grad-accum) with the loss/lr/eval history the loop already
-records. Quiz D4 cold: the five loop invariants + order; grad-accum `/N` scaling (why + where);
-the eval-hygiene split (`no_grad` = memory+grad-leak, `eval()` = dropout/BN); AdamW vs Adam decay;
-LR↔batch scaling rules.
+Week 2 theme: transformers + generation → decoder-only mini-implementation. Likely arc: attention
+from scratch (QKV, scaled dot-product, causal mask), multi-head, positional encodings, the
+decoder block, then a KV-cache + sampling (greedy/temp/top-k/top-p) generation loop. Reuse the
+Week-1 harness (`train.py` loop, `eval_ablation.py`) to train/eval the mini-transformer.
+Quiz Week-1 cold at the start: `∂CE/∂z = p − e_y`; loop invariants w/ backward INSIDE accum
+(memory not math); eval hygiene two-bugs; bf16 memory (16 B/param); masked-mean static form.
 
 ## Completed
 
@@ -48,6 +48,18 @@ LR↔batch scaling rules.
   inverted eval `%`, backward-inside-accum on a summed tensor, missing grad-accum `/N`, and the
   **double-softmax** (feeding `softmax` to `F.cross_entropy`). Drill ≈3.6/5 — under-answered the
   eval-hygiene split. This is his weakest area so far; wants more loop reps.
+
+- **W1 D5 — Eval + Ablation Discipline.** Built `code/eval_ablation.py` + test (5/5 self-check,
+  6/6 pytest): `evaluate_loss` (hygiene), `run_with_val` (dual train/val curves + `train_pool`/
+  `label_noise` to make overfit observable), `overfit_one_batch` (2.82→0.0016), `ablation`
+  (seed-averaged one-var sweep, LR U-shape: 3e-5→2.08, 3e-3→0.06, 3e2→2.92 w/ clip off). All four
+  of his impls were correct first-try on logic; the 3 failures were the scaffold's flawed task
+  assumptions, which became the day's best lessons: (1) `cross_entropy` K-dim shape bug is SILENT
+  when `T==V` (treats time axis as class axis); (2) a noiseless consistent rule CAN'T overfit
+  (memorize==generalize) → need label noise; (3) grad clipping tames Adam so hard LR-divergence
+  only shows at LR≈300 with clip off. Quiz D4 4.2/5 (regressed: said backward AFTER accum loop —
+  must be INSIDE, reason=memory; missed clip in the invariant list). Drills D1 0.85 / D2 0.7
+  (led with capacity/data instead of "verify eval first"). Also wrote week-summary + retrospective.
 
 ## Learner profile (quick facts)
 
@@ -118,3 +130,16 @@ LR↔batch scaling rules.
   applies `−ηλθ` directly after the adaptive step → uniform decay. Warmup guards the step-0 spike
   (Adam's `v̂` is garbage early); cosine anneals to settle. LR↔batch: `Var(g_B)=σ²/B` → linear rule
   `η∝B` (Goyal) / sqrt rule `η∝√B`, up to a critical batch size.
+- `F.cross_entropy` K-dim form: input `(N,C,d₁…)`, target `(N,d₁…)`. Passing `(B,T,V)` vs `(B,T)`
+  does NOT crash when `T==V` — silently treats time axis as classes → garbage loss. ALWAYS
+  `reshape(-1,V)`/`reshape(-1)`. Square shapes hide shape bugs.
+- Overfitting needs NON-generalizing signal: a noiseless, globally-consistent rule can't overfit
+  (memorize == generalize). To see a train≪val gap you must inject label noise into a finite pool.
+- Grad clipping (norm cap) makes Adam nearly unkillable on easy tasks: LR≤30 still converged with
+  `grad_clip=1.0`; divergence only at LR≈300 clip-off, NaN by ~1000. Adam step is ~lr-bounded.
+- Ablation: change ONE var, FIX the compute budget, ≥3 seeds, report mean ± spread; claim a result
+  only if the effect beats seed noise (non-overlapping intervals). One seed can lie.
+- Debug reflex: VERIFY THE EVAL PIPELINE before diagnosing overfitting — a broken eval mimics
+  catastrophic overfit (train 0.05 / val 5.5 was a shape bug, not the model). Senior tell.
+- `dataclasses.replace(base, **{var: val}, seed=s)` for a dynamic-key config edit; `replace(base,
+  var=val)` fails (passes literal kwarg `var`).
