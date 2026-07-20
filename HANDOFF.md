@@ -7,19 +7,25 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
 ## Current position
 
 - **Week 01 — COMPLETE** (Days 01-05 done). LM Foundations & PyTorch Fluency.
-- **Next up: Week 02 Day 01 — Transformers + generation** (decoder-only mini-implementation).
+- **Week 02 — IN PROGRESS.** Day 01 (attention first principles) done.
+- **Next up: Week 02 Day 02 — Transformer block + numerical stability** (residual + LN + MLP,
+  pre-LN vs post-LN).
 
 ## Next session
 
-Start with the prompt: **"Start Week 2 Day 1"** (or **"Generate Week 2 sessions"** first if the
-`week-02-.../day-*/session.md` files don't exist yet — check `curriculum.md` for the block list).
+Start with the prompt: **"Start Week 2 Day 2"**. Session plan already exists at
+`week-02-transformers-generation/day-02-transformer-block-numerical-stability/session.md`.
 
-Week 2 theme: transformers + generation → decoder-only mini-implementation. Likely arc: attention
-from scratch (QKV, scaled dot-product, causal mask), multi-head, positional encodings, the
-decoder block, then a KV-cache + sampling (greedy/temp/top-k/top-p) generation loop. Reuse the
-Week-1 harness (`train.py` loop, `eval_ablation.py`) to train/eval the mini-transformer.
-Quiz Week-1 cold at the start: `∂CE/∂z = p − e_y`; loop invariants w/ backward INSIDE accum
-(memory not math); eval hygiene two-bugs; bf16 memory (16 B/param); masked-mean static form.
+Day 2 arc: assemble the full decoder block (residual + LayerNorm + MLP), pre-LN vs post-LN and why
+pre-LN trains stably at depth, then feed the attention core + `positional_encoding.py` from Day 1
+into it. Later in the week: decoding strategies (D3), KV-cache/batching/throughput (D4), generation
+debug lab (D5). Reuse the Week-1 harness (`train.py`, `eval_ablation.py`) to train/eval the
+mini-transformer.
+
+Quiz Week-2 D1 cold at the start: `Var(q·k)=d_k σ⁴` + why `√d_k` not `d_k`; softmax Jacobian
+`diag(s)−ssᵀ` → 0 at one-hot (saturation=vanishing grad); causal mask after softmax breaks
+normalization + enables parallel training; RoPE = relative via rotations, `<rope(q,m),rope(k,n)>`
+depends only on `m−n`, long-context ⇒ RoPE (not learned, which is hard-capped) + NTK/YaRN scaling.
 
 ## Completed
 
@@ -60,6 +66,18 @@ Quiz Week-1 cold at the start: `∂CE/∂z = p − e_y`; loop invariants w/ back
   only shows at LR≈300 with clip off. Quiz D4 4.2/5 (regressed: said backward AFTER accum loop —
   must be INSIDE, reason=memory; missed clip in the invariant list). Drills D1 0.85 / D2 0.7
   (led with capacity/data instead of "verify eval first"). Also wrote week-summary + retrospective.
+
+- **W2 D1 — Attention from First Principles.** Already had a correct attention core in
+  `anthropic_attention/` (SDPA + causal mask + MHA, einsum/matmul parity), so the day pushed on
+  derivations + the missing piece. Built `week-02/code/positional_encoding.py` (6/6 self-checks):
+  sinusoidal (strided-slice interleave) + RoPE (`rope_cos_sin`/`_rotate_half`/`apply_rope`), with a
+  harness proving `<rope(q,m),rope(k,n)>` is constant along constant-offset diagonals (relative-pos
+  invariance, 1.4e-6). Derivations excellent: `Var(q·k)=d_k σ⁴`, softmax Jacobian `diag(s)−ssᵀ`→0 at
+  one-hot. Quiz (W1) 3.85/4, derivations ~2.8/3, drill ~0.8. Gaps caught: (1) why `√d_k` not `d_k`
+  (dividing by `d_k` over-shrinks var∝1/d_k→uniform — normalize the STD); (2) drill said sinusoidal
+  is the hard-capped one — it's LEARNED that's hard-capped, sinusoidal is closed-form/any-length;
+  (3) long-context ⇒ RoPE, learned is the WORST pick there. Add the "causal mask enables parallel
+  training" systems point to the mask answer.
 
 ## Learner profile (quick facts)
 
@@ -143,3 +161,21 @@ Quiz Week-1 cold at the start: `∂CE/∂z = p − e_y`; loop invariants w/ back
   catastrophic overfit (train 0.05 / val 5.5 was a shape bug, not the model). Senior tell.
 - `dataclasses.replace(base, **{var: val}, seed=s)` for a dynamic-key config edit; `replace(base,
   var=val)` fails (passes literal kwarg `var`).
+- Attention = soft differentiable retrieval: `softmax(QKᵀ/√d_k + M)V`; softmax replaces a
+  non-differentiable argmax over keys. Score is a dot product (→ scale), softmax-normalized
+  (→ saturation), permutation-equivariant (→ needs positional encoding).
+- `Var(q·k)=d_k σ⁴`; scale by `1/√d_k` to make logit STD `d_k`-independent. Dividing by `d_k`
+  over-shrinks (var ∝ 1/d_k → uniform attention, can't discriminate). Big `d_k` unscaled →
+  saturated softmax → near one-hot rows → zero Jacobian → vanishing gradient (a trainability bug).
+- Softmax Jacobian `∂s_i/∂z_j = s_i(δ_ij − s_j)` = `diag(s) − ssᵀ`; at one-hot `s=e_k`,
+  `diag(s)=ssᵀ` ⇒ Jacobian = 0.
+- Causal mask = additive `−∞` BEFORE softmax (contributes 0 to denominator, rows stay normalized) +
+  enables training all positions in parallel in one pass. After softmax → rows sum <1; re-normalizing
+  just reimplements mask-before. RoPE applied to Q,K only, after head split, before scores.
+- Positional encodings: sinusoidal = parameter-free, closed-form/any-length, weak extrapolation;
+  learned = expressive but HARD-CAPPED at max_positions (worst for long context); RoPE = relative
+  via rotations, `<rope(q,m),rope(k,n)>` depends only on `m−n`, extrapolates best. Freq ladder
+  `θ_i=base^(−2i/D)`: fast hands = local resolution, slow hands = global range (slowest wavelength
+  bounds context). Long context ⇒ RoPE + NTK/YaRN base-rescaling to extend without retraining.
+- RoPE convention consistency is the #1 silent bug: `_rotate_half` interleaved pairs
+  (`x[...,0::2]`/`x[...,1::2]`) must match `repeat_interleave(angles, 2)` in the cos/sin cache.

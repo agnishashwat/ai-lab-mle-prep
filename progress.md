@@ -2,9 +2,9 @@
 
 ## Current Status
 
-- Current week: Week 01 COMPLETE -> Week 02 next
-- Current day: Week 1 done (Days 01-05 complete)
-- Current focus: transitioning to transformers + generation (Week 2)
+- Current week: Week 02 in progress (Day 01 complete)
+- Current day: Week 2 Day 01 done -> Day 02 next
+- Current focus: transformers + generation (attention core + positional encodings done)
 
 ### Diagnostic (Day 01)
 
@@ -16,7 +16,7 @@
 | Week | Theme | Status | Deliverable |
 |---|---|---|---|
 | 01 | LM foundations + PyTorch | Complete (5/5) | Tiny LM train/eval/ablation harness |
-| 02 | Transformers + generation | Next | Decoder-only mini-implementation |
+| 02 | Transformers + generation | In progress (D1/5) | Decoder-only mini-implementation |
 | 03 | RL foundations | Not started | Toy policy-gradient implementation |
 | 04 | RLHF + PPO | Not started | PPO/RLHF explainer notebook |
 | 05 | DPO + preference optimization | Not started | DPO trainer |
@@ -44,6 +44,10 @@ Topics to revisit:
 - [ ] Loop invariants cold: backward INSIDE grad-accum (memory, not math) - regressed on D5 quiz
 - [ ] `cross_entropy` K-dim shape bug is silent when T==V (always reshape to (-1,V)/(-1))
 - [ ] "Verify eval pipeline before diagnosing overfitting" reflex
+- [ ] `1/√d_k`: divide by `d_k` over-shrinks (var ∝ 1/d_k → uniform); √d_k normalizes the STD
+- [ ] Softmax Jacobian `diag(s)−ssᵀ` → 0 at one-hot (saturation = vanishing gradient)
+- [ ] Causal mask after softmax → rows <1; parallel-training point; RoPE for long context (not learned)
+- [ ] RoPE freq ladder + NTK/YaRN base-rescaling for context extension
 
 ## Interview Bank Additions
 
