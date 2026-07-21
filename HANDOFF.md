@@ -7,25 +7,26 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
 ## Current position
 
 - **Week 01 — COMPLETE** (Days 01-05 done). LM Foundations & PyTorch Fluency.
-- **Week 02 — IN PROGRESS.** Days 01-02 done (attention+pos-enc; TransformerBlock+TinyGPT).
-- **Next up: Week 02 Day 03 — Decoding strategies** (temperature, top-k/top-p, beam) on top of the
-  trained TinyGPT.
+- **Week 02 — IN PROGRESS.** Days 01-03 done (attention+pos-enc; TransformerBlock+TinyGPT; decoding).
+- **Next up: Week 02 Day 04 — KV cache + batching + inference throughput** (make `generate()` fast;
+  the memory math for KV cache is on the Review Queue).
 
 ## Next session
 
-Start with the prompt: **"Start Week 2 Day 3"**. Session plan at
-`week-02-transformers-generation/day-03-decoding-strategies/session.md`.
+Start with the prompt: **"Start Week 2 Day 4"**. Session plan at
+`week-02-transformers-generation/day-04-kv-cache-batching-throughput/session.md`.
 
-Day 3 arc: sampling from the `TinyGPT` built on D2 — greedy/temperature/top-k/top-p (nucleus)/beam,
-the bias-variance framing of each, and why repetition happens. Later in the week: KV-cache/batching/
-throughput (D4), generation debug lab (D5). Reuse `code/transformer_block.py` (TinyGPT) as the model
-to decode from.
+Day 4 arc: why `generate()` recomputing all `T` positions each step is wasteful → KV cache (store
+per-layer K,V, compute only the new position), batching/padding, and the inference memory math
+(KV-cache size = `2 · n_layers · n_heads · d_k · seq · batch · dtype_bytes`). Reuse
+`code/transformer_block.py` (TinyGPT) + `code/decoding.py` (generate loop) as the base to accelerate.
 
-Quiz Week-2 D2 cold at the start: pre-LN `x+f(LN(x))` vs post-LN `LN(x+f(x))`, gradient-highway
-`+1` (additive `I` survives) vs compounding `Π J_LN` (warmup sensitivity, worse-at-depth); RMSNorm
-= scale-only (drops mean-centering + bias), LN Jacobian projects out mean + radial (scale) dirs;
-`1/√(2L)` output-proj rescale keeps residual var `O(1)`; NaN-at-step-0 = config bug (NOT lr):
-mask→fp16-overflow→init/eps→labels; fp32-under-bf16 ops = LN/RMS stats + softmax + logits→CE.
+Quiz Week-2 D3 cold at the start: temperature `softmax(z/T)` limits (`T→0` argmax, `T→∞` uniform,
+entropy `0→ln V`); top-k = fixed budget (fails both peaked→junk-tail and flat→amputate) vs top-p =
+adaptive nucleus (smallest set, cumprob `>=` p; `>` keeps one extra at ties); beam length-norm
+`1/L^α` (raw `Σ log p_t` biased short); degeneration = repetition attractor (self-attention +
+likelihood), fix = temp+nucleus, beam only for low-entropy (MT/code/ASR); filters return masked
+LOGITS (compose, one softmax); top-p scatter-back-to-vocab bug; batched beam couples the k beams.
 
 ## Completed
 
@@ -92,6 +93,23 @@ mask→fp16-overflow→init/eps→labels; fp32-under-bf16 ops = LN/RMS stats + s
   underflow is silent/non-NaN; (3) multi-head "buys parallelism" → real answer is independent
   representation subspaces. Latent bug live-caught: `TransformerBlock(d, n_heads, n_heads)` passed
   `n_heads` for `mult`, silent because both were 4 (same class as W1 `T==V` CE bug).
+
+- **W2 D3 — Decoding Strategies.** Built `week-02/code/decoding.py` + `test_decoding.py` (13/13
+  self-check, 9/9 pytest): `apply_temperature`, `top_k_filter` (kth-value threshold), `top_p_filter`
+  (sort→cumsum→shift-right→scatter-back), `sample` (seeded multinomial), `generate` (eval+no_grad,
+  crop-to-cfg.T, full-seq accumulator), `beam_search` (expand k×V → prune, length-normalized, B=1).
+  Evidence: temp entropy `0→1.744→2.079(=ln V)`; top-p peaked=1/flat=5 (adaptive); greedy & beam
+  both recover successor `[6..10]`. Derivations excellent (temp log-odds monotone reparam, beam
+  length-bias, top-p peaked-vs-flat walk, degeneration attractor). Coding was heavily
+  question-driven (many "why this line?" — good sign, but needed lots of idiom-level help): the
+  whole session was Q&A on advanced-indexing-vs-scatter, the `None`/`-1:` broadcast axis,
+  `>=` vs `>` at the nucleus boundary (he CAUGHT that `>` keeps an extra token — I'd mis-stated it),
+  batched-beam coupling, `new_tensor`, `*c` unpack. Live bugs caught: `cat` defaulting to `dim=0`
+  (missing `dim=-1`); bare `cfg.T` instead of `model.cfg.T`; returning the cropped context instead
+  of a full accumulator; missing eval/no_grad. Drills ~0.7/0.7 — both had the core idea but missed
+  the second half (top-k's symmetric failure modes / prod combo; and "what to use instead" + the
+  low-entropy exception). Gap to reinforce: read the FULL question (name the alternative + the
+  exception), and don't invert the top-k-vs-top-p "when" framing.
 
 ## Learner profile (quick facts)
 
@@ -224,3 +242,27 @@ mask→fp16-overflow→init/eps→labels; fp32-under-bf16 ops = LN/RMS stats + s
   are equal (`n_heads==mult==4`; earlier `T==V` in CE). Vary a config value to expose it.
 - nanoGPT-idiom: name transformer sublayers (`fc1`/`fc2`, `Wo`) rather than `nn.Sequential` —
   required for the `1/√(2L)` rescale and any surgical weight access (LoRA/tying/freeze).
+- Decoding axis: search (greedy/beam) MAXIMIZES likelihood → bland+repetitive on open text; sampling
+  (temp+nucleus) matches human-text entropy. Task type picks the tool.
+- Temperature = `softmax(z/T)`; log-odds `log(p_i/p_j)=(z_i−z_j)/T` scale by `1/T` (monotone → greedy
+  is T-invariant). `T→0` argmax, `T→∞` uniform, entropy monotone `0→ln V`. Return RESCALED LOGITS.
+- Top-k = fixed budget k: FAILS both ways (peaked → drags junk tail; flat → amputates real mass).
+  Top-p (nucleus) = smallest set with cumprob `>=` p → ADAPTIVE (few when confident, many when
+  uncertain). Boundary is `>=` (`>` keeps ONE extra token at exact ties = the HuggingFace quirk).
+- Decode filters return MASKED LOGITS (−inf), not probs, so temp→top_k→top_p compose and a SINGLE
+  final softmax renormalizes once. top-p's #1 bug: build remove-mask in sorted order then MUST
+  `scatter_(-1, sort_idx, mask)` back to vocab order (+ shift-right-by-one keeps the crossing token).
+- Beam raw score `Σ_t log p_t ≤ 0` → every token lowers it → length-biased short; fix = length-norm
+  `(1/L^α) Σ log p_t` (`α≈0.6–0.7`; α=1 per-token avg). Length-norm is a no-op when all beams are
+  equal length (only bites with EOS/variable length) — normalize each hyp by ITS OWN length.
+- Neural text degeneration: max-likelihood decoding = repetition attractor (transformer attends to
+  its own output → each repeat is lower-entropy/higher-prob, positive feedback); human text is in the
+  TYPICAL SET not at the mode. Fix = temp+nucleus. Beam only for LOW-entropy (MT, code, ASR).
+- `generate` MUST crop context to last `cfg.T` INSIDE the loop (learned abs pos-table hard-capped at
+  T) and keep a SEPARATE full-sequence accumulator (don't return the cropped ctx). eval()+no_grad().
+- `torch.cat` default is `dim=0` — appending a token needs `dim=-1`. `x.new_tensor([[v]])` inherits
+  dtype+device (GPU-safe). Threshold `values[..., -1:]` (or `-1, None`) keeps size-1 axis for `(B,V)`
+  broadcast; bare `[..., -1]` → `(B,)` misaligns unless `V==B` (square-shape silent bug, seen again).
+- Sampling batches trivially (rows independent); BEAM does not — top-k prune couples a prompt's k
+  hypotheses → batched beam needs `(B,k)` layout, per-row top-k over `k×V`, and a beam-reindex
+  (`//V`, `%V`) each step. Hence B=1 scope for a from-scratch beam.

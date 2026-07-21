@@ -2,9 +2,9 @@
 
 ## Current Status
 
-- Current week: Week 02 in progress (Days 01-02 complete)
-- Current day: Week 2 Day 02 done -> Day 03 next
-- Current focus: transformers + generation (attention + pos-enc + TransformerBlock/TinyGPT done)
+- Current week: Week 02 in progress (Days 01-03 complete)
+- Current day: Week 2 Day 03 done -> Day 04 next
+- Current focus: transformers + generation (attention + pos-enc + TransformerBlock/TinyGPT + decoding done)
 
 ### Diagnostic (Day 01)
 
@@ -16,7 +16,7 @@
 | Week | Theme | Status | Deliverable |
 |---|---|---|---|
 | 01 | LM foundations + PyTorch | Complete (5/5) | Tiny LM train/eval/ablation harness |
-| 02 | Transformers + generation | In progress (D2/5) | Decoder-only mini-implementation |
+| 02 | Transformers + generation | In progress (D3/5) | Decoder-only mini-implementation |
 | 03 | RL foundations | Not started | Toy policy-gradient implementation |
 | 04 | RLHF + PPO | Not started | PPO/RLHF explainer notebook |
 | 05 | DPO + preference optimization | Not started | DPO trainer |
@@ -53,6 +53,11 @@ Topics to revisit:
 - [ ] fp16 OVERFLOW→Inf→NaN (not bf16 underflow, which is silent/non-NaN)
 - [ ] Which ops stay fp32 under bf16: LN/RMS stats, softmax, logits→CE (reduce-then-divide)
 - [ ] Multi-head = independent representation subspaces (not just parallel compute)
+- [ ] Top-k vs top-p: top-p adaptive (nucleus = smallest set, cumprob >= p); top-k fixed budget fails both ways
+- [ ] Neural text degeneration = repetition attractor (self-attention + likelihood); fix = temp + nucleus
+- [ ] Beam length-norm `1/L^α`: raw `Σ log p_t` biased short; beam right only for low-entropy tasks
+- [ ] Filters return masked LOGITS (compose, one final softmax); top-p scatter-back-to-vocab-order bug
+- [ ] Batched beam couples the k hypotheses (per-row top-k over k×V + beam reindex); sampling batches free
 
 ## Interview Bank Additions
 
