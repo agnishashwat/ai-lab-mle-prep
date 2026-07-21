@@ -2,9 +2,9 @@
 
 ## Current Status
 
-- Current week: Week 02 in progress (Day 01 complete)
-- Current day: Week 2 Day 01 done -> Day 02 next
-- Current focus: transformers + generation (attention core + positional encodings done)
+- Current week: Week 02 in progress (Days 01-02 complete)
+- Current day: Week 2 Day 02 done -> Day 03 next
+- Current focus: transformers + generation (attention + pos-enc + TransformerBlock/TinyGPT done)
 
 ### Diagnostic (Day 01)
 
@@ -16,7 +16,7 @@
 | Week | Theme | Status | Deliverable |
 |---|---|---|---|
 | 01 | LM foundations + PyTorch | Complete (5/5) | Tiny LM train/eval/ablation harness |
-| 02 | Transformers + generation | In progress (D1/5) | Decoder-only mini-implementation |
+| 02 | Transformers + generation | In progress (D2/5) | Decoder-only mini-implementation |
 | 03 | RL foundations | Not started | Toy policy-gradient implementation |
 | 04 | RLHF + PPO | Not started | PPO/RLHF explainer notebook |
 | 05 | DPO + preference optimization | Not started | DPO trainer |
@@ -48,6 +48,11 @@ Topics to revisit:
 - [ ] Softmax Jacobian `diag(s)−ssᵀ` → 0 at one-hot (saturation = vanishing gradient)
 - [ ] Causal mask after softmax → rows <1; parallel-training point; RoPE for long context (not learned)
 - [ ] RoPE freq ladder + NTK/YaRN base-rescaling for context extension
+- [ ] Pre-LN vs post-LN: gradient-highway `+1` vs compounding LN-Jacobian product (warmup sensitivity)
+- [ ] NaN-at-step-0 = config bug (rules out LR); checklist: mask→fp16 overflow→init/eps→labels
+- [ ] fp16 OVERFLOW→Inf→NaN (not bf16 underflow, which is silent/non-NaN)
+- [ ] Which ops stay fp32 under bf16: LN/RMS stats, softmax, logits→CE (reduce-then-divide)
+- [ ] Multi-head = independent representation subspaces (not just parallel compute)
 
 ## Interview Bank Additions
 

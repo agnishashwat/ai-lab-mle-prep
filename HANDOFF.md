@@ -7,25 +7,25 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
 ## Current position
 
 - **Week 01 — COMPLETE** (Days 01-05 done). LM Foundations & PyTorch Fluency.
-- **Week 02 — IN PROGRESS.** Day 01 (attention first principles) done.
-- **Next up: Week 02 Day 02 — Transformer block + numerical stability** (residual + LN + MLP,
-  pre-LN vs post-LN).
+- **Week 02 — IN PROGRESS.** Days 01-02 done (attention+pos-enc; TransformerBlock+TinyGPT).
+- **Next up: Week 02 Day 03 — Decoding strategies** (temperature, top-k/top-p, beam) on top of the
+  trained TinyGPT.
 
 ## Next session
 
-Start with the prompt: **"Start Week 2 Day 2"**. Session plan already exists at
-`week-02-transformers-generation/day-02-transformer-block-numerical-stability/session.md`.
+Start with the prompt: **"Start Week 2 Day 3"**. Session plan at
+`week-02-transformers-generation/day-03-decoding-strategies/session.md`.
 
-Day 2 arc: assemble the full decoder block (residual + LayerNorm + MLP), pre-LN vs post-LN and why
-pre-LN trains stably at depth, then feed the attention core + `positional_encoding.py` from Day 1
-into it. Later in the week: decoding strategies (D3), KV-cache/batching/throughput (D4), generation
-debug lab (D5). Reuse the Week-1 harness (`train.py`, `eval_ablation.py`) to train/eval the
-mini-transformer.
+Day 3 arc: sampling from the `TinyGPT` built on D2 — greedy/temperature/top-k/top-p (nucleus)/beam,
+the bias-variance framing of each, and why repetition happens. Later in the week: KV-cache/batching/
+throughput (D4), generation debug lab (D5). Reuse `code/transformer_block.py` (TinyGPT) as the model
+to decode from.
 
-Quiz Week-2 D1 cold at the start: `Var(q·k)=d_k σ⁴` + why `√d_k` not `d_k`; softmax Jacobian
-`diag(s)−ssᵀ` → 0 at one-hot (saturation=vanishing grad); causal mask after softmax breaks
-normalization + enables parallel training; RoPE = relative via rotations, `<rope(q,m),rope(k,n)>`
-depends only on `m−n`, long-context ⇒ RoPE (not learned, which is hard-capped) + NTK/YaRN scaling.
+Quiz Week-2 D2 cold at the start: pre-LN `x+f(LN(x))` vs post-LN `LN(x+f(x))`, gradient-highway
+`+1` (additive `I` survives) vs compounding `Π J_LN` (warmup sensitivity, worse-at-depth); RMSNorm
+= scale-only (drops mean-centering + bias), LN Jacobian projects out mean + radial (scale) dirs;
+`1/√(2L)` output-proj rescale keeps residual var `O(1)`; NaN-at-step-0 = config bug (NOT lr):
+mask→fp16-overflow→init/eps→labels; fp32-under-bf16 ops = LN/RMS stats + softmax + logits→CE.
 
 ## Completed
 
@@ -78,6 +78,20 @@ depends only on `m−n`, long-context ⇒ RoPE (not learned, which is hard-cappe
   is the hard-capped one — it's LEARNED that's hard-capped, sinusoidal is closed-form/any-length;
   (3) long-context ⇒ RoPE, learned is the WORST pick there. Add the "causal mask enables parallel
   training" systems point to the mask answer.
+
+- **W2 D2 — Transformer Block & Numerical Stability.** Built `week-02/code/transformer_block.py` +
+  `test_transformer_block.py` (7/7 self-check, 6/6 pytest): `RMSNorm` (fp32 reduction), `MLP`
+  (`d→4d→d` GELU), pre-LN `TransformerBlock`, `TinyGPT` (tok+learned-pos embed, N blocks, final
+  norm, LM head) with the GPT-2 `1/√(2L)` output-proj rescale wired in. Attention was provided (his
+  Day-1 core). Marquee causal test passes bit-exact (`max|Δ|_past = 0.00e+00`); overfit-one-batch
+  CE → 0.0010. Derivations excellent (gradient-highway `+1`, LN Jacobian removing mean+scale dirs,
+  matmul-vs-normalization precision). Quiz (W2 D1) 3.4/4, drills: pre/post-LN 4.6/5, NaN-at-step-0
+  1.8→4.2 after redo. Gaps caught: (1) NaN-at-step-0 he first answered with the *runtime* "find
+  where NaN appears" technique — that's the step-N case; step-0 = config bug, rules out LR — needed
+  the full checklist; (2) said bf16 *underflow* causes step-0 NaN — it's fp16 *overflow*→Inf; bf16
+  underflow is silent/non-NaN; (3) multi-head "buys parallelism" → real answer is independent
+  representation subspaces. Latent bug live-caught: `TransformerBlock(d, n_heads, n_heads)` passed
+  `n_heads` for `mult`, silent because both were 4 (same class as W1 `T==V` CE bug).
 
 ## Learner profile (quick facts)
 
@@ -179,3 +193,34 @@ depends only on `m−n`, long-context ⇒ RoPE (not learned, which is hard-cappe
   bounds context). Long context ⇒ RoPE + NTK/YaRN base-rescaling to extend without retraining.
 - RoPE convention consistency is the #1 silent bug: `_rotate_half` interleaved pairs
   (`x[...,0::2]`/`x[...,1::2]`) must match `repeat_interleave(angles, 2)` in the cos/sin cache.
+- Transformer = residual stream: `x = x + f(Norm(x))` per sublayer. Attention = ONLY cross-position
+  mixing; MLP (`d→4d→d`) = per-position. Two sublayers/block: causal MHA then MLP.
+- Pre-LN `x+f(LN(x))` vs post-LN `LN(x+f(x))`. Pre-LN keeps the residual an identity ⇒ backward has
+  a standalone `+1` (gradient highway) that survives even if every `∂f≈0`. Post-LN puts `J_LN` on
+  the highway ⇒ `Π_{2L} J_LN` compounds ⇒ warmup-sensitive divergence at depth. Post-LN slightly
+  better final quality IF tamed; everything modern is pre-LN ("it just trains").
+- Gradient highway: `∂L/∂x_ℓ = ∂L/∂x_L Π(I+∂f_k)` → `I + Σ∂f_k + …`; the additive `I` can't be
+  killed by a product of small Jacobians (contrast plain deep net = pure product = vanishing).
+- RMSNorm = `γ⊙x/√(mean(x²)+ε)`: drops mean-centering AND bias, keeps scaling. Bet (LLaMA): the
+  re-scaling is what matters, not re-centering. Cheaper, ~same quality, now standard.
+- LN Jacobian `(1/σ)(I − (1/d)11ᵀ − (1/d)x̂x̂ᵀ)`: projects out the mean direction (shift-invariance)
+  AND the radial direction (scale-invariance) ⇒ LN removes the scale d.o.f. (activations can't drift
+  bigger to cut loss; only direction changes pass through).
+- Depth init: rescale each sublayer OUTPUT proj (`Wo`, MLP `fc2`) by `1/√(2L)` so the residual var
+  stays `O(1)` over `L` layers (else `2L` additive writes → var ~2L → blow-up). GPT-2 trick.
+- fp32-under-bf16-autocast: LN/RMS statistics, softmax, and logits→CE (logsumexp). Rule: matmul =
+  accumulate-in-fp32-then-round-ONCE (safe in bf16); normalization = reduce-THEN-DIVIDE (unsafe, the
+  imprecise variance gets amplified by the division).
+- NaN AT STEP 0 = config bug, not dynamics (no weight moved yet) ⇒ RULES OUT lr (only bites step 1+).
+  Bisect forward→loss→backward. Checklist by prob: (1) mask/loss (fully-masked row → softmax over
+  all −∞ → 0/0 → NaN), (2) fp16 OVERFLOW→Inf (deep residual > 65504; fix bf16 or GradScaler),
+  (3) init/eps (unscaled out-proj var ~2L, or LN eps=0), (4) bad data/labels (target id ≥ V). Senior
+  tell = temporal contrast: step-0 ⇒ forward/config; step-N-then-NaN ⇒ "something grew" (grad norms,
+  set_detect_anomaly). bf16 UNDERFLOW→0 is SILENT/non-NaN, a different failure.
+- Multi-head vs one wide head = independent representation subspaces (each head its own
+  Wq/Wk/Wv + softmax → attend to different relations), then `Wo` mixes. Parallel compute is a bonus,
+  not the point.
+- Silent-arg-bug pattern (seen twice now): a wrong positional arg passes because two config numbers
+  are equal (`n_heads==mult==4`; earlier `T==V` in CE). Vary a config value to expose it.
+- nanoGPT-idiom: name transformer sublayers (`fc1`/`fc2`, `Wo`) rather than `nn.Sequential` —
+  required for the `1/√(2L)` rescale and any surgical weight access (LoRA/tying/freeze).
