@@ -2,9 +2,9 @@
 
 ## Current Status
 
-- Current week: Week 02 in progress (Days 01-03 complete)
-- Current day: Week 2 Day 03 done -> Day 04 next
-- Current focus: transformers + generation (attention + pos-enc + TransformerBlock/TinyGPT + decoding done)
+- Current week: Week 02 in progress (Days 01-04 complete)
+- Current day: Week 2 Day 04 done -> Day 05 next (Week-2 debug lab)
+- Current focus: transformers + generation (attention + pos-enc + TransformerBlock/TinyGPT + decoding + KV cache done)
 
 ### Diagnostic (Day 01)
 
@@ -16,7 +16,7 @@
 | Week | Theme | Status | Deliverable |
 |---|---|---|---|
 | 01 | LM foundations + PyTorch | Complete (5/5) | Tiny LM train/eval/ablation harness |
-| 02 | Transformers + generation | In progress (D3/5) | Decoder-only mini-implementation |
+| 02 | Transformers + generation | In progress (D4/5) | Decoder-only mini-implementation |
 | 03 | RL foundations | Not started | Toy policy-gradient implementation |
 | 04 | RLHF + PPO | Not started | PPO/RLHF explainer notebook |
 | 05 | DPO + preference optimization | Not started | DPO trainer |
@@ -34,7 +34,8 @@ Topics to revisit:
 - [ ] PPO ratio / clipping
 - [ ] DPO derivation
 - [ ] GRPO group baseline
-- [ ] KV-cache memory math
+- [x] KV-cache memory math (`2·L·n_kv·d_head·T·B·bytes`; 512 KiB/tok, 2 GiB@4k, 64 GiB@8k×16; done W2 D4)
+- [ ] Arithmetic intensity / roofline: decode ≈1 op/byte → memory-bound; batch to amortize weights (add BW-tied levers: quant, spec-decode)
 - [ ] Mixed-precision memory (16 bytes/param; savings are activations + throughput)
 - [ ] fp16-NaN debugging narrative (temporal clue → hypotheses → matched fix)
 - [ ] Bootstrap confidence intervals

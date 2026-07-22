@@ -7,26 +7,26 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
 ## Current position
 
 - **Week 01 — COMPLETE** (Days 01-05 done). LM Foundations & PyTorch Fluency.
-- **Week 02 — IN PROGRESS.** Days 01-03 done (attention+pos-enc; TransformerBlock+TinyGPT; decoding).
-- **Next up: Week 02 Day 04 — KV cache + batching + inference throughput** (make `generate()` fast;
-  the memory math for KV cache is on the Review Queue).
+- **Week 02 — IN PROGRESS.** Days 01-04 done (attention+pos-enc; TransformerBlock+TinyGPT; decoding; KV cache).
+- **Next up: Week 02 Day 05 — Week-2 debug lab** (capstone: diagnose bad generations, NaNs, shape
+  and masking bugs across the week's TinyGPT + decode + KV-cache stack).
 
 ## Next session
 
-Start with the prompt: **"Start Week 2 Day 4"**. Session plan at
-`week-02-transformers-generation/day-04-kv-cache-batching-throughput/session.md`.
+Start with the prompt: **"Start Week 2 Day 5"**. Session plan at
+`week-02-transformers-generation/day-05-*/session.md` (create it if absent from `curriculum.md`).
 
-Day 4 arc: why `generate()` recomputing all `T` positions each step is wasteful → KV cache (store
-per-layer K,V, compute only the new position), batching/padding, and the inference memory math
-(KV-cache size = `2 · n_layers · n_heads · d_k · seq · batch · dtype_bytes`). Reuse
-`code/transformer_block.py` (TinyGPT) + `code/decoding.py` (generate loop) as the base to accelerate.
+Day 5 arc: the week's DEBUG LAB — take the TinyGPT / decoding / KV-cache code and inject/diagnose
+the classic failure modes (NaN-at-step-0 vs step-N, causal-mask leakage, `T==V` shape bugs,
+double-softmax, KV-cache `k` vs `k_all` / prefill-decode feeding bug), each with the matched fix.
+Consolidates Week 2 for interview readiness.
 
-Quiz Week-2 D3 cold at the start: temperature `softmax(z/T)` limits (`T→0` argmax, `T→∞` uniform,
-entropy `0→ln V`); top-k = fixed budget (fails both peaked→junk-tail and flat→amputate) vs top-p =
-adaptive nucleus (smallest set, cumprob `>=` p; `>` keeps one extra at ties); beam length-norm
-`1/L^α` (raw `Σ log p_t` biased short); degeneration = repetition attractor (self-attention +
-likelihood), fix = temp+nucleus, beam only for low-entropy (MT/code/ASR); filters return masked
-LOGITS (compose, one softmax); top-p scatter-back-to-vocab bug; batched beam couples the k beams.
+Quiz Week-2 D4 cold at the start: KV-cache formula `2·L·n_kv·d_head·T·B·bytes` (7B fp16 =
+512 KiB/tok → 2 GiB@4k,B1 → 64 GiB@8k,B16, dwarfs 14 GB weights; GQA n_kv=8 → 4× smaller); prefill
+(compute-bound, parallel) vs decode (memory-bandwidth bound, ≈1 op/byte); why K/V cached but not Q;
+why batching helps (amortize weight-streaming → intensity ↑ ~B×); BW-tied levers = batch /
+continuous-batch / quantize / speculative-decode; GQA/MQA + PagedAttention. Also re-poll the D3
+degeneration + top-k/top-p framing (still a soft spot: read the FULL question, name the alternative).
 
 ## Completed
 
@@ -110,6 +110,23 @@ LOGITS (compose, one softmax); top-p scatter-back-to-vocab bug; batched beam cou
   the second half (top-k's symmetric failure modes / prod combo; and "what to use instead" + the
   low-entropy exception). Gap to reinforce: read the FULL question (name the alternative + the
   exception), and don't invert the top-k-vs-top-p "when" framing.
+
+- **W2 D4 — KV Cache, Batching & Inference Throughput.** Built `week-02/code/kv_cache.py` +
+  `test_kv_cache.py` (13/13 self-check, 6/6 pytest): cache-aware attention (`sdpa_cached` with an
+  **offset causal mask** via `tril(diagonal=pos_offset)`), block/model cached forwards (positions =
+  `pos_offset+arange(S)`), `generate_cached` (prefill@0 then 1-token decode@len-1), and
+  `kv_cache_bytes`. Correctness anchor: cached greedy **token-identical** to uncached Day-3 generate;
+  prefill matches full forward at **0.00e+00**; incremental matches each step; **4.15× decode speedup**
+  at N=200. Derivation regressed then recovered: first pass had `d_head=128/32=4` (double-divide) +
+  dropped the `n_heads` multiply + a `2^20 bytes = 1024 GB` unit slip → landed the formula cold on the
+  drill (64 GiB @ 8k×16, dwarfs 14 GB weights; GQA 4×). Drill 1 **1.0** (clean number + "KV dwarfs
+  weights" insight), Drill 2 **0.75** (had the symptom — GPU idles on weight loads — but under-stated
+  the *mechanism*: arithmetic intensity ≈1 op/byte, batching amortizes weight-streaming; PagedAttention
+  is a capacity fix not a BW lever — wants quant/speculative-decode as the direct BW levers). Two live
+  code bugs I mis-passed first then caught via the harness: (1) `scores = q @ k` not `q @ k_all`
+  (silent in prefill P=0, crashes first decode step); (2) `generate_cached` fed the whole running
+  context + past cache into decode instead of just `next_tok` (defeats the cache). Quiz (W2 D1-D3)
+  4.6/5.
 
 ## Learner profile (quick facts)
 
@@ -266,3 +283,26 @@ LOGITS (compose, one softmax); top-p scatter-back-to-vocab bug; batched beam cou
 - Sampling batches trivially (rows independent); BEAM does not — top-k prune couples a prompt's k
   hypotheses → batched beam needs `(B,k)` layout, per-row top-k over `k×V`, and a beam-reindex
   (`//V`, `%V`) each step. Hence B=1 scope for a from-scratch beam.
+- KV cache: past tokens' K/V never change (causal) → cache them; new token computes only its own
+  q,k,v and attends to cached K/V. Cache Q? NO — a query is used only at its own step. Attention
+  per step `O(T²)→O(T)`, total gen `O(N³)→O(N²)`. Store per layer `(B,n_kv,T,d_head)` ×2 (K,V).
+- KV-cache bytes = `2·L·n_kv·d_head·T·B·dtype_bytes` (2=K&V; `n_kv` is what GQA/MQA shrink;
+  `d_head=d/n_heads`). 7B fp16 MHA = **512 KiB/token** → **2 GiB@4k,B1**, **64 GiB@8k,B16** (dwarfs
+  the ~14 GB fp16 weights → KV is the binding serve constraint). GQA `n_kv=8` → **4× smaller**.
+  Byte ladder: `2^30=1 GiB`; don't call `2^20` bytes a GB (it's 1 MiB). `d_head` is already 128 —
+  don't re-divide by heads; and MULTIPLY by n_heads (both were the D4 derivation slips).
+- Prefill vs decode: **prefill** = whole prompt in one parallel pass, fills cache, COMPUTE-bound;
+  **decode** = 1 token/step, MEMORY-BANDWIDTH-bound. Decode arithmetic intensity ≈ **1 op/byte**
+  (stream all weights+KV per token, do ~one token of math) ⇒ GPU idles on HBM. Batching reads each
+  weight ONCE for B tokens → FLOPs↑, bytes~const → intensity ↑ ~B× → climb roofline toward compute.
+- BW-tied throughput levers (name the mechanism, not just the name): batch (amortize weights),
+  continuous/in-flight batch (keep batch full), quantize weights (fewer bytes to stream),
+  speculative decode (draft proposes k, big model verifies in ONE pass → multiple tokens/weight-sweep),
+  GQA/MQA (smaller KV + fits bigger batch). PagedAttention = capacity/fragmentation fix (INDIRECT).
+- KV-cache impl invariants: (1) score `q @ k_all` (ALL cached+new keys) not `q @ k` — the `q@k` bug
+  is SILENT in prefill (P=0) and crashes the first decode step (`S` vs `P+S`). (2) Model sees each
+  token ONCE: prefill feeds `(B,L)`@`pos_offset=0`; each decode step feeds `(B,1)`@`pos_offset=len-1`
+  — feeding the whole running context WITH the past cache double-counts and defeats the cache.
+  (3) Offset causal mask = `tril(ones(S,P+S), diagonal=pos_offset)` → keep iff `key_j ≤ pos_offset+q_i`
+  (prefill→lower-tri; decode S=1→keep all). (4) Learned pos-table ⇒ positions `pos_offset+arange(S)`.
+  (5) `cat` past+new on time axis `dim=-2`; build mask on `x.device`.
