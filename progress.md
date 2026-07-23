@@ -2,9 +2,9 @@
 
 ## Current Status
 
-- Current week: Week 02 in progress (Days 01-04 complete)
-- Current day: Week 2 Day 04 done -> Day 05 next (Week-2 debug lab)
-- Current focus: transformers + generation (attention + pos-enc + TransformerBlock/TinyGPT + decoding + KV cache done)
+- Current week: **Week 02 COMPLETE** (Days 01-05 done) -> Week 03 (RL foundations) next
+- Current day: Week 2 Day 05 done (Generation Debug Lab: 6 invariant regression tests + notebook)
+- Current focus: transformers + generation fully covered (attention, pos-enc, TinyGPT, decoding, KV cache, debug lab)
 
 ### Diagnostic (Day 01)
 
@@ -16,7 +16,7 @@
 | Week | Theme | Status | Deliverable |
 |---|---|---|---|
 | 01 | LM foundations + PyTorch | Complete (5/5) | Tiny LM train/eval/ablation harness |
-| 02 | Transformers + generation | In progress (D4/5) | Decoder-only mini-implementation |
+| 02 | Transformers + generation | Complete (5/5) | Decoder-only mini-impl + debug suite |
 | 03 | RL foundations | Not started | Toy policy-gradient implementation |
 | 04 | RLHF + PPO | Not started | PPO/RLHF explainer notebook |
 | 05 | DPO + preference optimization | Not started | DPO trainer |
@@ -59,6 +59,10 @@ Topics to revisit:
 - [ ] Beam length-norm `1/L^α`: raw `Σ log p_t` biased short; beam right only for low-entropy tasks
 - [ ] Filters return masked LOGITS (compose, one final softmax); top-p scatter-back-to-vocab-order bug
 - [ ] Batched beam couples the k hypotheses (per-row top-k over k×V + beam reindex); sampling batches free
+- [ ] Attention-NaN checklist COLD (fastest-first): masked-row 0/0 -> fp16 overflow -> eps -> grads -> data (D5 soft spot)
+- [ ] Four debugging contracts: causal / shape / numeric / train-inference; two crown-jewel invariant tests
+- [ ] Teacher-forcing vs free-running; overfit-one-batch-then-greedy splits plumbing vs generation bugs
+- [ ] Test-design: an invariant test is only as sensitive as the input (random model, not position-wise task)
 
 ## Interview Bank Additions
 

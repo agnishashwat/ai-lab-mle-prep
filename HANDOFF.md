@@ -7,26 +7,28 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
 ## Current position
 
 - **Week 01 — COMPLETE** (Days 01-05 done). LM Foundations & PyTorch Fluency.
-- **Week 02 — IN PROGRESS.** Days 01-04 done (attention+pos-enc; TransformerBlock+TinyGPT; decoding; KV cache).
-- **Next up: Week 02 Day 05 — Week-2 debug lab** (capstone: diagnose bad generations, NaNs, shape
-  and masking bugs across the week's TinyGPT + decode + KV-cache stack).
+- **Week 02 — COMPLETE** (Days 01-05 done). Transformers + generation: attention+pos-enc;
+  TransformerBlock+TinyGPT; decoding; KV cache; **generation debug lab**.
+- **Next up: Week 03 Day 01 — RL foundations for post-training** (MDPs, policy gradient,
+  baselines/advantage, GAE, KL-constrained RL). This is a DECLARED TOP GAP — go slow, derive.
 
 ## Next session
 
-Start with the prompt: **"Start Week 2 Day 5"**. Session plan at
-`week-02-transformers-generation/day-05-*/session.md` (create it if absent from `curriculum.md`).
+Start with the prompt: **"Start Week 3 Day 1"**. Session plans at
+`week-03-*/day-01-*/session.md` — **likely absent**; if so, first flesh out Week 3's five
+`session.md` files from `curriculum.md` (RL foundations block list) before teaching Day 1.
 
-Day 5 arc: the week's DEBUG LAB — take the TinyGPT / decoding / KV-cache code and inject/diagnose
-the classic failure modes (NaN-at-step-0 vs step-N, causal-mask leakage, `T==V` shape bugs,
-double-softmax, KV-cache `k` vs `k_all` / prefill-decode feeding bug), each with the matched fix.
-Consolidates Week 2 for interview readiness.
+Week 3 arc: RL foundations for post-training. Day 1 is expected to be MDPs + the policy-gradient
+theorem from first principles (REINFORCE, log-derivative trick, why baselines reduce variance
+without bias), building toward advantage/GAE and KL-constrained RL later in the week. Lean hard on
+derivations — RL depth "interview-crisp and derivable on demand" is one of his two named top gaps.
 
-Quiz Week-2 D4 cold at the start: KV-cache formula `2·L·n_kv·d_head·T·B·bytes` (7B fp16 =
-512 KiB/tok → 2 GiB@4k,B1 → 64 GiB@8k,B16, dwarfs 14 GB weights; GQA n_kv=8 → 4× smaller); prefill
-(compute-bound, parallel) vs decode (memory-bandwidth bound, ≈1 op/byte); why K/V cached but not Q;
-why batching helps (amortize weight-streaming → intensity ↑ ~B×); BW-tied levers = batch /
-continuous-batch / quantize / speculative-decode; GQA/MQA + PagedAttention. Also re-poll the D3
-degeneration + top-k/top-p framing (still a soft spot: read the FULL question, name the alternative).
+Quiz Week-2 cold at the start (spaced repetition, hit the D5 soft spots): the **attention-NaN
+fastest-first checklist** (temporal clue step-0 vs step-N → masked-row 0/0 → fp16 overflow → eps →
+grads → data) — this came out as guesses on D5, needs a clean cold rep. Also re-poll: **teacher
+forcing vs free-running** + the two crown-jewel invariant tests (causal-leakage, cached==uncached);
+KV-cache memory formula + why decode is BW-bound (≈1 op/byte, batching amortizes weights); top-k
+(fails both ways) vs top-p (adaptive); degeneration = repetition attractor.
 
 ## Completed
 
@@ -127,6 +129,23 @@ degeneration + top-k/top-p framing (still a soft spot: read the FULL question, n
   (silent in prefill P=0, crashes first decode step); (2) `generate_cached` fed the whole running
   context + past cache into decode instead of just `next_tok` (defeats the cache). Quiz (W2 D1-D3)
   4.6/5.
+
+- **W2 D5 — Generation Debug Lab (Week-2 capstone).** Built `week-02/code/debug_lab.py` — six
+  INVARIANT regression tests (causal-no-leakage, cached==uncached, masked-row-not-all-inf,
+  no-nan-fwd-bwd, shape-contract, overfit-one-batch) + a planted-bug demo that monkeypatches Bug A
+  (mask `diagonal=0`) and proves the suite fires. 6/6 pass (harness + pytest). Wired the Week-2
+  generation notebook (`work.ipynb`): causal attention heatmaps (0 mass above diagonal), all 5
+  decoding strategies, cached==uncached + **2.85× decode speedup**, live NaN repro/fix. Taught the
+  **four-contract debug map** (causal/shape/numeric/train-inference) and the two crown-jewel tests.
+  Quiz (D1-D4) 5.2/6 (KV math now automatic; D3 decoding solid). Bug hunt A-E ~4.1/5 (slipped on the
+  CE reshape fix and the crop-the-INPUT axis for E). **Two genuine TEST-DESIGN bugs surfaced live:**
+  (1) `cached==uncached` was TOOTHLESS on the successor-trained model — `next=current+1` is
+  position-wise so a broken attention mask doesn't change output; fix = use a RANDOM model (logits
+  depend on all positions). (2) `torch.zeros_like(bool_mask)` is bool → `masked_fill(-inf)` casts to
+  True → `isfinite` trivially passes; fix = float scores + check finiteness AFTER softmax. Drills:
+  train/inference-mismatch ~0.75 (needs to LEAD with teacher-forced vs free-running); **attention-NaN
+  fastest-first ~0.4 — came out as guesses, the clear remaining soft spot.** Checkpoints ~4.4/5.
+  Wrote deliverable + week-summary + retrospective. WEEK 2 COMPLETE.
 
 ## Learner profile (quick facts)
 
@@ -306,3 +325,27 @@ degeneration + top-k/top-p framing (still a soft spot: read the FULL question, n
   (3) Offset causal mask = `tril(ones(S,P+S), diagonal=pos_offset)` → keep iff `key_j ≤ pos_offset+q_i`
   (prefill→lower-tri; decode S=1→keep all). (4) Learned pos-table ⇒ positions `pos_offset+arange(S)`.
   (5) `cat` past+new on time axis `dim=-2`; build mask on `x.device`.
+- Four debugging CONTRACTS (every transformer/gen bug = one violation): CAUSAL (no future leakage),
+  SHAPE/AXIS (each axis means one thing; worst when two dims equal), NUMERIC (reductions stay finite
+  + normalized), TRAIN/INFERENCE (token seen the same at gen as train). Method: symptom → contract →
+  cheapest EXCLUSION test → decisive LOCALIZATION test.
+- Two crown-jewel INVARIANT tests (weights-independent → run pre-training in CI): (1) causal-leakage
+  = perturb tokens > t, assert logits ≤ t are BIT-IDENTICAL; (2) cached==uncached = KV-cache greedy is
+  token-identical to naive path. Leakage is dangerous because the model CHEATS (peeks at the answer) →
+  train loss collapses to ~0 while learning nothing → total failure at inference.
+- Teacher forcing (train: gold prefix, 1 parallel pass, causal mask makes it valid) vs free-running
+  (inference: feed model's own outputs back, T sequential steps). "Trains fine but generates garbage"
+  ⇒ feed a known example: teacher-forced correct + free-running garbage ⇒ bug is 100% in the gen path
+  (positions/cache/mask/eval/crop/preprocessing skew), NOT the weights.
+- Overfit-one-batch = the #1 plumbing smoke test: a correct model MUST drive one fixed batch to ~0
+  (memorize == solve). Fail ⇒ bug (detached graph, no_grad on the optimized branch, wrong .parameters(),
+  LR, shape). Then GREEDY-the-overfit to also test the gen path (learning works vs using-what-it-learned).
+- Attention-NaN fastest-first (SOFT SPOT — memorize the order): temporal clue (step-0=config, rules out
+  LR; step-N=grew) → (1) fully-masked softmax row `softmax([-inf…]) = exp→0 everywhere → 0/Σ0 = 0/0 = NaN`
+  (fix: every row keeps ≥1 key) → (2) fp16 overflow→Inf→Inf−Inf=NaN (bf16/fp32 softmax) → (3) LN/RMS
+  eps=0 → (4) exploding grads (clip/warmup) → (5) bad data / target id ≥ V.
+- TEST-DESIGN lesson: an invariant test's power = the input's SENSITIVITY to the thing under test. A
+  cached==uncached test on a POSITION-WISE task (successor `next=cur+1`, needs no attention) is TOOTHLESS
+  to a broken attention mask — use a RANDOM model (logits depend on all positions). And a passing test
+  can be wrong for the wrong reason (`zeros_like(bool_mask)` → isfinite trivially True; use float + check
+  AFTER softmax).
