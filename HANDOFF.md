@@ -9,26 +9,28 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
 - **Week 01 — COMPLETE** (Days 01-05 done). LM Foundations & PyTorch Fluency.
 - **Week 02 — COMPLETE** (Days 01-05 done). Transformers + generation: attention+pos-enc;
   TransformerBlock+TinyGPT; decoding; KV cache; **generation debug lab**.
-- **Next up: Week 03 Day 01 — RL foundations for post-training** (MDPs, policy gradient,
-  baselines/advantage, GAE, KL-constrained RL). This is a DECLARED TOP GAP — go slow, derive.
+- **Week 03 — IN PROGRESS.** All five Day session.md plans now fleshed out from curriculum
+  (MDPs → policy gradient → baselines/advantage → GAE → KL-constrained RL). **Day 01 DONE.**
+- **Next up: Week 03 Day 02 — Policy Gradient Theorem.** RL depth is a DECLARED TOP GAP — derive.
 
 ## Next session
 
-Start with the prompt: **"Start Week 3 Day 1"**. Session plans at
-`week-03-*/day-01-*/session.md` — **likely absent**; if so, first flesh out Week 3's five
-`session.md` files from `curriculum.md` (RL foundations block list) before teaching Day 1.
+Start with the prompt: **"Start Week 3 Day 2"**. Session plan at
+`week-03-rl-foundations/day-02-policy-gradient-theorem/session.md` (already fleshed out).
 
-Week 3 arc: RL foundations for post-training. Day 1 is expected to be MDPs + the policy-gradient
-theorem from first principles (REINFORCE, log-derivative trick, why baselines reduce variance
-without bias), building toward advantage/GAE and KL-constrained RL later in the week. Lean hard on
-derivations — RL depth "interview-crisp and derivable on demand" is one of his two named top gaps.
+Day 2 = the policy gradient theorem from first principles: log-derivative/score-function trick,
+`∇J = E[Σ_t ∇log π(a_t|s_t) G_t]`, why dynamics P and ρ₀ **drop out** (⇒ model-free), reward-to-go
+causality, and the bridge to the advantage form. Coding: REINFORCE on the Day-1 gridworld/bandit
+(`code/reinforce.py`) with a gradient-variance print. **Carry in the EGLP lemma**
+`E_{a∼π}[∇log π]=0` — he had this as a GAP on the Day-1 drill (see below); it's the seed for both
+the reward-to-go argument (D2) and baseline unbiasedness (D3).
 
-Quiz Week-2 cold at the start (spaced repetition, hit the D5 soft spots): the **attention-NaN
-fastest-first checklist** (temporal clue step-0 vs step-N → masked-row 0/0 → fp16 overflow → eps →
-grads → data) — this came out as guesses on D5, needs a clean cold rep. Also re-poll: **teacher
-forcing vs free-running** + the two crown-jewel invariant tests (causal-leakage, cached==uncached);
-KV-cache memory formula + why decode is BW-bound (≈1 op/byte, batching amortizes weights); top-k
-(fails both ways) vs top-p (adaptive); degeneration = repetition attractor.
+Quiz Day-1 cold at the start (spaced repetition): MDP tuple + Markov property; derive the Bellman
+expectation eq for V^π in two lines; **why E_{a∼π}[A^π]=0** and why that makes V the natural
+baseline; expectation (E_π, linear) vs optimality (max_a, nonlinear); the LLM→MDP mapping
+(deterministic append dynamics, sparse terminal reward ⇒ credit assignment is the crux). Also keep
+a Week-2 spaced item alive: the **attention-NaN fastest-first checklist** (still improving —
+remember fp16 overflow is bucket-agnostic, can fire at step 0 too).
 
 ## Completed
 
@@ -147,6 +149,20 @@ KV-cache memory formula + why decode is BW-bound (≈1 op/byte, batching amortiz
   fastest-first ~0.4 — came out as guesses, the clear remaining soft spot.** Checkpoints ~4.4/5.
   Wrote deliverable + week-summary + retrospective. WEEK 2 COMPLETE.
 
+- **W3 D1 — MDPs, Returns & Value Functions.** Fleshed out all 5 Week-3 session.md plans first.
+  Built `week-03-rl-foundations/code/mdp.py` (7/7 self-check invariants PASS): `policy_matrices`
+  (einsum contractions), `bellman_expectation_backup`, iterative policy eval (γ-contraction in
+  code) == exact linear solve `(I−γP_π)^{-1}r_π`, `q_from_v`, `advantage`, `value_iteration`
+  (max-backup + one-hot greedy). 2-state chain: `V^*=[10,10]=1/(1−γ)`, `π^*`="reach & stay",
+  random `V^π=[4.75,5.41]`<V^*. Derived Bellman expectation cleanly on the whiteboard (via the
+  Q-then-V-substitution route — correct; noted the Q line is where Markov + law-of-total-expectation
+  live). Week-2 cold quiz **~4.15/5** (KV math now automatic + exact; NaN checklist came out as
+  knowledge not guesses — drill the fastest-first ORDER + remember fp16 overflow is bucket-agnostic;
+  teacher-forcing decisive-because-same-weights was the missing half). Interview drills: Q1 (why not
+  SL) 0.9; **Q2 (critic/unbiasedness) 0.6 — knew critic=V^π but missed the EGLP unbiasedness
+  argument → explicit Day-3 seed.** Code was strong (all correct, only nits: unseeded V init;
+  argmax on last-iter Q has a one-step lag, recompute Q after loop). Deliverable written.
+
 ## Learner profile (quick facts)
 
 - Strong: PhD-level math/optimization, senior ML eng, real post-training experience
@@ -157,6 +173,34 @@ KV-cache memory formula + why decode is BW-bound (≈1 op/byte, batching amortiz
   "pet food" → "pet food for cats"), DPO to beat a Sonnet teacher via HF.
 - Teaching style that works: derive from first principles, quiz from prior day, give code
   stubs + self-check harness (don't pre-solve), connect to his projects and later weeks.
+
+### Running facts — Week 3 (RL foundations)
+
+- RL vs SL: `J(θ)=E_{τ∼p_θ}[R(τ)]` — the SAMPLING DISTRIBUTION depends on θ. This (not just
+  non-differentiable reward) is the FUNDAMENTAL reason you can't plain-backprop; forces the
+  log-derivative/score-function trick `∇E_{p_θ}[f]=E_{p_θ}[f ∇log p_θ]`.
+- MDP tuple `(S,A,P,r,γ,ρ₀)`. Markov property = future ⊥ past | present ⇒ it's EXACTLY what makes
+  V^π(s) a function of s alone (no path dependence ⇒ the Bellman recursion closes).
+- Trajectory factorization `p_θ(τ)=ρ₀(s₀)Π_t π_θ(a_t|s_t)P(s_{t+1}|s_t,a_t)`: only the π terms
+  carry θ ⇒ dynamics & ρ₀ vanish from ∇log p_θ (⇒ model-free, the D2 punchline).
+- Return `G_t=Σ_k γ^k r_{t+k}`; γ sets effective horizon `≈1/(1−γ)` (verified: V^*=10 at γ=0.9).
+- `V^π(s)=E_π[G_t|s]`, `Q^π(s,a)=E_π[G_t|s,a]`, `V^π=E_{a∼π}[Q^π]`. Advantage `A^π=Q^π−V^π`;
+  `E_{a∼π}[A^π]=0` per state (proven in code) = why V^π is the natural (variance-reducing) baseline.
+- Bellman EXPECTATION `V^π(s)=Σ_a π(a|s)[r+γΣ_{s'}P V^π(s')]` (linear in V, fixed π = evaluation)
+  vs Bellman OPTIMALITY `V^*(s)=max_a[r+γΣ P V^*]` (nonlinear, greedy-in-Q^* is optimal). Both are
+  γ-contractions in sup-norm ⇒ unique fixed point ⇒ iterative eval / value iteration converge.
+- Deriving Bellman: peel one step `Q^π(s,a)=r(s,a)+γΣ_{s'}P(s'|s,a)V^π(s')` — that line silently
+  uses Markov (future depends only on s') + law of total expectation; then V^π=Σ_a π Q^π, substitute.
+- EGLP lemma (Day-1 GAP, seed for D2/D3): `E_{a∼π}[∇_θ log π_θ(a|s)]=∇Σ_a π=∇1=0` ⇒ any STATE-ONLY
+  baseline b(s) is UNBIASED: `E[∇log π · b(s)]=b(s)·0=0`. Reduces variance, not mean. b=V^π ⇒
+  advantage form `∇J=E[Σ_t ∇log π · A^π]`.
+- LLM→MDP: state=prompt+tokens, action=next token, π=LM softmax, dynamics DETERMINISTIC (append),
+  reward SPARSE & TERMINAL (RM/verifier @EOS), γ≈1. ⇒ long horizon + sparse reward = credit
+  assignment is the crux (why baselines/GAE matter). PPO critic estimates V^π; GRPO uses a group
+  mean as the (still-unbiased) baseline instead of a learned critic.
+- Numpy idioms locked: `np.eye(A)[idx]` = one-hot rows (= scatter `M[arange, idx]=1`); solve linear
+  systems with `np.linalg.solve`, NEVER `inv`; explicit `V[:,None]` when subtracting a per-state
+  vector across the action axis (S==A square-shape silent-bug trap, seen again).
 
 ## Conventions
 

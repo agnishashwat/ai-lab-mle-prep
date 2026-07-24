@@ -2,9 +2,9 @@
 
 ## Current Status
 
-- Current week: **Week 02 COMPLETE** (Days 01-05 done) -> Week 03 (RL foundations) next
-- Current day: Week 2 Day 05 done (Generation Debug Lab: 6 invariant regression tests + notebook)
-- Current focus: transformers + generation fully covered (attention, pos-enc, TinyGPT, decoding, KV cache, debug lab)
+- Current week: **Week 03 IN PROGRESS** — RL foundations for post-training
+- Current day: Week 3 Day 01 done (MDPs, returns, value functions, Bellman ops; `code/mdp.py` 7/7 invariants)
+- Current focus: RL substrate for PPO/GRPO/DPO — value functions, advantage, Bellman fixed points
 
 ### Diagnostic (Day 01)
 
@@ -17,7 +17,7 @@
 |---|---|---|---|
 | 01 | LM foundations + PyTorch | Complete (5/5) | Tiny LM train/eval/ablation harness |
 | 02 | Transformers + generation | Complete (5/5) | Decoder-only mini-impl + debug suite |
-| 03 | RL foundations | Not started | Toy policy-gradient implementation |
+| 03 | RL foundations | In progress (D1/5) | Toy policy-gradient implementation |
 | 04 | RLHF + PPO | Not started | PPO/RLHF explainer notebook |
 | 05 | DPO + preference optimization | Not started | DPO trainer |
 | 06 | GRPO + RLVR | Not started | Mini RLVR repo |
@@ -30,7 +30,10 @@
 
 Topics to revisit:
 
-- [ ] Policy gradient theorem
+- [x] MDP tuple + Markov property; Bellman expectation (E_π) vs optimality (max_a); γ-contraction ⇒ unique fixed point (W3 D1)
+- [x] Value functions V^π/Q^π, advantage A^π=Q−V, and E_{a∼π}[A]=0 per state = why V is the natural baseline (W3 D1)
+- [ ] EGLP lemma E_{a∼π}[∇log π]=0 ⇒ state-only baseline is unbiased (Day-1 drill gap → Day 3)
+- [ ] Policy gradient theorem (log-derivative trick; why P & ρ₀ drop out; reward-to-go causality)
 - [ ] PPO ratio / clipping
 - [ ] DPO derivation
 - [ ] GRPO group baseline
