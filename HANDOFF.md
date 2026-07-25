@@ -198,6 +198,14 @@ alive: attention-NaN fastest-first ORDER.
   named 1 of 6 variance sources, no answer at all on the temp/top-p off-policy scenario, and
   Drill 3 restated the conclusion without the argument or the 3.15× number that was on screen.
   Recurring pattern (also in the W2 retro): **answers the first clause of a question and stops.**
+  **RE-DRILLED same session (he asked for it) — big recovery:** LLM→MDP 0.55→**0.85**;
+  factorization 0.4→**0.7** (derivation now complete; couldn't name model-based RL as the class
+  needing P); causality proof 0.3→**0.85** (clean, via the slick `∇E_{a∼π}[1]=∇1=0` route);
+  Ψ ladder 0.3→**0.6**; variance sources 0.35→**0.6**; off-policy 0.0→**0.72** (got PPO's
+  motivation unaided: "still off-policy after epoch 1, fix = importance sampling"); pushback
+  0.3→**0.5**. Two residual tells: (1) repeated the "depends on θ" slip when saying why `t'≥t`
+  survives — the discriminator is `a_t`-MEASURABILITY, not θ-dependence; (2) **inflated his own
+  measured 3.15× to "~4×"** — flag hard, never round a measured number in your favor.
 
 ## Learner profile (quick facts)
 
@@ -255,12 +263,42 @@ alive: attention-NaN fastest-first ORDER.
   `∇E[r_{t'}]=0` — that's false, early rewards do depend on θ. For `t'≥t` it fails (`r_{t'}` depends
   on `a_t`) — that asymmetry IS causality. Effect: bias UNCHANGED, variance strictly lower.
 - Ψ_t ladder (high→low variance): `R(τ)` → `G_t` → `G_t−b(s_t)` → `Q^π` → `A^π` → `δ_t` (biased if
-  V≠V^π) → `GAE(γ,λ)`. Each step down swaps a Monte-Carlo sample for an expectation/bootstrap.
-  Every algorithm REINFORCE→PPO differs ONLY in Ψ_t.
-- Six sources of REINFORCE variance (D2 drill gap): (1) SF estimator sees no ∇f, (2) temporal
-  credit misassignment → reward-to-go, (3) all-positive returns, no baseline → advantage,
-  (4) horizon: `T(T−1)/2` useless cross terms, (5) compounding ρ₀/π/P stochasticity → batch size
-  (only 1/n), (6) reward scale (variance ∝ reward²) → advantage whitening.
+  V≠V^π) → `GAE(γ,λ)`. Every algorithm REINFORCE→PPO differs ONLY in Ψ_t.
+- **What Ψ_t IS:** `∇log π(a_t|s_t)` is the DIRECTION ("make a_t more likely at s_t"); `Ψ_t` is the
+  signed scalar CREDIT for that decision. **Ψ_t MUST depend on the action** — a state-only Ψ gives
+  an IDENTICALLY ZERO gradient by EGLP (that's the definition of a baseline). Division of labor:
+  Ψ_t depends on `a_t` (all the signal); the baseline `b` does not (keeps it unbiased). `A^π=Q^π−V^π`
+  states both at once.
+- Ladder ORDERING PRINCIPLE (he got this wrong — said "shrink |Ψ|"): shrinking Ψ by `c` scales mean
+  AND std by `c`, so SNR is unchanged. It's **lower variance at FIXED mean**, via two mechanisms:
+  (1) delete provably zero-mean terms = control variate (reward-to-go, baselines); (2) replace a
+  SAMPLE with its EXPECTATION = Rao-Blackwellization, `Var(E[X|Y]) ≤ Var(X)` (G_t → Q^π → bootstrap).
+  Mechanism 2 needs a critic you don't have ⇒ critic error is the source of the bias in δ_t/GAE.
+- Cross-term count: `ĝ = (Σ_t ∇log π_t)(Σ_{t'} γ^{t'} r_{t'})` = `T²` pairs; the `T(T−1)/2` pairs with
+  `t'<t` are provably zero-mean = pure noise. **CORRECTION to an earlier over-claim: the variance
+  GAP does NOT grow like T².** Measured on the 2-state chain (γ=0.99, 3000 eps): ratio 1.84× @T=2,
+  2.70× @T=8, 3.09× @T=32, **4.09× @T=128** (both variances grow ~T^2.3; the ratio grows slowly and
+  monotonically). Interview claim = "free, consistent, horizon-growing win," with the table.
+- `t'≥t` survives because `r_{t'}` depends on **`a_t`** ⇒ NOT `h_t`-measurable. NOT because it
+  "depends on θ" (past rewards depend on θ too — that's not the discriminator). He has slipped on
+  this exact point twice.
+- Model-based RL is the class that NEEDS the dropped `P` term: DP/value iteration (his own Day-1
+  `mdp.py` uses `mdp.P` in every backup), Dyna/MBPO (learn `P̂`, roll out synthetic data), Dreamer /
+  differentiable sims (need `∂s'/∂a` for a PATHWISE gradient), AlphaZero MCTS (known P for planning).
+  Trade = sample efficiency vs. the policy exploiting model error.
+- LLM determinism consequences: all trajectory randomness is in π_θ; the transition "model" is exact
+  and free (model error is not an LLM-RL failure mode); environment stochasticity is NOT a variance
+  source here — gradient noise is policy sampling + reward noise only.
+- Interview hygiene: **never round a measured number in your favor** (3.15× is not "~4×"). The
+  credibility of a quantitative answer rests on the number being exact and reproducible.
+- Sources of REINFORCE variance (D2 drill gap; he got 3 of 5 on the re-drill): (1) SF estimator is
+  zeroth-order — sees no ∇f, only a scalar score; (2) temporal credit misassignment → reward-to-go;
+  (3) all-positive returns, no centering → baseline/advantage; (4) horizon: `T(T−1)/2` zero-mean
+  cross terms; (5) compounding ρ₀/π/P stochasticity over an exponentially large trajectory space →
+  batch size, the EXPENSIVE lever (only `1/n`, so halving noise costs 4× compute); (6) reward-model
+  NOISE (not reward SCALE — he correctly noted scaling Ψ moves mean and std together, so SNR is
+  unchanged; scale is an effective-LR issue, and advantage whitening helps mostly via CENTERING);
+  (7) LLM-specific: sparse terminal reward, one scalar shared across all T tokens.
 - **Off-policy-by-accident (the #1 RLHF sampling bug):** rollouts at temp 0.7 / top-p 0.9 come from
   μ≠π_θ; both distortions oversample already-likely tokens ⇒ reinforce the mode ⇒ ENTROPY COLLAPSE
   ("reward up, then degeneration"). Fix order: sample RL rollouts at T=1.0 untruncated → IS ratio
