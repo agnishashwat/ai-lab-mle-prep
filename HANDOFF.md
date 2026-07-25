@@ -9,28 +9,36 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
 - **Week 01 — COMPLETE** (Days 01-05 done). LM Foundations & PyTorch Fluency.
 - **Week 02 — COMPLETE** (Days 01-05 done). Transformers + generation: attention+pos-enc;
   TransformerBlock+TinyGPT; decoding; KV cache; **generation debug lab**.
-- **Week 03 — IN PROGRESS.** All five Day session.md plans now fleshed out from curriculum
-  (MDPs → policy gradient → baselines/advantage → GAE → KL-constrained RL). **Day 01 DONE.**
-- **Next up: Week 03 Day 02 — Policy Gradient Theorem.** RL depth is a DECLARED TOP GAP — derive.
+- **Week 03 — IN PROGRESS.** All five Day session.md plans fleshed out from curriculum
+  (MDPs → policy gradient → baselines/advantage → GAE → KL-constrained RL). **Days 01-02 DONE.**
+- **Next up: Week 03 Day 03 — Baselines, Advantage & Variance Reduction.** RL depth is a
+  DECLARED TOP GAP — derive.
 
 ## Next session
 
-Start with the prompt: **"Start Week 3 Day 2"**. Session plan at
-`week-03-rl-foundations/day-02-policy-gradient-theorem/session.md` (already fleshed out).
+Start with the prompt: **"Start Week 3 Day 3"**. Session plan at
+`week-03-rl-foundations/day-03-baselines-advantage-variance-reduction/session.md`.
 
-Day 2 = the policy gradient theorem from first principles: log-derivative/score-function trick,
-`∇J = E[Σ_t ∇log π(a_t|s_t) G_t]`, why dynamics P and ρ₀ **drop out** (⇒ model-free), reward-to-go
-causality, and the bridge to the advantage form. Coding: REINFORCE on the Day-1 gridworld/bandit
-(`code/reinforce.py`) with a gradient-variance print. **Carry in the EGLP lemma**
-`E_{a∼π}[∇log π]=0` — he had this as a GAP on the Day-1 drill (see below); it's the seed for both
-the reward-to-go argument (D2) and baseline unbiasedness (D3).
+Day 3 = baselines and the advantage form. The **EGLP lemma is now overdue for a cold, unprompted
+derivation** — it has been the load-bearing step three days running (D1 drill gap, D2 reward-to-go
+proof, D3 baseline unbiasedness) and he has still never produced it unprompted. Make him state and
+prove `E_{a∼π}[∇log π]=0` in two lines BEFORE anything else, then: any `h_t`-measurable `b(s)` is
+unbiased; `b=V^π` is the variance-minimizing-ish choice; the true optimal baseline is the
+`||∇log π||²`-weighted average of Q; bridge to `A^π` and to GRPO's group-mean baseline.
 
-Quiz Day-1 cold at the start (spaced repetition): MDP tuple + Markov property; derive the Bellman
-expectation eq for V^π in two lines; **why E_{a∼π}[A^π]=0** and why that makes V the natural
-baseline; expectation (E_π, linear) vs optimality (max_a, nonlinear); the LLM→MDP mapping
-(deterministic append dynamics, sparse terminal reward ⇒ credit assignment is the crux). Also keep
-a Week-2 spaced item alive: the **attention-NaN fastest-first checklist** (still improving —
-remember fp16 overflow is bucket-agnostic, can fire at step 0 too).
+**Coding:** `code/reinforce.py` is built to extend — add a `Psi_t` mode to `episode_weights` and
+rerun the SAME harness. The `exact_J` / `exact_gradient` finite-difference ground truth means any
+new estimator can be tested for unbiasedness numerically. A batch-level baseline needs plumbing at
+the `collect_batch` level (single-episode baselines are biased — he made exactly this error on D2).
+Good D3 experiment: show baseline is unbiased AND stacks with reward-to-go (expect well beyond the
+3.15× that reward-to-go alone bought).
+
+Quiz D2 cold: derive PG in 4 lines (log-derivative + regularity conditions); why P and ρ₀ drop out
+and what model-free means; **the reward-to-go causality proof via the tower rule** (his D2 proof
+was invalid — see Completed); the Ψ_t ladder with bias/variance; score-function vs pathwise.
+Also re-drill the two D2 drill misses: **six sources of REINFORCE variance** and the
+**temp-0.7/top-p-0.9 off-policy rollout scenario** (he had no answer). Keep the Week-2 spaced item
+alive: attention-NaN fastest-first ORDER.
 
 ## Completed
 
@@ -163,6 +171,34 @@ remember fp16 overflow is bucket-agnostic, can fire at step 0 too).
   argument → explicit Day-3 seed.** Code was strong (all correct, only nits: unseeded V init;
   argmax on last-iter Q has a one-step lag, recompute Q after loop). Deliverable written.
 
+- **W3 D2 — Policy Gradient Theorem & REINFORCE.** Built `week-03/code/reinforce.py` (9/9
+  self-checks, ~27 s): tabular softmax policy, `episode_logprobs` (LM `log_softmax`+`gather`
+  idiom), `discount_cumsum`, the two `Psi_t` modes, `episode_gradient` via `autograd.grad`,
+  `collect_batch`/`gradient_statistics`, and the REINFORCE loop. **Design win: the env is the
+  Day-1 finite MDP, so `exact_J` (T Bellman backups) + central finite differences give a
+  GROUND-TRUTH gradient** — unbiasedness became an assertion, not a claim. Results: both
+  estimators match FD truth (max|err| 0.0069 / 0.0038); **reward-to-go = 3.15× variance
+  reduction at identical mean**; learned π == Day-1 π* ("reach & stay"), return 7.916/8.0.
+  Noticed unprompted-by-him structure: gradient rows sum to zero (softmax over-parameterization,
+  same null space as `diag(s)−ssᵀ`) and state-0 grad is 2.7× state-1's (discounted state
+  visitation). Cold quiz (D1) **4.5/6** — clean Bellman + advantage whiteboards; **Q5 LLM→MDP
+  0.55: put the policy's randomness into the DYNAMICS** (action = sampled TOKEN not logits;
+  dynamics = deterministic append; γ≈1 not 1/length). NaN checklist up to 0.75 from 0.4.
+  Derivation **1.8/4**: Part 1 clean; **Part 2 he omitted ρ₀ and P from `p_θ(τ)` entirely =
+  assuming the conclusion**; **Part 3 invalid — claimed `∇_θ E[r_{t'}]=0` (false; early rewards
+  DO depend on θ) by treating the sampled trajectory as θ-independent.** Correct proof = tower
+  rule on `h_t` (past reward is `h_t`-measurable) + EGLP on the inner `E_{a_t}`. Part 4 gave 2 of
+  7 Ψ_t choices. Live code bugs: **`np.zeros(dtype=np.long)` gradient buffer (int truncation →
+  silent all-zero gradients, the week's most dangerous bug)**; `sum` instead of `mean`; variance
+  un-normalized; `T = rewards.shape` (tuple) ×2; `actions.unsqueeze` on a numpy array; **an
+  episode-internal `G_t − G.mean()` "baseline" (BIASED — b must be `h_t`-measurable)**; a
+  `reward_to_go_baseline` branch silently identical to `reward_to_go`. Heavy idiom Q&A
+  (gather-vs-advanced-indexing incl. the batched `arange(B)[:,None]` case, `autograd.grad` tuple
+  return, `detach` not in-place, optimizer forms for ASCENT). **Drills weak: 0.35 / 0.0 / 0.3** —
+  named 1 of 6 variance sources, no answer at all on the temp/top-p off-policy scenario, and
+  Drill 3 restated the conclusion without the argument or the 3.15× number that was on screen.
+  Recurring pattern (also in the W2 retro): **answers the first clause of a question and stops.**
+
 ## Learner profile (quick facts)
 
 - Strong: PhD-level math/optimization, senior ML eng, real post-training experience
@@ -201,6 +237,61 @@ remember fp16 overflow is bucket-agnostic, can fire at step 0 too).
 - Numpy idioms locked: `np.eye(A)[idx]` = one-hot rows (= scatter `M[arange, idx]=1`); solve linear
   systems with `np.linalg.solve`, NEVER `inv`; explicit `V[:,None]` when subtracting a per-state
   vector across the action axis (S==A square-shape silent-bug trap, seen again).
+- LLM policy notation: net maps state→**logits** `z_t∈R^V`; `π_θ(·|s_t)=softmax(z_t)` is the
+  DISTRIBUTION; `π_θ(a_t|s_t)` is ONE SCALAR coordinate at the SAMPLED token. Logits ≠ action.
+  Dynamics = deterministic append (`s'=s⊕a`), so ALL trajectory randomness lives in π_θ.
+- **PG = cross-entropy on your OWN samples, reweighted.** Same `log_softmax→gather` pass as LM
+  training; differences are (a) gathered token is sampled not gold, (b) weight is `Ψ_t` not `1/BT`.
+  `∇_z log π(a|s) = e_a − p` = exact NEGATIVE of W1's `∂CE/∂z = p − e_y` ⇒ `Ψ_t<0` pushes mass AWAY
+  from the sample, which SFT structurally cannot express. Same off-by-one shift as LM training.
+- Score-function `E[f ∇log p]` (needs only to EVALUATE f; discrete/black-box OK; high variance,
+  f is a scalar weight) vs pathwise/reparam `x=g_θ(ε)` (needs ∇f + continuous x; low variance).
+  LLM RL is forced into SF on BOTH counts. **DPO = the attempt to get back to pathwise** (closed
+  form over fixed pairs ⇒ low variance, paid for with off-policy static data).
+- PG derivation regularity conditions: exchange ∇ and Σ (dominated convergence), **support of p_θ
+  must not depend on θ** (fine for softmax), R(τ) not a function of θ.
+- Reward-to-go causality (COLD-DRILL THIS): for `t'<t`, condition on `h_t=(s_0,a_0,…,s_t)`; `r_{t'}`
+  is `h_t`-measurable ⇒ pulls out; inner `E_{a_t∼π}[∇log π]=0` by EGLP ⇒ term is 0. **NOT** because
+  `∇E[r_{t'}]=0` — that's false, early rewards do depend on θ. For `t'≥t` it fails (`r_{t'}` depends
+  on `a_t`) — that asymmetry IS causality. Effect: bias UNCHANGED, variance strictly lower.
+- Ψ_t ladder (high→low variance): `R(τ)` → `G_t` → `G_t−b(s_t)` → `Q^π` → `A^π` → `δ_t` (biased if
+  V≠V^π) → `GAE(γ,λ)`. Each step down swaps a Monte-Carlo sample for an expectation/bootstrap.
+  Every algorithm REINFORCE→PPO differs ONLY in Ψ_t.
+- Six sources of REINFORCE variance (D2 drill gap): (1) SF estimator sees no ∇f, (2) temporal
+  credit misassignment → reward-to-go, (3) all-positive returns, no baseline → advantage,
+  (4) horizon: `T(T−1)/2` useless cross terms, (5) compounding ρ₀/π/P stochasticity → batch size
+  (only 1/n), (6) reward scale (variance ∝ reward²) → advantage whitening.
+- **Off-policy-by-accident (the #1 RLHF sampling bug):** rollouts at temp 0.7 / top-p 0.9 come from
+  μ≠π_θ; both distortions oversample already-likely tokens ⇒ reinforce the mode ⇒ ENTROPY COLLAPSE
+  ("reward up, then degeneration"). Fix order: sample RL rollouts at T=1.0 untruncated → IS ratio
+  (variance explodes over a product of T ratios ⇒ why PPO clips a PER-TOKEN ratio) → note clipping
+  can't repair top-p (**support** mismatch, can't estimate mass you never sample) → instrument
+  entropy + `KL(π_θ‖π_ref)`.
+- Baseline validity: `b` must be `h_t`-MEASURABLE (known before `a_t` is drawn). An episode-internal
+  `G_t − G.mean()` depends on `a_t` and the future ⇒ BIASED. Baselines are a BATCH-level quantity.
+- The surrogate `Σ_t Ψ_t log π_t` is a **gradient generator, not an objective** — its value is
+  meaningless (watch mean reward, never `policy_loss`). `.sum()` not `.mean()` over t, and `/batch`
+  when using `.backward()` (the grad-accum "sum of means → mean of means" fact again).
+- Optimizers DESCEND ⇒ ascent needs `theta.grad = −g`, or `SGD(..., maximize=True)`, or minimize
+  `loss = −surrogate`. `autograd.grad` returns a TUPLE (one per input) and leaves `.grad` untouched
+  (right for per-sample measurement loops); `.backward()` accumulates. `.detach()` on an
+  `autograd.grad` result is redundant at `create_graph=False`; `.detach()` is NOT in-place.
+- **Accumulator dtype is part of correctness**: `np.zeros(..., dtype=np.long)` for a gradient buffer
+  silently truncates floats to 0 and every downstream check "passes" on zeros. Same family as W2-D5
+  `zeros_like(bool_mask)`. Also `theta[:, states]` gives `(B,B,T,A)` — pair with `arange(B)[:,None]`.
+- Indexing rule: whole-slice lookup → advanced indexing `x[idx]` / `index_select` / `F.embedding`
+  (backward is a SCATTER-ADD, so repeated states/tokens accumulate); one-element-per-position →
+  `gather` (index must be the FULL output shape); `take_along_dim` broadcasts the index for you.
+- Softmax over-parameterization: adding a constant to a logit row leaves π unchanged ⇒ J is flat
+  along `1` ⇒ **every policy-gradient row must sum to zero** (same null space as `diag(s)−ssᵀ`).
+  A row that doesn't sum to zero is a bug. Gradient magnitude tracks DISCOUNTED STATE VISITATION
+  (early states get bigger gradients — in LLMs, early tokens).
+- The `γ^t` factor on the reward-to-go weight is required for exact unbiasedness w.r.t. the
+  discounted objective; PPO/GRPO DROP it (formally biased, empirically better conditioned).
+- Finite-MDP ground-truth pattern (reusable all week): `J_T` = T Bellman backups from V=0, then
+  central finite differences ⇒ an exact gradient to check ANY new estimator's unbiasedness
+  numerically. `np.var` already divides by n; per-episode variance (estimator property) ≠ variance
+  of the batch mean (`/n`) — batch size buys only `1/n`, baselines/GAE attack the numerator.
 
 ## Conventions
 
