@@ -10,35 +10,41 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
 - **Week 02 — COMPLETE** (Days 01-05 done). Transformers + generation: attention+pos-enc;
   TransformerBlock+TinyGPT; decoding; KV cache; **generation debug lab**.
 - **Week 03 — IN PROGRESS.** All five Day session.md plans fleshed out from curriculum
-  (MDPs → policy gradient → baselines/advantage → GAE → KL-constrained RL). **Days 01-02 DONE.**
-- **Next up: Week 03 Day 03 — Baselines, Advantage & Variance Reduction.** RL depth is a
+  (MDPs → policy gradient → baselines/advantage → GAE → KL-constrained RL). **Days 01-03 DONE.**
+- **Next up: Week 03 Day 04 — GAE & the Bias/Variance Tradeoff.** RL depth is a
   DECLARED TOP GAP — derive.
 
 ## Next session
 
-Start with the prompt: **"Start Week 3 Day 3"**. Session plan at
-`week-03-rl-foundations/day-03-baselines-advantage-variance-reduction/session.md`.
+Start with the prompt: **"Start Week 3 Day 4"**. Session plan at
+`week-03-rl-foundations/day-04-gae-bias-variance/session.md`.
 
-Day 3 = baselines and the advantage form. The **EGLP lemma is now overdue for a cold, unprompted
-derivation** — it has been the load-bearing step three days running (D1 drill gap, D2 reward-to-go
-proof, D3 baseline unbiasedness) and he has still never produced it unprompted. Make him state and
-prove `E_{a∼π}[∇log π]=0` in two lines BEFORE anything else, then: any `h_t`-measurable `b(s)` is
-unbiased; `b=V^π` is the variance-minimizing-ish choice; the true optimal baseline is the
-`||∇log π||²`-weighted average of Q; bridge to `A^π` and to GRPO's group-mean baseline.
+Day 4 = GAE. It slots straight onto D3's machinery: `δ_t = r_t + γV(s_{t+1}) − V(s_t)` and
+`GAE(γ,λ) = Σ (γλ)^l δ_{t+l}` are just two more `weight_fn`s for
+`actor_critic.batch_gradient_statistics`, so the finite-difference `exact_gradient` will
+**quantify the bias** for each λ — the headline experiment is a λ-sweep table (bias vs variance,
+λ=0 → pure TD, λ=1 → Monte-Carlo reward-to-go, and it should reproduce D3's numbers at both ends).
+D3 already previewed the bias source: critic error. Derive the telescoping identity
+`Σ_l γ^l δ_{t+l} = G_t − V(s_t)` (λ=1) and the geometric-average interpretation.
 
-**Coding:** `code/reinforce.py` is built to extend — add a `Psi_t` mode to `episode_weights` and
-rerun the SAME harness. The `exact_J` / `exact_gradient` finite-difference ground truth means any
-new estimator can be tested for unbiasedness numerically. A batch-level baseline needs plumbing at
-the `collect_batch` level (single-episode baselines are biased — he made exactly this error on D2).
-Good D3 experiment: show baseline is unbiased AND stacks with reward-to-go (expect well beyond the
-3.15× that reward-to-go alone bought).
+**Also worth building on D4 (D3 left it open):** a TIME-INDEXED finite-horizon baseline `V_t(s)`
+(`T−t` Bellman backups → a `(T,S)` table). It should beat both the pooled `b(s)` and `b*`, and it
+converts D3's "mismatched V^π is unbiased but WORSE" cautionary result into a constructive fix.
 
-Quiz D2 cold: derive PG in 4 lines (log-derivative + regularity conditions); why P and ρ₀ drop out
-and what model-free means; **the reward-to-go causality proof via the tower rule** (his D2 proof
-was invalid — see Completed); the Ψ_t ladder with bias/variance; score-function vs pathwise.
-Also re-drill the two D2 drill misses: **six sources of REINFORCE variance** and the
-**temp-0.7/top-p-0.9 off-policy rollout scenario** (he had no answer). Keep the Week-2 spaced item
+Quiz D3 cold: EGLP (should now be instant — if so, retire it); the **h_t-measurability table**
+(which quantities qualify and the consequence of each); why `b=Q^π` DELETES the gradient rather
+than biasing it; `b*` vs `V^π` (weighted vs unweighted mean return) and why nobody uses `b*`;
+the GRPO `(K−1)/K` identity and why the STD division is the real bias.
+**Re-drill the two D3 drill misses:** (1) **"unbiased ≠ variance-reducing"** — the mismatched-critic
+scenario, he answered "biased" (0.25); (2) **entropy regularization's failure mechanism** —
+`∂H/∂z_k = −p_k(log p_k+H)` decays as π sharpens ⇒ preventative not cure, plus KL-to-ref as the
+LLM alternative (0.5). And the perennial: **six sources of REINFORCE variance** (still ~2.5/6 on
+the third attempt — drill the estimator-walk table in Running facts). Keep the Week-2 spaced item
 alive: attention-NaN fastest-first ORDER.
+
+**Recurring behavioural gaps to police:** he still answers the first clause and stops (D3: gave
+what entropy buys but not how it fails, and did NOT cite the β-sweep numbers that were on his
+screen). Demand the second half of every question, and demand he quote his OWN measured numbers.
 
 ## Completed
 
@@ -207,6 +213,48 @@ alive: attention-NaN fastest-first ORDER.
   survives — the discriminator is `a_t`-MEASURABILITY, not θ-dependence; (2) **inflated his own
   measured 3.15× to "~4×"** — flag hard, never round a measured number in your favor.
 
+- **W3 D3 — Baselines, Advantage & Variance Reduction.** Built `week-03/code/actor_critic.py`
+  (**39/39 staged checks, ~31 s**): `fit_state_baseline` (two-`bincount` tabular critic),
+  `oracle_state_baseline` (Day-1 linear solve), `optimal_state_baseline` (`b*`),
+  `weights_with_baseline`, the deliberately-buggy `weights_within_episode_baseline`,
+  `batch_gradient_statistics` (takes a `weight_fn` closure so the DATA is held fixed across
+  estimators), `policy_entropy`/`entropy_gradient`, and `train` with a β sweep.
+  **Variance ladder (identical rollouts): total_return 20.033 → reward_to_go 6.317 (3.17×,
+  reproducing D2's 3.15× = free regression test) → +fitted baseline 1.765 (11.35× cumulative,
+  3.58× on top) → +`b*` 1.476 (13.57×, the best unbiased, as theory predicts).**
+  Learned π == Day-1 π*, return 7.966/8.
+  **Two results that became the day's lessons.** (1) The oracle **`V^π` baseline is unbiased
+  (max|err| 0.0046) but INCREASES variance 27%** (7.769 vs 6.317) — `V^π≈3.4` is the
+  infinite-horizon value while `Ψ_t` uses the T-step reward-to-go pooled over t (mean ≈1.27), so
+  it DEcentres. **My harness assertion "oracle V^π also stacks" was the thing that was wrong, not
+  his code** (3rd time a scaffold claim became the best lesson: W1-D5 noiseless-overfit, W2-D5
+  toothless cached==uncached). ⇒ unbiasedness and variance reduction are INDEPENDENT; this is the
+  unconverged-PPO-critic failure mode. (2) The **biased** within-episode baseline has the LOWEST
+  variance of all (0.784, 25.56×) with its mean 38% wrong (0.561 vs 0.902) ⇒ low variance alone is
+  worthless; only "variance reduction at FIXED mean" is a claim.
+  **Entropy β sweep:** β 0/0.5/2/5 → H 0.074/0.118/0.294/0.522, return 7.966/7.925/7.634/6.375
+  (monotone both ways). β=0.05 did nothing (ΔH=0.0024) because `∂H/∂z_k = −p_k(log p_k+H)` DECAYS
+  as π sharpens ⇒ needs β~O(1); entropy bonus is a collapse PREVENTATIVE, not a cure.
+  **Cold quiz (D2) 6.25/8:** EGLP finally produced cold and unprompted (**1.0** — retire it);
+  PG derivation clean but **regularity conditions unknown (0.7)**; ρ₀/P now written out in full
+  (1.0, fixed from D2); causality proof correct via tower rule (0.8); Ψ ladder **7/7 rungs + bias
+  column** (0.85, ordering principle only half-named); NaN checklist 0.8.
+  Still weak: **six variance sources ~0.4 (third attempt)** and off-policy 0.7.
+  **Derivations:** D1(a) and the `b*` minimization both correct first try (only a dropped square in
+  a denominator); needed 3 rounds of hints on D1(b) (`b=Q^π` ⇒ mean exactly 0) — the block ran
+  ~2× long. Taught **measurability as "if I tell you h_t you can tell me X"**, which he had
+  explicitly asked for. Gave him the GRPO `(K−1)/K`-times-RLOO identity + the std-division-is-the-
+  real-bias point. **Interview drills: D1 0.85, D2 0.9 (best answer — separated Q-as-Ψ from
+  Q-as-b unprompted), D3 0.5, D4 0.25 (answered "biased" to the mismatched-critic scenario — the
+  exact thing his own harness had just measured, and he did not cite his own β-sweep numbers).**
+  **Live code bugs (all caught by the harness):** `np.bincount` on 2-D input + scalar `weights`;
+  `torch.softmax` with no `dim`; `entropy_history.append(tensor)` (graph leak); calling
+  `entropy_gradient` INSIDE `no_grad`; and the notable one — **`theta += numpy_array` is not
+  in-place**: numpy takes over, rebinds the name, and `theta` silently becomes a fresh tensor with
+  `requires_grad=False` (probed and confirmed). **Process change (he asked): rebuilt the harness as
+  STAGED and promoted it to a repo-wide convention** (skill file + `shared/templates/
+  exercise-harness-template.py`) so he can test each TODO the moment he writes it.
+
 ## Learner profile (quick facts)
 
 - Strong: PhD-level math/optimization, senior ML eng, real post-training experience
@@ -330,11 +378,97 @@ alive: attention-NaN fastest-first ORDER.
   central finite differences ⇒ an exact gradient to check ANY new estimator's unbiasedness
   numerically. `np.var` already divides by n; per-episode variance (estimator property) ≠ variance
   of the batch mean (`/n`) — batch size buys only `1/n`, baselines/GAE attack the numerator.
+- **MEASURABILITY, in one line: "`X` is `h_t`-measurable" = if I tell you `h_t`, you can tell me
+  `X`** (X is a deterministic function of what's already known). This single notion settles
+  everything: `r_{t'}` for `t'<t` qualifies (⇒ reward-to-go valid); `r_{t'}` for `t'≥t` does NOT
+  (depends on `a_t`, AND is correlated with `∇log π`, so it can't factor out); `b(s_t)`/`V^π`/`V_φ`
+  qualify (⇒ unbiased regardless of ACCURACY); episode-internal `G_t−mean(G)` does not (⇒ biased,
+  measured 38% low). The discriminator is measurability, **NOT θ-dependence** (past rewards depend
+  on θ too) — he has slipped on this 3×.
+- **Baseline unbiasedness holds for ANY `h_t`-measurable `b`** (history-dependent is fine, not just
+  `b(s)`): tower-rule on `h_t` → `b` pulls out → EGLP kills `E_{a_t}[∇log π]`. Always finish with
+  the second half: **mean unchanged, VARIANCE reduced** — that's the whole point.
+- **An action-dependent baseline DELETES the gradient, it doesn't merely bias it.** With `Ψ_t=G_t`
+  and `b=Q^π(s_t,a_t)`: condition on `(s_t,a_t)` — now `∇log π` is the CONSTANT and `G_t` the random
+  thing, so `E[G_t−Q^π|s_t,a_t]=0` by definition of `Q^π` ⇒ mean is the ZERO matrix, bias `=−∇J`.
+  Per-sample the weights look perfectly centred; only a ground-truth check finds it. Generally
+  `E[∇log π·b(s,a)] = ∇E_{a∼π}[b(s,a)]` ⇒ you subtract the gradient of "make b large" (Q-Prop must
+  add a correction back).
+- Optimal baseline `b*(s) = E[||∇log π||²G]/E[||∇log π||²]` = the score-magnitude-WEIGHTED mean
+  return; `V^π` is the UNWEIGHTED one; equal iff score magnitude ⊥ return. Nobody uses `b*`: ratio
+  of noisy estimates, wants a per-COORDINATE baseline for vector θ, and `V^π` is reusable (gives
+  bootstrapping + GAE). Measured: `b*` 1.476 vs fitted `V` 1.765 — real but small.
+- **UNBIASED ≠ VARIANCE-REDUCING (D3's headline, D4 re-drill).** A horizon-mismatched oracle `V^π`
+  was unbiased (0.0046) and yet +27% variance (7.769 vs 6.317 with NO baseline) — `V^π≈1/(1−γ)=3.4`
+  vs pooled reward-to-go ≈1.27 ⇒ it DEcentres `Ψ_t`. This is the unconverged/mis-targeted PPO
+  critic: no crash, no NaN, advantage still ~zero-mean after whitening, reward stalls, noise up, and
+  **the gradient is NOT biased** (a critic is a function of `s_t` ⇒ `h_t`-measurable by
+  construction; how you FIT it is irrelevant to that). Diagnostic = critic **explained variance** vs
+  realized return-to-go. **Decisive experiment = zero the baseline and re-measure gradient variance
+  on the SAME rollouts; if variance FALLS, the critic is worse than nothing ⇒ mismatch, not bias.**
+- **Low variance alone is worthless** (`Ψ_t=0` has zero variance). The biased within-episode
+  baseline had the LOWEST variance of everything (25.56×) with a 38%-wrong mean. Only
+  "variance reduction at FIXED mean" is a claim — so pair every variance number with an
+  unbiasedness assertion.
+- Baselines STACK with reward-to-go (3.58× on top of 3.17× = **11.35× cumulative**) because they
+  kill different noise: reward-to-go deletes zero-mean cross terms, the baseline centres the rest.
+- **GRPO group mean = `(K−1)/K` × RLOO.** Identity: `R_k − (1/K)Σ_j R_j = (1−1/K)(R_k −
+  (1/(K−1))Σ_{j≠k}R_j)`. The leave-one-out baseline IS unbiased, so the group mean's "bias" is a
+  pure SCALE factor absorbed into the LR ⇒ unbiased in DIRECTION. The real bias is the **std
+  division**: nonlinear in the group, doesn't factor out, blows up on degenerate all-correct/
+  all-wrong groups (σ≈0) — what Dr. GRPO says to drop.
+- PPO-vs-GRPO in one sentence: PPO buys per-token low-variance advantages from a learned critic and
+  pays with the critic's approximation bias + a second network's memory/compute; GRPO drops the
+  critic (no critic bias, no critic memory) and pays K× rollout cost + loss of per-token credit
+  assignment (one sequence-level advantage broadcast to every token).
+- **Entropy bonus:** `H(π)=−Σπlogπ`, `∂H/∂z_k = −p_k(log p_k + H)` (rows sum to zero, same softmax
+  null space). Force **DECAYS as π sharpens** ⇒ weakest exactly where most needed ⇒ it is a collapse
+  **PREVENTATIVE, not a cure**, and needs `β~O(1)` (the PG's own scale) — β=0.05 moved H by 0.0024.
+  Measured tradeoff β 0/0.5/2/5 → H .074/.118/.294/.522, return 7.97/7.93/7.63/6.38 (monotone both
+  ways). LLM RLHF barely uses it: a UNIFORM-entropy target is wrong for text (you want high entropy
+  only where genuinely uncertain); the shipping regularizer is `KL(π_θ‖π_ref)`, anchored to a
+  known-good distribution instead of to uniform.
+- **`theta += numpy_array` is NOT in-place.** numpy takes over, returns a new object, Python rebinds
+  the name ⇒ `theta` silently becomes a fresh tensor with `requires_grad=False`, `is_leaf=True`
+  (values and dtype are fine — only the property you depend on dies). Also
+  `numpy + torch` RAISES while `torch + numpy` works (`Tensor.__array_priority__=1000` only wins on
+  the left), and the error names **concatenation**, an op nowhere in the code. Rule: numpy = storage/
+  statistics layer, torch = autograd layer, every crossing gets an explicit
+  `torch.as_tensor(..., dtype=theta.dtype)`. Heuristic: **an error naming an operation you never
+  called = a type-coercion fallback; look at operand TYPES.**
+- `no_grad` scopes by CODE REGION ⇒ never build a graph you need inside it (calling
+  `entropy_gradient` there raises "does not require grad"). Also `beta * f(x)` still evaluates
+  `f(x)` when `beta==0.0`. Log **floats** (`.item()`/`float()`), never tensors — appending a
+  0-dim tensor retains that iteration's whole graph. On GPU `.item()` forces a device sync: fine per
+  logging interval, a pipeline stall in a hot loop.
+- `np.bincount` needs **1-D** input (`.ravel()` both indices and weights) and `weights` must be an
+  ARRAY not a scalar; guard the empty bucket or unvisited states become `nan`. Two-`bincount` idiom:
+  `sums/counts` = unweighted mean (`V^π`), `Σ(wG)/Σw` = weighted mean (`b*`).
+- Indexing, one more time: ONE index array → whole rows (`pi[states]` → `(n,T,A)`); TWO aligned
+  index arrays → one element each (`pi[states, actions]` → `(n,T)`, numpy's `gather`). Better still,
+  expand the norm `||e_a−p||² = 1 − 2p_a + ||p||²` to avoid materializing an `(n,T,V)` one-hot — at
+  V=128k that's the reason production code never builds one-hots.
+- Grad of a SCALAR w.r.t. a matrix has the MATRIX's shape (Jacobian-layout questions only arise for
+  non-scalar outputs). `torch.softmax` has **no default `dim`**. Use `log_pi = log_softmax(...)`
+  then `pi = log_pi.exp()` — one stable pass, and the two are exactly consistent.
+- **Harness convention (repo-wide as of D3):** staged self-checks, one stage per TODO,
+  `NotImplementedError` → `[TODO]`+skip, `--fast`/`--list`/named-subset CLI, lazy `Ctx` fixtures
+  with their own seeded RNGs, `_fail_fast` probes before expensive fixtures. Skeleton:
+  `shared/templates/exercise-harness-template.py`. Two design rules earned here: **assert that the
+  BUG is detectably a bug** (relative threshold, e.g. `>5×` the unbiased error, so it survives batch
+  -size changes), and **when a well-motivated check fails, check the CLAIM before the code** — the
+  scaffold's assertion has now been the wrong one three times, each time producing the day's best
+  lesson.
 
 ## Conventions
 
 - Run code: `./.venv/bin/python ai-lab-mle-prep/<path>` from `/Users/sshivam/1point3acres`
   (torch 2.12, Python 3.14, pytest installed).
+- **Every coding exercise uses the STAGED harness** (one stage per TODO; `NotImplementedError`
+  → `[TODO]` and skip; `--fast` / `--list` / `<stage names>` CLI; lazy `Ctx` fixtures;
+  `_fail_fast` before expensive stages). Skeleton: `shared/templates/exercise-harness-template.py`.
+  Reference: `week-03-rl-foundations/code/actor_critic.py`. Rationale: he must be able to test
+  each function the moment he writes it, not after finishing the file.
 - **Auto-commit + push is authorized** (`agnishashwat` identity; see
   `.cursor/rules/auto-commit.mdc`). Confirm only for destructive git ops or secrets.
 - Each day ends by writing that day's `deliverable.md` and updating `progress.md` + this file.

@@ -160,7 +160,9 @@ return, including rewards that occurred before the action. Conditioning on the h
 `h_t`, those past rewards are constants and `E_{a_t~pi}[grad log pi(a_t|s_t)] = 0` by the
 EGLP lemma, so those cross terms are exactly zero in expectation -- pure noise, no signal.
 Dropping them gives the reward-to-go form at identical bias and strictly lower variance;
-I measured 3.15x on a toy chain, and the gap grows like `T^2` with horizon. The general
+I measured 3.15x on a toy chain, and the ratio grows slowly and monotonically with the
+horizon (1.84x at T=2, 3.09x at T=32, 4.09x at T=128 -- both variances grow ~T^2.3, so the
+*ratio* does NOT grow like T^2; it is a free, consistent, horizon-growing win). The general
 form is `grad J = E[sum_t grad log pi(a_t|s_t) Psi_t]`, and every algorithm from REINFORCE
 to PPO differs only in the choice of `Psi_t`.
 
