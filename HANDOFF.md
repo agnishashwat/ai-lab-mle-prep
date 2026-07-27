@@ -10,41 +10,59 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
 - **Week 02 — COMPLETE** (Days 01-05 done). Transformers + generation: attention+pos-enc;
   TransformerBlock+TinyGPT; decoding; KV cache; **generation debug lab**.
 - **Week 03 — IN PROGRESS.** All five Day session.md plans fleshed out from curriculum
-  (MDPs → policy gradient → baselines/advantage → GAE → KL-constrained RL). **Days 01-03 DONE.**
-- **Next up: Week 03 Day 04 — GAE & the Bias/Variance Tradeoff.** RL depth is a
+  (MDPs → policy gradient → baselines/advantage → GAE → KL-constrained RL). **Days 01-04 DONE.**
+- **Next up: Week 03 Day 05 — KL-Constrained RL** (why post-training pins to a reference
+  policy). Closes Week 3; then write the week-summary + retrospective. RL depth is a
   DECLARED TOP GAP — derive.
 
 ## Next session
 
-Start with the prompt: **"Start Week 3 Day 4"**. Session plan at
-`week-03-rl-foundations/day-04-gae-bias-variance/session.md`.
+Start with the prompt: **"Start Week 3 Day 5"**. Session plan at
+`week-03-rl-foundations/day-05-kl-constrained-rl/session.md`.
 
-Day 4 = GAE. It slots straight onto D3's machinery: `δ_t = r_t + γV(s_{t+1}) − V(s_t)` and
-`GAE(γ,λ) = Σ (γλ)^l δ_{t+l}` are just two more `weight_fn`s for
-`actor_critic.batch_gradient_statistics`, so the finite-difference `exact_gradient` will
-**quantify the bias** for each λ — the headline experiment is a λ-sweep table (bias vs variance,
-λ=0 → pure TD, λ=1 → Monte-Carlo reward-to-go, and it should reproduce D3's numbers at both ends).
-D3 already previewed the bias source: critic error. Derive the telescoping identity
-`Σ_l γ^l δ_{t+l} = G_t − V(s_t)` (λ=1) and the geometric-average interpretation.
+D5 lands on ground D3 and D4 already prepared. D3 established that a UNIFORM-entropy target is
+wrong for text and that `KL(π_θ‖π_ref)` is the regularizer that actually ships (anchored to a
+known-good distribution, not to uniform). D4 established that λ is a hedge against critic error.
+D5 should derive the KL-regularized objective, the reverse-vs-forward KL asymmetry (mode-seeking
+vs mode-covering), the k1/k2/k3 KL estimators and why the naive one is high-variance, and the
+per-token-KL-as-reward-shaping trick used in RLHF. It also sets up Week 5's DPO derivation, whose
+closed form falls straight out of the KL-constrained optimum
+`π*(y|x) ∝ π_ref(y|x) exp(r(x,y)/β)`.
 
-**Also worth building on D4 (D3 left it open):** a TIME-INDEXED finite-horizon baseline `V_t(s)`
-(`T−t` Bellman backups → a `(T,S)` table). It should beat both the pooled `b(s)` and `b*`, and it
-converts D3's "mismatched V^π is unbiased but WORSE" cautionary result into a constructive fix.
+**Carried forward from D4 (ran out of clock, do these first):** the two interview drills were
+never run. Use: (1) "In RLHF the reward arrives only at EOS — how do you assign credit to
+individual tokens, and how would you tune it?" (a polished answer is already written in D4's
+`deliverable.md`, so grade against it); (2) "Your PPO run is unstable — walk me through the λ
+lever." Also re-ask **B3** (mismatched-critic diagnostic + decisive experiment + his own numbers)
+— he scored 0.1, answering "compare to ground-truth gradients", which a real stack does not have.
 
-Quiz D3 cold: EGLP (should now be instant — if so, retire it); the **h_t-measurability table**
-(which quantities qualify and the consequence of each); why `b=Q^π` DELETES the gradient rather
-than biasing it; `b*` vs `V^π` (weighted vs unweighted mean return) and why nobody uses `b*`;
-the GRPO `(K−1)/K` identity and why the STD division is the real bias.
-**Re-drill the two D3 drill misses:** (1) **"unbiased ≠ variance-reducing"** — the mismatched-critic
-scenario, he answered "biased" (0.25); (2) **entropy regularization's failure mechanism** —
-`∂H/∂z_k = −p_k(log p_k+H)` decays as π sharpens ⇒ preventative not cure, plus KL-to-ref as the
-LLM alternative (0.5). And the perennial: **six sources of REINFORCE variance** (still ~2.5/6 on
-the third attempt — drill the estimator-walk table in Running facts). Keep the Week-2 spaced item
-alive: attention-NaN fastest-first ORDER.
+Quiz D4 cold: derive GAE from the k-step rungs (weight bookkeeping: total weight on `δ_{t+l}` is
+`(1−λ)Σ_{k≥l+1}λ^{k−1} = λ^l`); the telescoping identity and **what it assumes about V (nothing)**;
+λ=0/λ=1 limits with bias AND variance; **γ vs λ** (γ is part of the PROBLEM, λ is part of the
+ESTIMATOR — he missed this twice); the unbiasedness-at-every-λ proof (`l=0` by Bellman peel,
+`l≥1` by tower rule at `h_{t+l}` + `E_{a∼π}[A]=0`); and the D4 headline —
+**bootstrap bias is the STATE-VARYING part of critic error; a uniform offset is a baseline and is
+free** (wrong LEVEL → variance, wrong RANKING → bias; 0.0010 vs 1.5557 measured).
 
-**Recurring behavioural gaps to police:** he still answers the first clause and stops (D3: gave
-what entropy buys but not how it fails, and did NOT cite the β-sweep numbers that were on his
-screen). Demand the second half of every question, and demand he quote his OWN measured numbers.
+**Perennials still open:** six sources of REINFORCE variance (**4/7 on D4, best of four attempts**
+— the two persistent misses are that "reward SCALE" is NOT a source, it's reward-model **noise**,
+and the LLM-specific sparse-terminal-reward one); off-policy-by-accident (0.7). Retire: EGLP
+(1.0 on D3), attention-NaN checklist (full marks on D4 with mechanisms — done, drop it).
+
+**Recurring behavioural gaps to police:**
+1. **He answers the first clause and stops.** Unchanged after three days of flagging. On D4 he
+   skipped the consequence column of the measurability table, the "where does GRPO's real bias
+   live" clause, and every "and what would you do about it" tail. Demand the second half.
+2. **He does not quote his own measured numbers** unless forced (missed them on Q3, Q5, Q6, B3,
+   B4). This is the single cheapest credibility win available to him in an interview.
+3. **θ-dependence vs measurability, FOURTH slip** (D4 Q1 "Also biased?" on the unconverged
+   critic, and again when he asked how `∇log π` can be pulled out of a conditional expectation).
+   The fix that seemed to land: *conditional expectation asks "is this a deterministic function of
+   what I conditioned on?" — θ never appears in the licence.* Re-test it cold.
+4. **He drops the term the theorem is about.** D2 Part 2 (omitted `ρ₀` and `P` from `p_θ(τ)`),
+   D4 Part 4 (omitted `∇log π` entirely from the estimator, then correctly reported being stuck).
+   Prescribed habit: *write the estimator out in full once and confirm every factor appears on the
+   page before manipulating the expectation.*
 
 ## Completed
 
@@ -255,6 +273,50 @@ screen). Demand the second half of every question, and demand he quote his OWN m
   STAGED and promoted it to a repo-wide convention** (skill file + `shared/templates/
   exercise-harness-template.py`) so he can test each TODO the moment he writes it.
 
+- **W3 D4 — GAE, Bootstrapping & the Bias/Variance Tradeoff.** Built `week-03/code/gae.py`
+  (**64/64 staged checks, 60 s**): `td_errors`, `k_step_advantage`, `gae_naive`, `gae_reverse`
+  (with `dones` reset), `exact_time_indexed_values`, `fit_time_indexed_values`, `weights_gae`,
+  `train_gae`. **Design win: the λ-sweep is run against THREE critics chosen along interpretable
+  axes** (exact / wrong-LEVEL / wrong-RANKING), which is what made the day's headline findable.
+  **Headline (new, and it corrected my own harness): bootstrap bias comes ONLY from the
+  state-VARYING part of the critic's error.** `e` enters `δ_t` as `γe(s′)−e(s)`, so a uniform
+  offset is a constant, a constant is a baseline, and a baseline is free. Measured: the
+  infinite-horizon `V^π` is off by **+2.174 in every row** yet bootstraps at bias **0.0010**
+  (λ=0), while a `±1`-per-state skew with the *right* average level biases by **1.5557** — ~1500×
+  worse. ⇒ **wrong LEVEL → variance; wrong RANKING → bias**; diagnose a PPO value head by whether
+  it RANKS states correctly, not by `|V−G|`.
+  **Second result: with an exact critic EVERY λ is unbiased** (bias flat ~0.003 while variance
+  rises 5.3×) because the `l≥1` terms are zero-mean ⇒ **λ=0 strictly wins and λ>0 exists only as a
+  hedge against a critic you don't trust**. An interior MSE optimum appears only when the critic
+  is wrong (λ*=0.9: MSE 3.059 vs 6.954 at λ=0, 3.930 at λ=1).
+  **Third: time-indexed `V_t(s)` is the constructive fix for D3's mismatched baseline** — ladder
+  at λ=1 is 6.317 (V=0, reproducing D2 to the digit) → 1.765 (D3 pooled `b(s)`) → **1.142 (fitted
+  `V_t`)** → 1.147 (exact oracle), i.e. 1.55× on top of D3 and statistically indistinguishable
+  from the oracle. **17.5× cumulative** vs D2's `total_return`. λ=1 reproduces D3 and D2
+  *elementwise* (`~1e-16`) because telescoping is algebraic, not statistical.
+  Cold quiz (D3) **5.70/9**: strong on Q6 entropy (0.85), Q7 variance sources (0.95, 4/7, best of
+  four attempts), Q8 NaN (full marks — retire); weak on Q3 `b*` (0.6), Q4 GRPO (0.5 — never
+  mentioned the std division), Q5 mismatched critic (0.8, up from 0.25 — got "not biased" cold).
+  **Derivation 2.3/4:** Parts 1-2 (telescoping, geometric collapse) clean; **Part 3 0.25** — said
+  `Â=0` at λ=0 (mis-evaluated `(γλ)^0`), called `G_t` "infinite horizon" (the D3 horizon slip
+  again), skipped γ-vs-λ; **Part 4 0.3 — dropped `∇log π` from the estimator entirely** (same
+  failure as D2 Part 2). Taught the slicker `∂H/∂z_k = −p_k(z_k − E_p[z])` via
+  `H = lse(z) − E_p[z]`. His best question of the day: *"`G_t` is not `h_t`-measurable, so why
+  isn't it biasing?"* ⇒ measurability is required of the **subtracted baseline**, never of `Ψ_t`.
+  **Live code bugs:** `gae_reverse` never assigned `A[T-1]` and did `return A[t]` (a scalar —
+  `np.allclose` broadcast it silently); `torch.softmax(...)` handed to a numpy einsum
+  (`Can't call numpy() on Tensor that requires grad`, traceback naming `.numpy()`, an op he never
+  called — D3 heuristic fired again); `return V[:T]` dropping the terminal zero row; and the
+  notable one — **`Batch(..., n_iters, rng)` where `batch_size` belongs**, 6.25× too many episodes,
+  **which PASSED the test because less noise means better convergence** (tell = wall clock, 102 s
+  vs 60 s). Also `critic="exact"` was a `TypeError` that survived a 64/64 green run because no
+  stage exercised it, and `history.append(batch.total_returns)` appended arrays not floats.
+  ⇒ **green tests ≠ correct code; check the paths the tests don't cover.**
+  **My harness was wrong three times again** (unvisitable `(t=0, s≠s0)` bucket; "λ=0 with the
+  mismatched critic IS biased" — it isn't, which is how the headline was found; a false
+  interpolation claim). Fourth session running where checking the CLAIM beat checking the code.
+  Interview drills NOT run (out of clock) — carried to D5.
+
 ## Learner profile (quick facts)
 
 - Strong: PhD-level math/optimization, senior ML eng, real post-training experience
@@ -451,6 +513,46 @@ screen). Demand the second half of every question, and demand he quote his OWN m
 - Grad of a SCALAR w.r.t. a matrix has the MATRIX's shape (Jacobian-layout questions only arise for
   non-scalar outputs). `torch.softmax` has **no default `dim`**. Use `log_pi = log_softmax(...)`
   then `pi = log_pi.exp()` — one stable pass, and the two are exactly consistent.
+- **TD error / GAE:** `δ_t = r_t + γV_{t+1}(s_{t+1}) − V_t(s_t)`; `Â^(k)_t = Σ_{l<k} γ^l δ_{t+l}
+  = (Σ_{l<k} γ^l r_{t+l} + γ^k V(s_{t+k})) − V(s_t)` ("k real rewards, then bootstrap, minus the
+  baseline") — **assumes NOTHING about V, it is algebra on one sampled trajectory**. At `k=T−t`
+  with `V_T=0` it telescopes to `G_t − V_t(s_t)`. `Â^GAE_t = (1−λ)Σ_{k≥1}λ^{k−1}Â^(k)_t =
+  Σ_{l≥0}(γλ)^l δ_{t+l}` (total weight on `δ_{t+l}` is `(1−λ)Σ_{k≥l+1}λ^{k−1} = λ^l`).
+  Reverse scan `A_t = δ_t + γλ(1−done_t)A_{t+1}`, `A_T=0` — O(T) **and** numerically stable; the
+  cumsum form needs `γ^{−t}` (`0.9^{−999}≈1e45`) which is why every library scans backwards.
+- **The bias theorem:** with an EXACT critic, `Ψ_t = γ^t Â^GAE_t` is unbiased for **every** λ.
+  `l=0` terms give `∇J_T` (Bellman peel ⇒ `E[δ_t|s_t,a_t] = A_t`); `l≥1` terms are **exactly
+  zero** (condition on `h_{t+l}` — up to and including `s_{t+l}` but NOT `a_{t+l}`; `∇log π_t` is
+  `h_{t+l}`-measurable since `t<t+l`, and `E_{a∼π}[A_{t+l}|s_{t+l}]=0`). Same
+  tower-rule-plus-EGLP as D3, conditioned later. ⇒ the `l≥1` terms are pure zero-mean noise.
+- **Where it breaks:** `E[δ_t|s_t,a_t] = A_t + γE_{s'|s_t,a_t}[e_{t+1}(s')] − e_t(s_t)` with
+  `e_t(s)=V(s)−V_t(s)`. `−e_t(s_t)` is state-only = a **baseline** = free. `γE_{s'}[e_{t+1}]` is a
+  deterministic function of `(s_t,a_t)` ⇒ an **action-dependent baseline** = D3's catastrophic
+  case in mild dose. Bias vanishes iff `E_{s'|s,a}[e_{t+1}(s')]` doesn't depend on `a`; the clean
+  sufficient case is `e` constant across states.
+- **γ vs λ: γ is part of the PROBLEM** (changes `J`, `V`, the optimal policy, the horizon
+  `1/(1−γ)`); **λ is part of the ESTIMATOR** (identical target, only bias/variance move; there is
+  no λ-optimal policy). Schulman: *γ introduces bias regardless of the value function's accuracy;
+  λ introduces bias only when the value function is inaccurate.*
+- **Two different powers of γ in `weights_gae`:** `γ^t` out front (the discounted-objective
+  factor, = the leftover from re-basing `Σ_{t'≥t}γ^{t'}r_{t'}` into `γ^t G_t`; the textbook
+  `d^π_γ` form hides it in the state measure; PPO/GRPO drop it because it crushes late-token
+  signal) vs `γ^l` inside `Â^GAE` (offset from `t`). Conflating them is the likeliest silent bug.
+- **`Ψ_t` must NOT be `h_t`-measurable** — that requirement is on the subtracted baseline alone.
+  A state-only `Ψ` is identically-zero-gradient by EGLP. `Ψ` = signal (must see `a_t`);
+  `b` = control variate (must not).
+- **Value tables are `(T+1,S)` with `V[T,:]=0`.** Materializing the boundary as DATA (same as
+  `A = np.zeros(T+1)` in the scan) makes the classic GAE horizon off-by-one structurally
+  impossible, and means `s_T` never has to be recorded.
+- **Keep the slow reference structurally independent of the fast one.** `gae_naive` /
+  `k_step_advantage` must not call `gae_reverse`, or they can only ever agree with it — this
+  caught the unassigned `A[T-1]`, which was invisible to any scan-vs-scan comparison.
+- **Silent positional-arg bug, 3rd occurrence** (`Batch(..., n_iters, ...)` for `batch_size`;
+  earlier `TransformerBlock(d, n_heads, n_heads)` and `T==V`). **Use keywords when two adjacent
+  parameters share a type.** And note the new twist: this one **passed** because the error
+  improved the metric. A bug that helps is the hardest to find; the tell was the wall clock.
+- **Untested branches are broken until proven otherwise** (`critic="exact"` was a `TypeError`
+  under a 64/64 green run). Coverage, not pass count.
 - **Harness convention (repo-wide as of D3):** staged self-checks, one stage per TODO,
   `NotImplementedError` → `[TODO]`+skip, `--fast`/`--list`/named-subset CLI, lazy `Ctx` fixtures
   with their own seeded RNGs, `_fail_fast` probes before expensive fixtures. Skeleton:

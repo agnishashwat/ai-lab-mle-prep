@@ -3,7 +3,7 @@
 ## Current Status
 
 - Current week: **Week 03 IN PROGRESS** — RL foundations for post-training
-- Current day: Week 3 Day 03 done (baselines/advantage/variance reduction; `code/actor_critic.py` 39/39 staged checks, 11.35× cumulative variance cut, mismatched-`V^pi` shown unbiased-but-worse, entropy β sweep)
+- Current day: Week 3 Day 04 done (GAE / bias-variance; `code/gae.py` 64/64 staged checks in 60 s, λ-sweep against three critics, **bootstrap bias = the STATE-VARYING part of critic error only**, time-indexed `V_t(s)` → 17.5× cumulative variance cut vs Day 2's `total_return`)
 - Current focus: RL substrate for PPO/GRPO/DPO — value functions, advantage, Bellman fixed points
 
 ### Diagnostic (Day 01)
@@ -17,7 +17,7 @@
 |---|---|---|---|
 | 01 | LM foundations + PyTorch | Complete (5/5) | Tiny LM train/eval/ablation harness |
 | 02 | Transformers + generation | Complete (5/5) | Decoder-only mini-impl + debug suite |
-| 03 | RL foundations | In progress (D3/5) | Toy policy-gradient implementation |
+| 03 | RL foundations | In progress (D4/5) | Toy policy-gradient implementation |
 | 04 | RLHF + PPO | Not started | PPO/RLHF explainer notebook |
 | 05 | DPO + preference optimization | Not started | DPO trainer |
 | 06 | GRPO + RLVR | Not started | Mini RLVR repo |
@@ -38,13 +38,22 @@ Topics to revisit:
 - [x] The Ψ_t ladder (R(τ) → G_t → G_t−b → Q^π → A^π → δ_t → GAE) with bias/variance for each (W3 D3, 7/7 rungs + bias column; ordering principle still needs both mechanisms named)
 - [ ] PG regularity conditions: ∇/Σ swap; **support of p_θ must not depend on θ** (top-p violates it); R(τ) not θ-dependent (D3 quiz gap)
 - [ ] Score-function vs pathwise/reparameterization; why RL is forced into SF (discrete actions + black-box reward)
-- [ ] Six sources of REINFORCE variance + which technique kills each (STILL WEAK: 1/6 cold on D2, 3/5 re-drill, ~2.5/6 on D3 — use the estimator-walk table)
+- [ ] Six sources of REINFORCE variance + which technique kills each (STILL WEAK: 1/6 cold on D2, 3/5 re-drill, ~2.5/6 on D3, **4/7 on D4 — best yet**. Two persistent misses: "reward SCALE" is NOT a source (it's reward-model **noise**), and the LLM-specific sparse-terminal-reward one. Batch size costs 4× compute to halve noise)
+- [ ] `Ψ_t` need NOT be `h_t`-measurable — that requirement is on the **subtracted baseline** only. A state-only `Ψ` gives an identically zero gradient by EGLP, so non-measurability of `G_t` is the point, not a defect (D4 question — he applied the baseline test to the signal)
+- [ ] Why the policy gradient carries `γ^t`: it is the leftover from re-basing `Σ_{t'≥t} γ^{t'} r_{t'}` into `γ^t G_t`; the textbook `d^π_γ` form absorbs it into the state measure. PPO/GRPO drop it (D4 question)
+- [ ] `Σ_t` in a policy gradient always traces back to the product over timesteps in `p_θ(τ)` — log of a product; `ρ₀` and `P` vanish because they are θ-free (D4 question — reproducible on demand but not yet automatic)
 - [ ] Off-policy-by-accident: temp/top-p rollouts ≠ π_θ → entropy collapse; IS ratio → PPO clipping; top-p is a SUPPORT mismatch (D3: 0.7, has support argument, missing the mode-reinforcement MECHANISM + entropy/KL instrumentation)
 - [x] A valid baseline must be h_t-measurable; an episode-internal G_t mean is BIASED (W3 D3: measured, mean 38% too small)
 - [x] Measurability = "if I tell you h_t you can tell me X"; it (not θ-dependence) is the discriminator (W3 D3)
 - [x] Action-dependent baseline b=Q^π DELETES the gradient (mean exactly 0), it doesn't merely bias it (W3 D3)
 - [x] Optimal baseline b* = score-magnitude-weighted mean return; V^π is the unweighted one (W3 D3, measured 1.476 vs 1.765)
-- [ ] **Unbiased ≠ variance-reducing**: a horizon-mismatched V^π is unbiased but +27% variance = the unconverged-PPO-critic failure mode; diagnose via critic explained variance, settle by zeroing the baseline (D3 drill 0.25 — he answered "biased")
+- [x] **Unbiased ≠ variance-reducing**: a horizon-mismatched V^π is unbiased but +27% variance = the unconverged-PPO-critic failure mode (W3 D4 re-drill 0.8 — got "not biased" + the measurability argument cold; still owes the diagnostic + decisive experiment + his own numbers)
+- [ ] Mismatched-critic SECOND HALF: diagnostic = critic **explained variance**; decisive experiment = **zero the baseline, re-measure variance on the same rollouts** (D4 B3 scored 0.1 — answered "compare to ground-truth gradients", which a real stack does not have)
+- [x] GAE = geometric mixture of k-step rungs; telescoping `Σ γ^l δ_{t+l} = G_t − V_t(s_t)` assumes NOTHING about V; reverse scan + `dones` reset (W3 D4)
+- [ ] **Bootstrap bias = the STATE-VARYING part of the critic's error only.** `e` enters δ as `γe(s′)−e(s)`, so a uniform offset is a constant = a baseline = free. Measured: wrong-LEVEL critic (off by +2.174 everywhere) bias 0.0010 at λ=0; wrong-RANKING critic (±1 per state) bias 1.5557. **Wrong level → variance; wrong ranking → bias.**
+- [ ] With an EXACT critic every λ is unbiased (the `l≥1` terms are zero-mean) ⇒ λ=0 strictly wins; **λ>0 exists only as a hedge against a critic you don't trust**. Interior MSE optimum appears only when the critic is wrong (λ*=0.9 measured)
+- [ ] γ vs λ: **γ is part of the problem** (changes J, V, the optimal policy, the horizon); **λ is part of the estimator** (target identical, only bias/variance move). Schulman: γ biases regardless of critic accuracy, λ only when the critic is inaccurate (D4 Part 3 gap)
+- [ ] Time-indexed `V_t(s)` is the value function a finite-horizon objective actually has (`T−t` Bellman backups, `V_T=0`); beats pooled `b(s)` by 1.55× and matches the exact oracle (1.142 vs 1.147)
 - [ ] GRPO group mean = (K−1)/K × RLOO ⇒ unbiased in direction; the STD division is the real bias + degenerate-group blowup (Dr. GRPO)
 - [ ] Entropy bonus: ∂H/∂z_k = −p_k(log p_k+H) DECAYS as π sharpens ⇒ preventative not cure; needs β~O(1); KL-to-ref is the LLM regularizer (D3 drill 0.5 — no mechanism, didn't cite own sweep)
 - [ ] PPO ratio / clipping
