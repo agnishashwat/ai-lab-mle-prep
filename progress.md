@@ -2,9 +2,12 @@
 
 ## Current Status
 
-- Current week: **Week 03 IN PROGRESS** — RL foundations for post-training
-- Current day: Week 3 Day 04 done (GAE / bias-variance; `code/gae.py` 64/64 staged checks in 60 s, λ-sweep against three critics, **bootstrap bias = the STATE-VARYING part of critic error only**, time-indexed `V_t(s)` → 17.5× cumulative variance cut vs Day 2's `total_return`)
-- Current focus: RL substrate for PPO/GRPO/DPO — value functions, advantage, Bellman fixed points
+- Current week: **Week 03 COMPLETE** — RL foundations for post-training
+- Current day: Week 3 Day 05 done (KL-constrained RL; `code/kl_rl.py` 94/94 staged checks in 16 s;
+  closed-form optimum `π* ∝ π_ref e^{r/β}`, `J* = β log Z`, `dE[r]/dKL = β` to rtol 1e-4;
+  reverse-KL support confinement; k1/k2/k3 with the variance crossover; Goodhart hump at β=0.16).
+  Week-summary + retrospective written. **213 property-based checks across the week.**
+- Next: **Week 04 — RLHF & PPO for LLMs**, which assembles Days 1-5 into the InstructGPT pipeline.
 
 ### Diagnostic (Day 01)
 
@@ -17,8 +20,8 @@
 |---|---|---|---|
 | 01 | LM foundations + PyTorch | Complete (5/5) | Tiny LM train/eval/ablation harness |
 | 02 | Transformers + generation | Complete (5/5) | Decoder-only mini-impl + debug suite |
-| 03 | RL foundations | In progress (D4/5) | Toy policy-gradient implementation |
-| 04 | RLHF + PPO | Not started | PPO/RLHF explainer notebook |
+| 03 | RL foundations | Complete (5/5) | Toy policy-gradient implementation (213 checks) |
+| 04 | RLHF + PPO | Next | PPO/RLHF explainer notebook |
 | 05 | DPO + preference optimization | Not started | DPO trainer |
 | 06 | GRPO + RLVR | Not started | Mini RLVR repo |
 | 07 | Evals + reward modeling | Not started | Eval harness |
@@ -56,8 +59,17 @@ Topics to revisit:
 - [ ] Time-indexed `V_t(s)` is the value function a finite-horizon objective actually has (`T−t` Bellman backups, `V_T=0`); beats pooled `b(s)` by 1.55× and matches the exact oracle (1.142 vs 1.147)
 - [ ] GRPO group mean = (K−1)/K × RLOO ⇒ unbiased in direction; the STD division is the real bias + degenerate-group blowup (Dr. GRPO)
 - [ ] Entropy bonus: ∂H/∂z_k = −p_k(log p_k+H) DECAYS as π sharpens ⇒ preventative not cure; needs β~O(1); KL-to-ref is the LLM regularizer (D3 drill 0.5 — no mechanism, didn't cite own sweep)
-- [ ] PPO ratio / clipping
-- [ ] DPO derivation
+- [x] **An entropy bonus IS a KL penalty to a UNIFORM reference**: `KL(π‖Unif) = log A − H(π)` (asserted by identity in W3 D5). RLHF's one change is replacing "uniform" with "known-good"
+- [x] KL-regularized optimum `π*(a|s) = π_ref e^{r/β}/Z`, `J* = β log Z` = a log-sum-exp / soft max at temperature β (W3 D5 derivation, first try)
+- [x] `dJ*/dβ = −KL(π*‖π_ref)` (envelope theorem) and **`dE[r]/dKL = β`** — β is the exchange rate in reward-per-nat, and the frontier is concave in KL (W3 D5, rtol 1e-4)
+- [ ] **β limits, COLD** (D5 gap): `β→∞ ⇒ π_ref`, NOT uniform — uniform is the entropy-bonus special case; `β→0 ⇒` uniform over `argmax{r(s,a) : a ∈ supp(π_ref)}` — the argmax is over the SUPPORT
+- [ ] **Reverse KL confines support** (`supp(π_θ) ⊆ supp(π_ref)` at every β, asserted exactly at β=2/0.5/0.01) ⇒ RLHF ELICITS, cannot teach ⇒ SFT must precede RL ⇒ top-p rollouts are unrepairable (support, not reweighting). Needed 2 prompts to land
+- [ ] Reverse KL is mode-seeking / forward is mass-covering: measured low-reward-mode mass ref 0.500 → forward 0.095 → reverse 0.011 (8.6×); forward puts 0.775 on an action the reference never emits
+- [ ] k1/k2/k3 KL estimators: k1 unbiased but negative on 20-44% of samples; k2 biased and the bias is INVISIBLE at small KL; k3 unbiased + ≥0 pointwise. **var(k3)/var(k1) crosses over: 423× better at KL=0.004, 4.4× WORSE at KL=0.65** (ρ is a likelihood ratio)
+- [ ] Per-token KL as reward shaping == the sequence KL: `E[Σ_t penalty] = β·KL(p_θ(τ)‖p_ref(τ)) = β Σ_t E_{d_t}[KL_t]` (ρ₀ and P cancel — same reason PG is model-free). Measured 0.77787 vs 0.78974 exact. k3 shaping: same mean, 1.47× less variance, and k1 pays a BONUS on 24.5% of tokens
+- [ ] Over-optimization = Goodhart: proxy monotone in 1/β while true reward peaks interior (1.1286 @ β=0.16) then falls BELOW the reference (−2.3250 vs 0.0270). Negative control: tilting by the TRUE reward is monotone (D5 drill 0.35 — did not cite the numbers)
+- [ ] PPO ratio / clipping (as an IMPLICIT local KL trust region vs D5's explicit penalty)
+- [ ] DPO derivation — `r = β log(π*/π_ref) + β log Z`; `Z(x)` intractable because the action is a whole COMPLETION (`|V|^T`), not because logits are unavailable; it depends on the PROMPT only ⇒ cancels pairwise (W3 D5 Part 4, seen unprompted)
 - [ ] GRPO group baseline
 - [x] KV-cache memory math (`2·L·n_kv·d_head·T·B·bytes`; 512 KiB/tok, 2 GiB@4k, 64 GiB@8k×16; done W2 D4)
 - [ ] Arithmetic intensity / roofline: decode ≈1 op/byte → memory-bound; batch to amortize weights (add BW-tied levers: quant, spec-decode)

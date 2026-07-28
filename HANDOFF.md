@@ -9,60 +9,88 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
 - **Week 01 — COMPLETE** (Days 01-05 done). LM Foundations & PyTorch Fluency.
 - **Week 02 — COMPLETE** (Days 01-05 done). Transformers + generation: attention+pos-enc;
   TransformerBlock+TinyGPT; decoding; KV cache; **generation debug lab**.
-- **Week 03 — IN PROGRESS.** All five Day session.md plans fleshed out from curriculum
-  (MDPs → policy gradient → baselines/advantage → GAE → KL-constrained RL). **Days 01-04 DONE.**
-- **Next up: Week 03 Day 05 — KL-Constrained RL** (why post-training pins to a reference
-  policy). Closes Week 3; then write the week-summary + retrospective. RL depth is a
-  DECLARED TOP GAP — derive.
+- **Week 03 — COMPLETE** (Days 01-05 done). RL foundations: MDPs → policy gradient →
+  baselines/advantage → GAE → KL-constrained RL. **213 property-based checks across the week**,
+  all against exact or finite-difference ground truth. `week-summary.md` + `retrospective.md`
+  written.
+- **Next up: Week 04 — RLHF & PPO for LLMs**, which assembles Days 1-5 into the full
+  InstructGPT pipeline. Week 4 session.md plans are NOT yet written.
 
 ## Next session
 
-Start with the prompt: **"Start Week 3 Day 5"**. Session plan at
-`week-03-rl-foundations/day-05-kl-constrained-rl/session.md`.
+Start with the prompt: **"Generate Week 4 sessions"** (the five `session.md` plans do not exist
+yet; see `curriculum.md` for the canonical block list), then **"Start Week 4 Day 1"**.
 
-D5 lands on ground D3 and D4 already prepared. D3 established that a UNIFORM-entropy target is
-wrong for text and that `KL(π_θ‖π_ref)` is the regularizer that actually ships (anchored to a
-known-good distribution, not to uniform). D4 established that λ is a hedge against critic error.
-D5 should derive the KL-regularized objective, the reverse-vs-forward KL asymmetry (mode-seeking
-vs mode-covering), the k1/k2/k3 KL estimators and why the naive one is high-variance, and the
-per-token-KL-as-reward-shaping trick used in RLHF. It also sets up Week 5's DPO derivation, whose
-closed form falls straight out of the KL-constrained optimum
-`π*(y|x) ∝ π_ref(y|x) exp(r(x,y)/β)`.
+Week 4 lands on ground Week 3 fully prepared. The pieces already in hand: the `Ψ_t` ladder and
+that every algorithm differs only in `Ψ_t`; GAE with the bias theorem and the wrong-level /
+wrong-ranking distinction; the KL-constrained objective with its closed form, the β-as-exchange-
+rate identities, and per-token KL reward shaping verified against the exact sequence KL. What
+Week 4 must add: the **clipped surrogate as an implicit local KL trust region** (contrast with
+D5's explicit penalty — when do they disagree?), the value head trained by regression (so critic
+error is realistic rather than injected by hand), the full InstructGPT loss, and adaptive β.
 
-**Carried forward from D4 (ran out of clock, do these first):** the two interview drills were
-never run. Use: (1) "In RLHF the reward arrives only at EOS — how do you assign credit to
-individual tokens, and how would you tune it?" (a polished answer is already written in D4's
-`deliverable.md`, so grade against it); (2) "Your PPO run is unstable — walk me through the λ
-lever." Also re-ask **B3** (mismatched-critic diagnostic + decisive experiment + his own numbers)
-— he scored 0.1, answering "compare to ground-truth gradients", which a real stack does not have.
+**Design patterns that earned their keep and should be reused (all four Week-3 days):**
+1. **Finite-MDP ground truth.** `exact_J` (T Bellman backups) + central finite differences gives
+   a true gradient, so unbiasedness is an ASSERTION not a claim. This is the single
+   highest-leverage decision of Week 3.
+2. **Staged harness** (repo-wide convention; skeleton `shared/templates/exercise-harness-template.py`,
+   reference `week-03-rl-foundations/code/kl_rl.py`).
+3. **Perturb along INTERPRETABLE axes**, not randomly (D4's exact / wrong-level / wrong-ranking
+   critics is what made the headline findable).
+4. **Negative controls**: assert that the bug is detectably a bug (D5's "tilting by the TRUE
+   reward is monotone" is what makes the Goodhart hump attributable).
+5. **Structurally independent references** (D5's `solve_by_ascent` knows nothing about
+   exponential tilts, so agreement means something).
 
-Quiz D4 cold: derive GAE from the k-step rungs (weight bookkeeping: total weight on `δ_{t+l}` is
-`(1−λ)Σ_{k≥l+1}λ^{k−1} = λ^l`); the telescoping identity and **what it assumes about V (nothing)**;
-λ=0/λ=1 limits with bias AND variance; **γ vs λ** (γ is part of the PROBLEM, λ is part of the
-ESTIMATOR — he missed this twice); the unbiasedness-at-every-λ proof (`l=0` by Bellman peel,
-`l≥1` by tower rule at `h_{t+l}` + `E_{a∼π}[A]=0`); and the D4 headline —
-**bootstrap bias is the STATE-VARYING part of critic error; a uniform offset is a baseline and is
-free** (wrong LEVEL → variance, wrong RANKING → bias; 0.0010 vs 1.5557 measured).
+**Carried forward from D5 — do these first:**
+- **One-line code fix outstanding:** `tilted_policy` in `kl_rl.py` still calls `np.log(pi_ref)`
+  unguarded — emits a `RuntimeWarning` and reaches `-inf` by IEEE accident rather than intent.
+- **Cold recall of β limits** (D5 derivation Part 3, 0.25): `β→∞ ⇒ π_ref` NOT uniform (uniform is
+  the entropy-bonus special case, which he substituted for the general result); `β→0 ⇒` uniform
+  over `argmax{r : a ∈ supp(π_ref)}` — over the SUPPORT. Plus the consequence chain (RLHF
+  elicits / SFT first / top-p unrepairable), which needed two prompts to land.
+- **Re-ask D5 drill D2** (reward-up-eval-down, scored 0.35): wants the mechanism in terms of
+  where the RM is valid, the hump numbers (1.1286 @ β=0.16 → −2.3250 @ β=0.02 vs 0.0270
+  reference), HOW to pick the new β (KL ladder + gold eval at the turnover), and how he'd have
+  caught it earlier.
+- **Re-ask the λ tuning half of D5 drill D3** (0.5): he named both credit-assignment mechanisms
+  but gave no measured numbers and did not say how they interact.
 
-**Perennials still open:** six sources of REINFORCE variance (**4/7 on D4, best of four attempts**
-— the two persistent misses are that "reward SCALE" is NOT a source, it's reward-model **noise**,
-and the LLM-specific sparse-terminal-reward one); off-policy-by-accident (0.7). Retire: EGLP
-(1.0 on D3), attention-NaN checklist (full marks on D4 with mechanisms — done, drop it).
+Quiz D5 cold: the closed form + `J* = β log Z` and that `β log Z` is a **log-sum-exp / soft max**
+(Week 1's operator); the two β limits (see above — the known gap); reverse-vs-forward KL with the
+support consequence; why `Z` is intractable (**the action is a whole COMPLETION, `|V|^T` — not
+"we lack logits"**) and how it cancels pairwise into DPO; k1/k2/k3 with the **variance crossover**
+(423× better at KL=0.004, 4.4× WORSE at KL=0.65); and that per-token KL shaping IS the sequence
+KL because `ρ₀` and `P` cancel.
+
+**Perennials still open:** sources of REINFORCE variance (**6/7 on D5, best of five attempts** —
+only remaining miss is reward-model **noise**; also keep SOURCES separate from MECHANISMS, he
+filed Rao-Blackwellization as a source); **off-policy-by-accident (0.45 on D5, REGRESSED from
+0.70 on D3** — needs the causal mode-reinforcement→entropy-collapse loop, the product-of-T-ratios
+argument for per-token clipping, top-p as a SUPPORT mismatch, and entropy+KL instrumentation).
+Retire: EGLP (1.0 on D3), attention-NaN checklist (D4), **γ vs λ (1.0 on D5 — was missed twice
+before, now clean)**.
 
 **Recurring behavioural gaps to police:**
-1. **He answers the first clause and stops.** Unchanged after three days of flagging. On D4 he
-   skipped the consequence column of the measurability table, the "where does GRPO's real bias
-   live" clause, and every "and what would you do about it" tail. Demand the second half.
-2. **He does not quote his own measured numbers** unless forced (missed them on Q3, Q5, Q6, B3,
-   B4). This is the single cheapest credibility win available to him in an interview.
-3. **θ-dependence vs measurability, FOURTH slip** (D4 Q1 "Also biased?" on the unconverged
-   critic, and again when he asked how `∇log π` can be pulled out of a conditional expectation).
-   The fix that seemed to land: *conditional expectation asks "is this a deterministic function of
-   what I conditioned on?" — θ never appears in the licence.* Re-test it cold.
-4. **He drops the term the theorem is about.** D2 Part 2 (omitted `ρ₀` and `P` from `p_θ(τ)`),
-   D4 Part 4 (omitted `∇log π` entirely from the estimator, then correctly reported being stuck).
-   Prescribed habit: *write the estimator out in full once and confirm every factor appears on the
-   page before manipulating the expectation.*
+1. **He answers the first clause and stops.** FOURTH day. On D5 this was priced into the rubric
+   IN ADVANCE (explicit cap at 0.5 for one-clause answers) and it still happened on P2 and drill
+   D2. It is not a knowledge gap, it is a default response length. Prescribed fix now in the
+   retrospective: *count the clauses in the question and the paragraphs in the answer; if the
+   first number is larger, the answer is not finished.* Enforce this every day of Week 4 as a
+   separate scored line item on the second half of each answer.
+2. **He does not quote his own measured numbers** unless forced. Improving — they now appear
+   unprompted in derivations — but still missing from D5's Q6 and drill D2.
+3. **Retrieval, not comprehension, is the Week-3 error mode.** Every D5 quiz error was a fact he
+   demonstrably knew: the λ/bias direction was stated correctly in a table and inverted two pages
+   later; `β→∞` was answered with the special case. ⇒ Week 4 should add a short **cold recall of
+   CONCLUSIONS** block (one line per result, no whiteboard) distinct from the derivation block.
+4. **He drops the term the theorem is about, and drops factors when rewriting.** D2 Part 2 (`ρ₀`,
+   `P`), D4 Part 4 (`∇log π`), D5 Q2 (dropped `γ^l` off the reward sum twice, having written it
+   correctly one line earlier). Habit: *write it out in full once, confirm every factor is on the
+   page, then manipulate.*
+5. **He does not name where a theorem's hypothesis is consumed.** D5 Q5 gave both cases of the
+   GAE unbiasedness proof without ever pointing at the line that needs `V = V^π`. Ask "where did
+   you use the assumption?" every time he states a theorem.
 
 ## Completed
 
@@ -317,6 +345,67 @@ and the LLM-specific sparse-terminal-reward one); off-policy-by-accident (0.7). 
   interpolation claim). Fourth session running where checking the CLAIM beat checking the code.
   Interview drills NOT run (out of clock) — carried to D5.
 
+- **W3 D5 — KL-Constrained RL & the Reference Policy (Week-3 capstone).** Built
+  `week-03/code/kl_rl.py` (**94/94 staged checks, 16 s**; `--fast` 6 s): `kl_divergence`
+  (support conventions), `tilted_policy` (closed form in log space), `regularized_objective`,
+  `forward_kl_objective`, `frontier`, `overoptimization`, `kl_estimators` (k1/k2/k3),
+  `shaped_rewards` (InstructGPT per-token mechanism), `train_kl`. **Design win: most of the day
+  has a CLOSED FORM, so ground truth became algebra** — the harness checks the closed form
+  against `solve_by_ascent`, a black-box finite-difference simplex maximizer that knows nothing
+  about exponential tilts (the D2 ground-truth trick moved up a level: there the reference was a
+  gradient, here an argmax).
+  **Results.** (1) Three exact identities: `J* = β log Z`, `dJ*/dβ = −KL` (envelope theorem),
+  and **`dE[r]/dKL = β`** to rtol 1e-4 ⇒ β is the exchange rate in reward-per-nat and the
+  frontier is concave in KL. (2) **Reverse KL confines support**: `π*[a] == 0.0` EXACTLY at
+  β=2/0.5/0.01 for the highest-reward action when `π_ref` gives it zero mass; forward KL puts
+  **0.775** there. Mode-seeking vs mass-covering measured: low-reward-mode mass ref 0.500 →
+  forward 0.095 → reverse 0.011. (3) **k3's variance win is a small-KL phenomenon and it
+  REVERSES** — var(k1)/var(k3) = 423× at KL=0.004, 19.9× at 0.065, 3.0× at 0.23, **0.23× at
+  KL=0.65** (ρ is a likelihood ratio). k2's bias is invisible at small KL (0.1 se) and obvious at
+  6.4 se by KL=0.23; k1 reads NEGATIVE on 20-44% of samples. (4) **Goodhart, with a negative
+  control**: proxy monotone in 1/β (0.027→1.767) while true reward peaks at **1.1286 @ β=0.16**
+  then collapses to **−2.3250**, BELOW the reference's own 0.0270; tilting by the TRUE reward is
+  monotone with no hump. (5) Per-token KL shaping IS the sequence KL: measured 0.77787 vs
+  0.78974 exact (β=0.3), because `ρ₀` and `P` cancel — the same cancellation that makes PG
+  model-free. **k1 pays a BONUS on 24.5% of tokens**; k3 same mean, 1.47× less variance. (6)
+  `train_kl` β sweep 0/0.2/1/5 → return 7.928/7.875/5.897/2.966, sequence KL
+  5.056/4.834/1.758/0.072; β=0 reproduces D3/D4's "reach & stay" (a regression chaining back
+  three days) and every β beats the reference's 2.109.
+  **Cold quiz (D4) 4.60/6:** Q1 GAE derivation **1.0** (clean order-swap + geometric collapse);
+  Q4 **γ vs λ 1.0 — retire, was missed twice before**; Q3 limits 0.85; Q2 telescoping 0.85
+  (dropped `γ^l` off the reward sum twice); Q5 unbiasedness 0.75 (`l≥1` case perfect; `l=0` had a
+  false equality `δ_t = G_t − V(s_t)` and neither case named where `V = V^π` is consumed);
+  **Q6 0.15 — stated the λ/bias relation BACKWARDS**, i.e. inverted his own Day-4 headline two
+  pages after tabling it correctly. Perennials: P1 variance sources **0.80, 6/7, best of five**
+  (got the LLM sparse-terminal one at last; missed reward-model noise; filed Rao-Blackwellization
+  as a source); **P2 off-policy 0.45, REGRESSED from 0.70**.
+  **Derivation 2.85/4:** Part 1 (Lagrangian → closed form) **1.0**, including the `+1` from
+  `∇(π log π)`; Part 2 0.8 (algebra right, `dJ*/dβ < 0` noticed, but did not name `β log Z` as a
+  log-sum-exp / soft max, nor the Week-1 link); **Part 3 0.25 — BOTH limits wrong**: `β→∞` given
+  as uniform (that's the entropy-bonus special case) and `β→0` as an unrestricted argmax (must be
+  over `supp(π_ref)`), with the consequence chain absent; Part 4 0.8 — **saw the DPO cancellation
+  unprompted**, but said `Z` is intractable because "we lack `π_ref` for all actions" rather than
+  because the action is a whole COMPLETION (`|V|^T`).
+  **Live code bugs, both in named recurring classes.** (1) `kl_divergence` left `log_q`
+  unguarded: right answer for `p>0,q=0` by IEEE accident, **`0*inf = nan` when BOTH are zero** —
+  and **94/94 passed because no fixture had `p` and `q` vanishing at the same index**, though
+  that is the NORMAL case in RLHF (every tilted policy inherits the reference's zeros, so
+  `KL(π*_{β1}‖π*_{β2})` was `nan`). Then inverted `np.where((p>0)&(q==0), res, np.inf)`, stamping
+  `inf` on every healthy row. (2) **`kl_history` measured the wrong quantity and every check
+  still passed**: unweighted mean of per-state KL (1.053) instead of `Σ_t E_{d_t}[KL_t]` (5.056),
+  appended as a `(2,)` ARRAY not a float (D4's `history.append` bug one container over). All four
+  assertions tested monotonicity in β, which a wrong-by-a-factor quantity preserves. **The
+  available tell: a provided helper (`state_distributions`) the code never called — an unused
+  fixture in a file that told you to use it is a bug report.** Coding block 0.8 → 0.9 after fixes.
+  **Interview drills: D1 (why a reference) 0.6** — had both failure modes, β monotonicity, the
+  support mechanism and KL logging, but never named the KL DIRECTION or mode-seeking, gave no
+  elicitation-vs-capability consequence, and omitted entropy from the instrumentation;
+  **D2 (reward up / eval down) 0.35** — named reward hacking and "raise β" and nothing else, no
+  numbers despite being asked twice; **D3 (credit at EOS) 0.5** — named both mechanisms
+  (estimator-side GAE and reward-side per-token KL) but not how they interact, and no λ numbers.
+  Wrote deliverable (with three polished interview answers) + week-summary + retrospective.
+  **WEEK 3 COMPLETE.**
+
 ## Learner profile (quick facts)
 
 - Strong: PhD-level math/optimization, senior ML eng, real post-training experience
@@ -553,6 +642,105 @@ and the LLM-specific sparse-terminal-reward one); off-policy-by-accident (0.7). 
   improved the metric. A bug that helps is the hardest to find; the tell was the wall clock.
 - **Untested branches are broken until proven otherwise** (`critic="exact"` was a `TypeError`
   under a 64/64 green run). Coverage, not pass count.
+- **KL-CONSTRAINED RL (D5, the week's capstone).** `J(π) = E_{a∼π}[r] − β KL(π‖π_ref)`; the
+  optimum is an EXPONENTIAL TILT of the reference, `π*(a|s) = π_ref(a|s) e^{r(s,a)/β}/Z(s)`,
+  `Z(s) = Σ_a π_ref e^{r/β}`, with optimal value **`J* = β log Z(s)`**. Two failure modes force
+  the term, and they are DIFFERENT: reward hacking (the RM is a proxy, valid only near the SFT
+  distribution — the KL term encodes where you trust it) and catastrophic forgetting (`π_ref` is
+  the only thing in the loop that can WRITE; the RM only scores).
+- **`β log Z` is a LOG-SUM-EXP = a soft max of `r` at temperature β with `π_ref` as base
+  measure** — Week 1's operator, and the "soft value function" of MaxEnt RL / soft Q-learning
+  (which is why that literature and RLHF are the same math). It interpolates `max_a r` (β→0) and
+  `E_ref[r]` (β→∞). Implementation consequence: compute `Z` in LOG SPACE — `π_ref exp(r/β)`
+  overflows to `inf` at β=1e-3 and normalizes to `nan`.
+- **β LIMITS (D5 gap, cold-drill these):** `β→∞ ⇒ π* → π_ref` — **NOT uniform**; uniform is the
+  entropy-bonus special case (`π_ref` uniform). `β→0 ⇒ π* →` uniform over
+  `argmax{ r(s,a) : a ∈ supp(π_ref) }` — **over the SUPPORT**, with `1/K` on K-way ties.
+- **REVERSE KL CONFINES SUPPORT: `supp(π_θ) ⊆ supp(π_ref)` at every β > 0.** Two proofs: the tilt
+  MULTIPLIES `π_ref` so a zero survives any finite exponential; and `KL(π‖π_ref) = ∞` off the
+  support, so those policies are infinitely penalized regardless of reward. Asserted EXACTLY
+  (`== 0.0`) at β=2/0.5/0.01. Three consequences: (1) **RLHF ELICITS, it cannot teach** — it
+  reweights what the base model can already produce, so a weak base can't be fixed with more RL;
+  (2) **SFT must precede RL** — SFT MOVES the support, RL reweights within it; (3) **top-p
+  rollouts are unrepairable** — nucleus truncates SUPPORT (temperature is only a reweighting), so
+  no IS ratio and no clipping recovers mass you never sampled.
+- **Forward vs reverse KL.** Reverse `KL(π_θ‖π_ref)` = **mode-seeking** (dropping a mode costs
+  only the mass you moved) and support-CONFINING; forward `KL(π_ref‖π_θ)` = **mass-covering**
+  (diverges as `π→0` anywhere `π_ref` has mass) and support-EXPANDING, with no closed form.
+  Measured: low-reward-mode mass ref 0.500 → forward 0.095 → **reverse 0.011** (8.6×); forward
+  puts **0.775** on an action the reference never emits. Alignment WANTS mode-seeking: commit to
+  preferred behaviour, don't average over everything the base model does.
+- **β IS AN EXCHANGE RATE, not a regularization strength.** Two exact identities (envelope
+  theorem / Danskin): **`dJ*/dβ = −KL(π*‖π_ref)`** and **`dE[r]/dKL = β`** (verified rtol 1e-4).
+  The second makes the reward-KL frontier CONCAVE in KL — the first nats of drift buy far more
+  reward than the last — and makes β the price in reward-per-nat.
+- **The tilt is invariant to `r → r + c`** (absorbed by `Z`) ⇒ a reward model is identified only
+  up to a per-prompt constant ⇒ **that is exactly why GRPO's per-prompt group mean is free.**
+- **KL ESTIMATORS (you cannot sum over sequences).** With `lr = log π(a) − log π_ref(a)`, `a∼π`,
+  and `ρ = π_ref/π = e^{−lr}` (so `E_π[ρ] = 1` exactly): `k1 = lr` (unbiased, high variance,
+  **NEGATIVE on 20-44% of samples** — a logged KL below zero is k1 working, the #1 RLHF-dashboard
+  false alarm); `k2 = ½lr²` (≥0, BIASED); `k3 = ρ − 1 − log ρ = expm1(−lr) + lr` (unbiased via
+  the `E[ρ]=1` control variate AND ≥0 pointwise; what TRL/GRPO use). **Use `expm1`** — at
+  `|lr|~1e-12`, `exp(−lr) − 1` cancels to garbage and can go negative, killing the one property
+  k3 exists for.
+- **k3's variance win is a SMALL-KL phenomenon and it REVERSES** (measured, 200k samples):
+  var(k1)/var(k3) = **423× at KL=0.004, 19.9× at 0.065, 3.0× at 0.23, 0.23× (i.e. 4.4× WORSE) at
+  KL=0.65** — `ρ` is a likelihood ratio and ratios blow up once the distributions separate. k3 is
+  the right DEFAULT because production runs at small per-token KL, not because it dominates.
+  Correspondingly **k2's bias is INVISIBLE where you run** (0.1 se at KL=0.004) and obvious only
+  once the KL is real (6.4 se at KL=0.23) — that is how a biased estimator survives in the wild.
+- **SEQUENCE KL = TRAJECTORY-DISTRIBUTION KL, exactly.**
+  `KL(p_θ(τ)‖p_ref(τ)) = E_τ[Σ_t log(π_θ/π_ref)] = Σ_t E_{d_t}[KL(π_θ(·|s)‖π_ref(·|s))]`
+  because both policies share `ρ₀` and `P`, which cancel term by term — **the same cancellation
+  that makes the policy gradient model-free.** Needs the STATE-OCCUPANCY weighting `d_t` (forward
+  recursion `d_{t+1} = d_t P_π`): local disagreement at a state you never visit costs no KL
+  budget. Units: nats per COMPLETION, growing ~linearly in T — when a dashboard says "KL = 12",
+  always ask per-token or per-sequence (a factor of T hides there, and it is the commonest way
+  people misread each other's β).
+- **KL-AS-REWARD-SHAPING IS THE SHIPPED MECHANISM (InstructGPT):**
+  `r_t ← r_t − β(log π_θ(a_t|s_t) − log π_ref(a_t|s_t))`. Its expected sum is EXACTLY β × the
+  sequence KL (measured 0.77787 vs 0.78974 at β=0.3) ⇒ reward shaping and a sequence-level KL
+  constraint are the SAME OBJECT, one sampled and one exact. Why shape rather than add a loss
+  term: DENSITY — the RM reward is one scalar at EOS but the KL term exists at every token, so it
+  densifies the critic's regression target and hence every `δ_t` (D4's credit-assignment problem
+  attacked from the reward side). Use k3: same mean, **1.47× lower variance**, and ≥0 everywhere,
+  whereas **k1 pays a BONUS on 24.5% of tokens** (any token made less likely than the reference).
+- **OVER-OPTIMIZATION IS GOODHART, NOT AN RL ARTEFACT.** Optimizing a mis-specified proxy: the
+  proxy rises MONOTONICALLY in 1/β (0.027 → 1.767) while the true reward peaks at an INTERIOR β
+  (**1.1286 at β=0.16**) and then collapses to **−2.3250, BELOW the reference's own 0.0270** —
+  over-optimizing is worse than not doing RL at all, and the proxy reports success all the way
+  down. ⇒ **"our reward went up" is evidence of nothing.** **Negative control that makes it
+  attributable: tilting by the TRUE reward is monotone with no hump** ⇒ the hump is proxy
+  mis-specification, not RL and not the KL penalty. General form = Gao et al.: true reward
+  concave in `√KL`, eventually bending down. Fix: pick β by taking checkpoints along a KL ladder,
+  scoring each on a held-out GOLD/human eval, and landing at the turnover — plus never gating on
+  RM score.
+- **A leash is not a muzzle.** `train_kl` β sweep 0/0.2/1/5 → return 7.928/7.875/5.897/2.966 with
+  sequence KL 5.056/4.834/1.758/0.072 against a reference whose own return is 2.109: every β
+  improves on the reference, and β=0 reproduces D3/D4's optimum exactly.
+- **DPO IS PLANTED HERE.** `r(s,a) = β log(π*(a|s)/π_ref(a|s)) + β log Z(s)`. `β log Z` is
+  intractable **because the action is an entire COMPLETION** — `Z(x) = Σ_y π_ref(y|x)e^{r(x,y)/β}`
+  over `|V|^T` sequences — **NOT because logits are unavailable** (for one token you have all
+  `|V|`). It is combinatorial, not sparse. But `Z` depends on the **PROMPT ONLY**, so any two
+  completions of the same prompt share it and a DIFFERENCE kills it:
+  `r(x,y₁) − r(x,y₂) = β log(π*/π_ref)|_{y₁} − β log(π*/π_ref)|_{y₂}`. That converts
+  "maximize r subject to a KL constraint" (needs rollouts, an RM, and an intractable partition
+  function) into supervised classification on preference pairs. Week 5 adds Bradley-Terry on top.
+- **`np.where` IS NOT LAZY, and guarding the RESULT is not guarding the ARGUMENT.**
+  `np.where(p>0, p*np.log(p/q), 0.0)` still computes `p/q` everywhere, warns, and leaves
+  correctness resting on the bad slot and the masked slot coinciding. Guard INSIDE the log:
+  `np.log(np.where(p>0, p, 1.0))`. **But guarding then BREAKS the `+inf` convention** (a support
+  violation returns a finite wrong number), so the convention must be ASSERTED:
+  `np.any((p>0)&(q==0), axis=-1) → np.inf`. Leaving `log_q` unguarded instead gives `0*inf = nan`
+  whenever p AND q both vanish. Rule: **never let the answer depend on infinity arithmetic
+  working out.** Also `np.where(cond, a, b)` returns `a` where cond is TRUE — writing the
+  VIOLATION as the condition and the good value as the true-branch inverts the whole function.
+- **A METRIC CAN BE WRONG IN A DIRECTION NO TEST CAN SEE** (D5, and D4's positional-arg bug):
+  `kl_history` logged the unweighted per-state mean (1.053) instead of the occupancy-weighted
+  sequence KL (5.056) and 94/94 still passed, because every assertion tested MONOTONICITY IN β,
+  which a wrong-by-a-factor quantity preserves. Two tells: it appended an ARRAY not a float, and
+  **a provided helper the code never called — an unused fixture in a file that told you to use it
+  is a bug report.**
 - **Harness convention (repo-wide as of D3):** staged self-checks, one stage per TODO,
   `NotImplementedError` → `[TODO]`+skip, `--fast`/`--list`/named-subset CLI, lazy `Ctx` fixtures
   with their own seeded RNGs, `_fail_fast` probes before expensive fixtures. Skeleton:
