@@ -10,13 +10,22 @@ PPO/RLHF explainer notebook with toy code and failure-mode demonstrations.
 
 ## Sessions
 
-| Day | Topic | Deliverable |
-|---|---|---|
-| Day 1 | InstructGPT / RLHF Pipeline | RLHF pipeline diagram + notes |
-| Day 2 | PPO Objective | PPO loss implementation (ppo_loss.py) |
-| Day 3 | Token-Level PPO for LLMs | Token-level logprob/value-head walkthrough |
-| Day 4 | RLHF Failure Modes | Reward-hacking / KL-collapse demonstrations |
-| Day 5 | Toy PPO-Style RLHF Loop | End-to-end toy RLHF loop |
+| Day | Topic | Code | Headline |
+|---|---|---|---|
+| Day 1 | Pipeline + Bradley-Terry reward model | `toy_rlhf.py` | RM identified only up to a per-prompt constant; RM error grows with KL |
+| Day 2 | PPO objective: ratio, clip, epochs | `ppo_loss.py` | Clipping bounds the step, not the walk (measured drift vs explicit KL) |
+| Day 3 | Token-level PPO: value head, sequence reward | `token_ppo.py` | A *learned* critic's bias tracks the state-varying error, not the MSE |
+| Day 4 | Failure modes | `failure_modes.py` | Goodhart with a learned RM; off-policy bias measured against exact ∇J |
+| Day 5 | Toy PPO-RLHF loop (capstone) | `ppo_rlhf.py` | Adaptive β = dual ascent; its fixed point matches the closed-form frontier |
+
+## The Week's Design Decision
+
+Week 3's results were assertions rather than claims because a finite MDP gave exact ground
+truth (Bellman backups + central finite differences). Week 4 keeps that discipline in a
+setting where tokens, EOS, sequence reward and length are **literal**: Day 1 builds a
+token-level LM environment small enough to **enumerate every terminating sequence**, so
+`exact_J`, `exact_sequence_kl` and an exact gradient are available all week. Every
+unbiasedness or bias claim this week is checked against enumeration, not against a plot.
 
 ## Must-Know Interview Outcomes
 

@@ -13,21 +13,63 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
   baselines/advantage → GAE → KL-constrained RL. **213 property-based checks across the week**,
   all against exact or finite-difference ground truth. `week-summary.md` + `retrospective.md`
   written.
-- **Next up: Week 04 — RLHF & PPO for LLMs**, which assembles Days 1-5 into the full
-  InstructGPT pipeline. Week 4 session.md plans are NOT yet written.
+- **Week 04 — RLHF & PPO for LLMs: all five `session.md` plans WRITTEN (not yet taught).**
+  Day 1 pipeline + Bradley-Terry RM (`toy_rlhf.py`); Day 2 PPO objective (`ppo_loss.py`);
+  Day 3 token-level PPO + value head (`token_ppo.py`); Day 4 failure modes
+  (`failure_modes.py`); Day 5 capstone loop + adaptive β (`ppo_rlhf.py`).
 
 ## Next session
 
-Start with the prompt: **"Generate Week 4 sessions"** (the five `session.md` plans do not exist
-yet; see `curriculum.md` for the canonical block list), then **"Start Week 4 Day 1"**.
+Start with the prompt: **"Start Week 4 Day 1"**. The five plans exist; read
+`week-04-rlhf-ppo/day-01-instructgpt-rlhf-pipeline/session.md` and teach it.
 
-Week 4 lands on ground Week 3 fully prepared. The pieces already in hand: the `Ψ_t` ladder and
-that every algorithm differs only in `Ψ_t`; GAE with the bias theorem and the wrong-level /
-wrong-ranking distinction; the KL-constrained objective with its closed form, the β-as-exchange-
-rate identities, and per-token KL reward shaping verified against the exact sequence KL. What
-Week 4 must add: the **clipped surrogate as an implicit local KL trust region** (contrast with
-D5's explicit penalty — when do they disagree?), the value head trained by regression (so critic
-error is realistic rather than injected by hand), the full InstructGPT loss, and adaptive β.
+**Week 4's central design decision (mirrors Week 3's finite-MDP ground truth).** Day 1 builds
+a **token-level LM environment small enough to enumerate every terminating sequence** — a
+small vocab including EOS, small `T_max`, tabular softmax policy over prefix states. That
+gives `exact_J`, `exact_sequence_kl` and an exact finite-difference gradient for the whole
+week, in a setting where token logprobs, EOS, variable length and sequence reward are
+**literal** rather than analogized. Days 2-5 import it. Consequence worth protecting: every
+bias/unbiasedness claim in Week 4 is an assertion against enumeration, not a plot.
+
+**Structural additions Week 4 makes over Week 3** (each was named as a gap in the Week-3 wrap):
+1. **Clipping as an implicit local KL trust region** (D2), with the three ways it *isn't* one,
+   and a measured run where the clip fraction stays low while KL-to-reference walks away —
+   which is why InstructGPT ships clip AND an explicit penalty.
+2. **A value head trained by regression** (D3), so critic error is *earned* rather than
+   injected by hand as on W3 D4 — and the wrong-level/wrong-ranking theorem gets re-tested
+   against a real regression's error decomposition.
+3. **A learned Bradley-Terry RM** (D1), so D4's Goodhart hump comes from finite noisy
+   preference data and its turnover moves with data size (W3 D5's proxy was hand-specified).
+4. **Off-policy-by-accident measured** (D4) against exact ∇J, with a constant-reward negative
+   control and an IS fix that works for temperature and fails for top-p. This is his #1
+   regressed perennial (0.45, five asks) and it stops being a drill.
+5. **Adaptive β derived as dual gradient ascent** (D5) on the W3 D5 Lagrangian, with the
+   controller's fixed point checked against the closed-form `dE[r]/dKL = β` identity.
+
+**New per-day block added on the Week-3 retro's recommendation:** a 6-8 min **"cold recall of
+CONCLUSIONS"** at 0:00 — one line per result, spoken, no whiteboard — kept structurally
+distinct from the derivation block, because Week 3's error mode was retrieval and not
+comprehension. Also: every session file states the **clause-counting rubric** (multi-clause
+questions scored as two line items, first clause capped at 0.5 alone). Enforce it.
+
+**Week-3 backlog wired into the Week-4 plans** (do not let these slide):
+- D1 quiz re-asks D5 drill D2 (reward-up/eval-down, 0.35) and the λ half of D5 drill D3 (0.5).
+- D1 coding block opens with the one-line `tilted_policy` fix in `kl_rl.py` (unguarded
+  `np.log(pi_ref)`).
+- β limits and the Ψ ladder are in D1's cold-recall list; off-policy and variance-sources
+  perennials are quizzed on D1-D4 and *measured* on D4.
+- The standing D4 drill gap (critic diagnostic = explained variance; decisive experiment =
+  zero the baseline and re-measure variance on the same rollouts) is wired into D3 as a
+  `zero_baseline_probe` stage.
+
+Week 4 lands on ground Week 3 fully prepared. The pieces already in hand and reused by name in
+the plans: the `Ψ_t` ladder and that every algorithm differs only in `Ψ_t`; GAE with the bias
+theorem and the wrong-level / wrong-ranking distinction; the KL-constrained objective with its
+closed form, the β-as-exchange-rate identities, and per-token KL reward shaping verified against
+the exact sequence KL. **Every Week-4 coding file chains a regression back to a Week-3 file**
+(D2's surrogate gradient at ρ=1 must equal `actor_critic.py`'s gradient elementwise; D3's GAE
+stage is a pure regression against `gae.py`; D5's ablation grid must collapse to REINFORCE →
++baseline → GAE → PPO by flipping switches). If a link breaks, that is the bug.
 
 **Design patterns that earned their keep and should be reused (all four Week-3 days):**
 1. **Finite-MDP ground truth.** `exact_J` (T Bellman backups) + central finite differences gives

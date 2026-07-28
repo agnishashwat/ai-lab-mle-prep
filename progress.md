@@ -7,7 +7,11 @@
   closed-form optimum `π* ∝ π_ref e^{r/β}`, `J* = β log Z`, `dE[r]/dKL = β` to rtol 1e-4;
   reverse-KL support confinement; k1/k2/k3 with the variance crossover; Goodhart hump at β=0.16).
   Week-summary + retrospective written. **213 property-based checks across the week.**
-- Next: **Week 04 — RLHF & PPO for LLMs**, which assembles Days 1-5 into the InstructGPT pipeline.
+- Next: **Week 04 — RLHF & PPO for LLMs**, which assembles Days 1-5 into the InstructGPT
+  pipeline. **All five Week-4 `session.md` plans are written** (not yet taught); start with
+  "Start Week 4 Day 1". Week 4's ground-truth vehicle is a token-level LM environment small
+  enough to **enumerate every terminating sequence**, so `exact_J` / `exact_sequence_kl` /
+  exact ∇J are available all week with EOS, variable length and token logprobs all literal.
 
 ### Diagnostic (Day 01)
 
@@ -21,7 +25,7 @@
 | 01 | LM foundations + PyTorch | Complete (5/5) | Tiny LM train/eval/ablation harness |
 | 02 | Transformers + generation | Complete (5/5) | Decoder-only mini-impl + debug suite |
 | 03 | RL foundations | Complete (5/5) | Toy policy-gradient implementation (213 checks) |
-| 04 | RLHF + PPO | Next | PPO/RLHF explainer notebook |
+| 04 | RLHF + PPO | Plans written (0/5 taught) | PPO/RLHF explainer notebook |
 | 05 | DPO + preference optimization | Not started | DPO trainer |
 | 06 | GRPO + RLVR | Not started | Mini RLVR repo |
 | 07 | Evals + reward modeling | Not started | Eval harness |
