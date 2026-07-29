@@ -13,15 +13,35 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
   baselines/advantage → GAE → KL-constrained RL. **213 property-based checks across the week**,
   all against exact or finite-difference ground truth. `week-summary.md` + `retrospective.md`
   written.
-- **Week 04 — RLHF & PPO for LLMs: all five `session.md` plans WRITTEN (not yet taught).**
-  Day 1 pipeline + Bradley-Terry RM (`toy_rlhf.py`); Day 2 PPO objective (`ppo_loss.py`);
-  Day 3 token-level PPO + value head (`token_ppo.py`); Day 4 failure modes
+- **Week 04 — RLHF & PPO for LLMs: Day 01 DONE, Days 02-05 planned (not yet taught).**
+  Day 1 pipeline + Bradley-Terry RM (`toy_rlhf.py`, **73/73**); Day 2 PPO objective
+  (`ppo_loss.py`); Day 3 token-level PPO + value head (`token_ppo.py`); Day 4 failure modes
   (`failure_modes.py`); Day 5 capstone loop + adaptive β (`ppo_rlhf.py`).
+
+## SESSION-FORMAT PREFERENCE (he stated this explicitly on W4 D1 — obey it)
+
+**Give FULL blocks every day, regardless of how long the session is taking**, unless he
+explicitly asks for something to be shortened or moved to the next day. Do not compress a block
+because of the clock. He works through sessions across a whole day (work, then home) and has
+plenty of time; wall-clock elapsed is NOT a reason to trim. On D1 an over-eager compression of
+Block 3 had to be re-delivered in full.
 
 ## Next session
 
-Start with the prompt: **"Start Week 4 Day 1"**. The five plans exist; read
-`week-04-rlhf-ppo/day-01-instructgpt-rlhf-pipeline/session.md` and teach it.
+Start with the prompt: **"Start Week 4 Day 2"**. Read
+`week-04-rlhf-ppo/day-02-ppo-objective/session.md` and teach it.
+
+**Carried into D2 (not done on D1, out of clock): the two D1 interview drills.**
+1. *"Walk me through RLHF end to end, and tell me what each stage can and cannot fix."* Then:
+   the base model refuses a capability the RM rewards — which stage do you touch, and why can't
+   RL fix it? (Wants support confinement, elicit-vs-teach, SFT first.)
+2. *"Someone hands you an RM with 78% pairwise accuracy on a held-out set. What do you still not
+   know?"* Wants FIVE things: accuracy is on-distribution and the policy leaves it (cite
+   0.177→4.89, 27.6×); error asymmetry — over-estimates are SOUGHT (cite 86×); per-prompt
+   identifiability so raw scores don't compare (cite 0.445 cross-prompt vs 0.974 within);
+   where the errors sit — `sigma(-delta)` means near-ties dominate the fit, so 78% may be AT the
+   annotator noise ceiling; calibration ≠ accuracy. A polished version is already written in
+   D1's `deliverable.md` — quiz him COLD first, then compare.
 
 **Week 4's central design decision (mirrors Week 3's finite-MDP ground truth).** Day 1 builds
 a **token-level LM environment small enough to enumerate every terminating sequence** — a
@@ -84,19 +104,16 @@ stage is a pure regression against `gae.py`; D5's ablation grid must collapse to
 5. **Structurally independent references** (D5's `solve_by_ascent` knows nothing about
    exponential tilts, so agreement means something).
 
-**Carried forward from D5 — do these first:**
-- **One-line code fix outstanding:** `tilted_policy` in `kl_rl.py` still calls `np.log(pi_ref)`
-  unguarded — emits a `RuntimeWarning` and reaches `-inf` by IEEE accident rather than intent.
-- **Cold recall of β limits** (D5 derivation Part 3, 0.25): `β→∞ ⇒ π_ref` NOT uniform (uniform is
-  the entropy-bonus special case, which he substituted for the general result); `β→0 ⇒` uniform
-  over `argmax{r : a ∈ supp(π_ref)}` — over the SUPPORT. Plus the consequence chain (RLHF
-  elicits / SFT first / top-p unrepairable), which needed two prompts to land.
-- **Re-ask D5 drill D2** (reward-up-eval-down, scored 0.35): wants the mechanism in terms of
-  where the RM is valid, the hump numbers (1.1286 @ β=0.16 → −2.3250 @ β=0.02 vs 0.0270
-  reference), HOW to pick the new β (KL ladder + gold eval at the turnover), and how he'd have
-  caught it earlier.
-- **Re-ask the λ tuning half of D5 drill D3** (0.5): he named both credit-assignment mechanisms
-  but gave no measured numbers and did not say how they interact.
+**Status of the D5 carry-forwards (all addressed on D1):**
+- ✅ `kl_rl.py` `tilted_policy` fixed (guard inside the log); re-verified **94/94** under
+  `-W error::RuntimeWarning`, so the warning's absence is enforced rather than assumed.
+- ✅ β limits: produced correctly cold on D1 (β→∞ ⇒ π_ref; β→0 ⇒ argmax over the SUPPORT).
+  **Residual slip: he wrote `1/V` on the tie set; it is `1/K` over the tied maximizers.** And he
+  gave no consequences — see the clause-counting note below.
+- ⚠️ D5 drill D2 re-asked → **0.5**. Mechanism (a) and β-selection (c) now good; **(b) the hump
+  NUMBERS were blank for the second time running** and (d) restated (c).
+- ✅ λ half of D5 drill D3 re-asked → **0.8, up from 0.5** — he produced the interaction unaided
+  ("KL densifies the reward, so δ_t gets a denser signal"). Still no measured λ numbers.
 
 Quiz D5 cold: the closed form + `J* = β log Z` and that `β log Z` is a **log-sum-exp / soft max**
 (Week 1's operator); the two β limits (see above — the known gap); reverse-vs-forward KL with the
@@ -105,23 +122,48 @@ support consequence; why `Z` is intractable (**the action is a whole COMPLETION,
 (423× better at KL=0.004, 4.4× WORSE at KL=0.65); and that per-token KL shaping IS the sequence
 KL because `ρ₀` and `P` cancel.
 
-**Perennials still open:** sources of REINFORCE variance (**6/7 on D5, best of five attempts** —
-only remaining miss is reward-model **noise**; also keep SOURCES separate from MECHANISMS, he
-filed Rao-Blackwellization as a source); **off-policy-by-accident (0.45 on D5, REGRESSED from
-0.70 on D3** — needs the causal mode-reinforcement→entropy-collapse loop, the product-of-T-ratios
-argument for per-token clipping, top-p as a SUPPORT mismatch, and entropy+KL instrumentation).
-Retire: EGLP (1.0 on D3), attention-NaN checklist (D4), **γ vs λ (1.0 on D5 — was missed twice
-before, now clean)**.
+**Perennials still open (updated after W4 D1):**
+- **Sources of REINFORCE variance — 0.2 on D1, the worst score yet.** Asked only to name the
+  standing miss, he answered "we use sampled values, we can reduce variance by using expected
+  values" — which is **Rao-Blackwellization, a MECHANISM**, and it is the *second* time he has
+  filed it as a source. The standing miss is **reward-model NOISE**. Taught the discriminator on
+  D1: *a source is something you would still have if you never wrote any variance-reduction
+  code.* Re-ask on D2 and demand the source/mechanism split explicitly.
+- **Off-policy-by-accident — 0.65 on D1, recovering from 0.45.** Support-vs-reweighting is now
+  clean and unprompted. Still missing: the **fix ORDER** (the actual fix is *sample rollouts at
+  T=1.0 untruncated*; everything else is mitigation) and **why clipping is PER-TOKEN** (a
+  sequence IS ratio is a PRODUCT of T per-token ratios whose variance compounds multiplicatively
+  ⇒ clip each factor instead of the product). That second half is Day 2's motivation, so it
+  should land there naturally.
+- **k1/k2/k3 — 0.5 on D1.** Definitions and classification all correct; the *mechanism* for why
+  k3 is both unbiased and ≥0 was missing (unbiased via the `E[rho]=1` control variate,
+  non-negative via convexity of `-log rho` — two independent facts, which is why k1 and k2 each
+  get only one), and the entire crossover was missing (423× at KL 0.004 → 0.23× at KL 0.65).
+  His `O(rho^2)` vs `O(rho)` small-KL argument was correct and better than the usual hand-wave.
+
+Retire: EGLP (1.0 on D3), attention-NaN checklist (D4), γ vs λ (1.0 on D5), **why `Z` is
+intractable (1.0 cold on D1 — `|A|^T`, the action is a whole completion)**, **wrong LEVEL vs
+wrong RANKING (0.95 cold on D1, with the mechanism)**.
+
+**NEW perennial to track: the Ψ ladder REGRESSED to 0.5 on D1** (5 of 7 rungs; missing `Q^π` and
+`δ_t`, and he invented "KL divergence" as a rung). He scored **7/7 with the bias column on D3**.
+This is pure retrieval decay on a fact he owns, and the new cold-recall block caught it on its
+first run — which is exactly what that block was added for. Re-ask cold every day this week.
+Teach again if needed: `Q^π` is where Rao-Blackwellization enters the ladder, `δ_t` is where
+critic error enters, and **the KL term is not a Ψ at all** — it either modifies `r` (changing
+every rung) or sits in the loss.
 
 **Recurring behavioural gaps to police:**
-1. **He answers the first clause and stops.** FOURTH day. On D5 this was priced into the rubric
-   IN ADVANCE (explicit cap at 0.5 for one-clause answers) and it still happened on P2 and drill
-   D2. It is not a knowledge gap, it is a default response length. Prescribed fix now in the
-   retrospective: *count the clauses in the question and the paragraphs in the answer; if the
-   first number is larger, the answer is not finished.* Enforce this every day of Week 4 as a
-   separate scored line item on the second half of each answer.
-2. **He does not quote his own measured numbers** unless forced. Improving — they now appear
-   unprompted in derivations — but still missing from D5's Q6 and drill D2.
+1. **He answers the first clause and stops.** FIFTH day. On D1 it hit cold-recall item 2 (gave
+   both β limits, omitted the three consequences) and quiz Q1 (defined k1/k2/k3, skipped both
+   the mechanism and the crossover). **But there is real progress: quiz Q2 came back with four
+   parts for four clauses, including an explicit "don't remember" for the part he couldn't do.**
+   That is the habit working. Keep scoring the second half as a separate line item.
+2. **He does not quote his own measured numbers.** Still the most reliable point-loser. On D1
+   the hump numbers were blank for the SECOND time (1.1286 @ β=0.16 → −2.3250 vs the reference's
+   0.0270), and the λ numbers were absent again. Everything else in his answer was right both
+   times. Prescription: when a question says "your measured numbers," treat a missing number as
+   a wrong answer, not a stylistic omission.
 3. **Retrieval, not comprehension, is the Week-3 error mode.** Every D5 quiz error was a fact he
    demonstrably knew: the λ/bias direction was stated correctly in a table and inverted two pages
    later; `β→∞` was answered with the special case. ⇒ Week 4 should add a short **cold recall of
@@ -447,6 +489,61 @@ before, now clean)**.
   (estimator-side GAE and reward-side per-token KL) but not how they interact, and no λ numbers.
   Wrote deliverable (with three polished interview answers) + week-summary + retrospective.
   **WEEK 3 COMPLETE.**
+
+- **W4 D1 — The InstructGPT Pipeline & the Reward Model.** Built
+  `week-04-rlhf-ppo/code/toy_rlhf.py` (**73/73 staged checks, 13.3 s; `--fast` 3.4 s**), the
+  week's infrastructure: `TokenEnv` (vocab 4 with a real EOS, `t_max=4`, 40 states,
+  **121 enumerable terminating sequences** = 40 eos + 81 truncated), `enumerate_sequences`,
+  `sequence_logprob`, `exact_J`, `exact_sequence_kl`, `tilted_sequence_dist`, plus the RM half:
+  `bt_loss_and_grad`, `fit_reward_model`, `sample_preferences`. Days 2-5 import the first five.
+  **Ground-truth pattern transplanted intact from Week 3**: enumeration replaces Bellman backups,
+  so `exact_J` is exact and unbiasedness stays an assertion.
+  **Headline 1 — per-prompt identifiability, asserted as an experiment.** Refit from a different
+  init on identical data: within-prompt differences agree to **8.22e-15**, raw scores differ by
+  **1.7355**; the per-prompt mean drifts **6.9e-15** from its init, i.e. data cannot move it at
+  all. Cross-prompt pairwise accuracy on raw scores **0.445 — worse than chance** — vs **0.974**
+  within-prompt and 0.976 cross-prompt after centering. Raw recovery err 8.6088 → **0.2743**
+  centered (**31.4×**).
+  **Headline 2 — the KL penalty is a confidence region for the RM.** `pi_ref = pi_SFT` = the RM's
+  own sampling distribution, so KL literally measures distance from its training data. Error
+  **0.177 on-distribution → 4.89 at sequence KL 4.44 (27.6×)**, monotone, on BOTH a gold-tilted
+  and a proxy-tilted ladder. Data-size sweep: over-estimation **3.231 → 0.038 (86×)** from 300 to
+  20 000 comparisons ⇒ **β is a property of the RM's DATA, not of the policy**.
+  Other verified numbers: sum-to-one `1.000000000000000` under two unrelated thetas; `exact_J` vs
+  12k-rollout MC mean z **−0.01** over 5 seeds; enumerated sequence KL **0.96993705** == the
+  occupancy-weighted route (unweighted per-state mean would read 0.50890693 — **D5's actual bug
+  wired in as an assertion**); BT analytic grad vs central FD **1.785e-10**; annotator noise
+  0→0.40 drops RM accuracy 0.969→0.844 (±0.034, 3 seeds).
+  **Cold recall (new block) 4.15/6**, quiz **2.6/5**, derivation **2.35/4**. Clean: closed form +
+  `J* = β log Z` (1.0), why `Z` is intractable (1.0), wrong level vs wrong ranking (0.95), Eq. (2)
+  terms (1.0), BT NLL + gradient calculus (1.0 on the algebra). **Two sign/limit errors worth
+  re-asking: he gave `dE[r]/dKL = −β` (it is +β; he had collapsed it with `dJ*/dβ = −KL`, which
+  have OPPOSITE signs — mnemonic: β is a price, prices are positive) and did not name the
+  frontier as CONCAVE in KL.** Also `1/V` for `1/K` on the β→0 tie set.
+  **Live code review (his implementations were strong — every stage passed first or second try):**
+  `tilted_sequence_dist` first shipped `beta==0` / `beta==inf` special cases — ~7 lines, **4 bugs,
+  zero test coverage** (`len()` of a scalar argmax, zeroing forbidden rewards instead of `-inf`,
+  `list > int`, returning log-probs) — the W3 D4 `critic="exact"` lesson exactly; and it
+  exponentiated an unnormalised log-weight, correct for every β the ladders use and `nan` only at
+  the one β the check was placed at. Punchline taught: **the stable log-space form makes both
+  special cases unnecessary** (softmax gives 1/K on ties free, `softmax(log p_ref) = p_ref`, and
+  `log 0 = -inf` gives exact support confinement). Also caught: `enumerate_sequences` rebinding
+  `frontier` *inside* the loop iterating it (right answer, works only via Python's iterator
+  semantics), `np.long` (version- and platform-dependent; and the spelling of the W3 D2 bug), and
+  a `list + ndarray` that would silently concatenate if the caller passed a list.
+  **MY HARNESS WAS WRONG FOUR TIMES BEFORE ANY LEARNER CODE RAN** (fifth session running):
+  (1) a correlation assertion over **6 prompts** (read −0.666) → replaced with the deterministic
+  two-init refit, which is strictly better; (2) "over-estimation grows with KL" — it falls, and
+  `E[max(err,0)]` DEGENERATES as β→0 because the tilted distribution collapses onto one sequence
+  → moved to a data-size axis where the effect is real and 86×; (3) "off-distribution error >2×
+  at every data size" fitted to one dataset (across 4 seeds the middle sizes reach 1.6×) →
+  direction everywhere, magnitude only where converged; (4) regret asserted monotone — it hangs
+  on a **discrete argmax over 121 items**, is non-monotone across seeds and sometimes 0 at the
+  smallest size → **reported, not asserted**. Also: `--fast` was cutting gradient STEPS, making a
+  true assertion false for unrelated reasons; it now shrinks data and loosens tolerances only.
+  Closed the W3 chore (`tilted_policy` log guard, 94/94 under `-W error::RuntimeWarning`).
+  Deliverable written with a polished five-part answer to the 78%-RM drill.
+  **Interview drills NOT run (out of clock) — carried to D2.**
 
 ## Learner profile (quick facts)
 
@@ -791,6 +888,122 @@ before, now clean)**.
   -size changes), and **when a well-motivated check fails, check the CLAIM before the code** — the
   scaffold's assertion has now been the wrong one three times, each time producing the day's best
   lesson.
+
+### Running facts — Week 4 (RLHF & PPO)
+
+- **The three stages as three optimization problems.** SFT = MLE on demonstrations (moves the
+  SUPPORT and the format); RM = MLE on comparisons (turns a comparison into a scalar FIELD);
+  PPO = `max_theta E[r_psi - beta log(pi_theta/pi_ref)]` on **prompts only, no labels**. Stage 3
+  is where the estimator class changes from pathwise to SCORE-FUNCTION — which is the whole
+  reason Week 3 existed. The economic argument for RLHF: stages 1-2 buy a FIXED human budget,
+  stage 3 converts it into unbounded gradient steps. Every downstream failure is a consequence.
+- **THE LOAD-BEARING COINCIDENCE: `pi_ref = pi_SFT` = the RM's training distribution.** The RM
+  was fit on completions sampled from `pi_SFT`, and the KL penalty measures distance from
+  `pi_SFT`. These are taught as two facts and are ONE. ⇒ **the KL penalty is a confidence region
+  for the reward model**, measured in nats, not a regularizer for its own sake. Consequences:
+  (1) beta is a property of the RM's DATA, so a bigger/better-fit RM justifies a SMALLER beta —
+  which is testable, and is what Gao et al. measured (the turnover moves out); (2) the fix is
+  often to retrain the RM on CURRENT-policy samples, i.e. iterated/online RLHF is *moving the
+  confidence region to where the policy now is*; (3) Gao's law is
+  `r_gold(d) = d(alpha - beta log d)` with `d = sqrt(KL)` — DISTANCE, not divergence, is the
+  natural axis.
+- **Four networks, and only `pi_theta` can WRITE.** Policy (trainable, writes), value head
+  (trainable, scores, Day 3), RM (frozen, scores), reference (frozen, could write but is only a
+  measuring stick). ⇒ **no amount of RM quality creates a behaviour**; the RM can only re-rank
+  what the policy already emits. 7B bf16-Adam bill: trainable **16 B/param = 112 GB**, frozen
+  **2 B/param = 14 GB** ⇒ naive 112+112+14+14 = **252 GB** before activations and the rollout KV
+  cache. Three cuts: share the trunk (−112 GB, but the two losses then compete for one
+  representation); **cache reference logprobs at rollout time and drop `pi_ref` entirely** (free
+  — the weights are frozen and you know which tokens were sampled; the one people forget);
+  LoRA (`pi_ref` = "the same weights with the adapter off"). InstructGPT used a **6B RM for a
+  175B policy** and found a 175B RM less stable — ranking is easier than generation.
+- **PPO is a training job AND an inference job in one loop**: rollout (memory-bandwidth-bound,
+  wants a paged KV cache and continuous batching) → score → optimize (compute-bound, wants
+  ZeRO/FSDP). Those want different memory layouts, and the weights move between them every
+  iteration. That impedance mismatch, not the math, is why RLHF frameworks are complicated.
+- **Bradley-Terry.** `P(y_w > y_l|x) = sigmoid(r_w - r_l)`;
+  `L = E[logaddexp(0, -delta)]`; `dL/dr_w = -sigmoid(-delta)`, `dL/dr_l = +sigmoid(-delta)`
+  (equal and opposite — the differences-only structure is visible in the gradient itself).
+  Gradient magnitude `sigmoid(-delta)` is **monotone decreasing in how right the model already
+  is**: →0 confidently correct, exactly **1/2 at a tie**, →1 confidently WRONG. (The max is at
+  `delta -> -inf`, NOT at `delta ~ 0`.)
+- **⇒ THE FIT IS DOMINATED BY THE LEAST RELIABLE LABELS.** Confidently-correct pairs are switched
+  off, so what drives the gradient is near-ties and misrankings — and near-ties are exactly where
+  human annotators coin-flip. Hence (a) **RM accuracy has a NOISE CEILING in the 70s**, and a 95%
+  RM on real preference data is evidence of a leak, not of quality; (b) Llama-2's **margin loss**
+  `-log sigmoid(delta - m(r))` exists to restore signal on confident pairs; (c) filter near-ties
+  or spend extra annotators on them.
+- **IDENTIFIABILITY: `r_psi(x,.)` and `r_psi(x,.) + c(x)` fit IDENTICALLY.** Hypothesis consumed:
+  **both completions in a pair share the same prompt** — pair across prompts and the free
+  direction collapses to a single GLOBAL constant, which is why anchor completions and deliberate
+  cross-prompt comparisons are a real fix. Verified as an EXPERIMENT (better than a statistic):
+  refit from a different init ⇒ centered scores agree to **8.22e-15**, raw differ by **1.7355**,
+  per-prompt mean drifts **6.9e-15** from its init. Three consequences: raw scores are **not
+  comparable across prompts** (cross-prompt accuracy **0.445, worse than chance**, vs 0.974
+  within-prompt — a dashboard averaging RM score over a mixed prompt set is measuring the prompt
+  mix); **GRPO's per-prompt group mean is free** because subtracting it moves along exactly the
+  unidentifiable direction; per-prompt centering is the only safe normalization.
+- **ONE degree of freedom, THREE appearances**: unidentifiable in the RM's fit (today), invisible
+  in the KL-regularized optimum (`pi* ∝ pi_ref e^{r/beta}` is invariant to `r -> r+c`, W3 D5),
+  and free to subtract in GRPO. Saying all three connects the week.
+- **The error asymmetry that makes over-optimization dangerous.** MSE is symmetric; the failure is
+  not. An UNDER-estimate is harmless (the policy avoids that completion); an OVER-estimate is
+  actively SOUGHT, because to an argmax an over-estimate is indistinguishable from a genuinely
+  good completion. So the statistic that matters is the UPPER TAIL of the error over the
+  reachable region, not the mean — and it grows with optimization pressure at fixed KL.
+  Measured: over-estimation collapses **86×** (3.231 → 0.038) from 300 to 20 000 comparisons.
+- **Preference data: `K` completions per prompt → `C(K,2)` pairs, all in the SAME batch.**
+  Statistical reason: otherwise each completion is used in `K-1` gradient steps per epoch and the
+  RM memorizes it (InstructGPT overfits after one epoch treating pairs as independent). Compute
+  reason: `C(K,2)` pairs reference only `K` distinct completions, so one batch = `K` forwards
+  instead of up to `K(K-1)` ⇒ **~(K-1)× cheaper, 8× at K=9**. The statistically correct choice is
+  also the cheap one. Why rank rather than pick: annotator time is dominated by READING, so
+  ranking K costs barely more than comparing 2 and yields `C(K,2)` labels.
+- **InstructGPT Eq. (2) in one sentence:** `r_psi` is what you want, the `beta` KL term is where
+  you are ALLOWED to look for it, and the `gamma` **ptx** term is what you promise not to break.
+  ptx mixes PRETRAINING gradients back in to fight the **alignment tax** (RLHF'd models regressed
+  on SQuAD/DROP/translation while winning human preference) — note it is an **MLE** term, i.e.
+  the one part of the objective that can move SUPPORT back.
+- **Enumeration is Week 4's ground truth.** `TokenEnv(vocab=4, t_max=4)`: states are prefixes with
+  a decision still PENDING (lengths 0..t_max-1 ⇒ 1+3+9+27 = 40; the root `()` is a state because
+  `theta[0]` holds the first token's logits), and **121 terminating sequences** = 40 eos-terminated
+  + 81 truncated. **Sum-to-one over all terminating sequences under an arbitrary theta is the
+  invariant that proves you enumerated a PARTITION** — it catches a dropped EOS branch and a
+  double-counted prefix, the two likely bugs. There is no separate "stop probability": EOS is an
+  ACTION with its own logit and truncation is forced.
+- **Sequence KL two ways.** By enumeration, and by occupancy `sum_s d(s) KL(pi(.|s)||pi_ref(.|s))`
+  (each state has a unique time index here, so W3 D5's `sum_t E_{d_t}[KL_t]` collapses to this).
+  Agreement to 1e-10 across structurally independent routes. **The unweighted per-state mean reads
+  0.50891 against the true 0.96994 — D5's actual bug, now wired in as an assertion.**
+- **Never exponentiate an unnormalised log-weight.** `exp(log p_ref + r/beta)` still overflows
+  (the exponent is ~6400 at beta=1e-3); build `z` and hand it to a softmax that subtracts the max.
+  **Doing this makes the beta→0 and beta→inf special cases UNNECESSARY**: softmax gives exactly
+  `1/K` on K-way ties, `softmax(log p_ref) = p_ref` exactly, and `log 0 = -inf` propagates to an
+  exact `0.0` (= reverse-KL support confinement, for free). **When a formulation needs `if`
+  statements at its limits, the formulation is usually wrong, not the limits.**
+- **`np.add.at` for any scatter-add with repeated indices.** `grad[p,w] -= g` GATHERS the RHS then
+  SCATTERS it back, so duplicates keep only the last write. The index must be a **TUPLE** `(p, w)`
+  — a stacked `(n,2)` array indexes axis 0 only, which RAISES on a rectangular array and
+  **silently returns `(n,2,n_items)` on a square one** (square shapes hiding an indexing bug:
+  4th occurrence). Cheap structural test that needs no ground truth: **a correct BT gradient's
+  rows sum to EXACTLY zero**, because the loss is flat along `c(x)`; the `-=` bug leaves 0.2437.
+  Same argument as W3's "every policy-gradient row sums to zero" under softmax
+  over-parameterization — different free direction, identical logic.
+- **A "safe-looking" learning rate can silently fail to converge.** The BT loss is a MEAN over
+  pairs, so each item's gradient is `O(1/n_items)` NO MATTER how much data there is; the top
+  Hessian eigenvalue here is ~0.02, so the stable range is `lr < ~100` and 0.5 does nothing.
+  Diagnose with the loss curve, not with intuition about "large" learning rates.
+- **`np.long` is version- AND platform-dependent** (removed in numpy 1.24, reintroduced in 2.0 as
+  C `long` = 32-bit on Windows). Write `np.int64`. It is also the spelling of the W3 D2
+  gradient-buffer bug. Relatedly `list + ndarray` ADDS but `list + list` CONCATENATES — never let
+  `+` straddle the two when one side is caller-supplied.
+- **Statistics that depend on an ARGMAX cannot carry an assertion without seed-averaging.**
+  Regret (`gold.max() - gold[argmax(psi)]`) over 121 items moves by a whole reward gap when one
+  noisy estimate reaches the top: non-monotone across seeds and sometimes 0 at the SMALLEST data
+  size. Report it, don't assert it. Same family: a correlation over 6 points is not a test.
+- **`--fast` must shrink DATA and loosen TOLERANCES, never gradient STEPS.** Cutting steps made a
+  true assertion false for reasons unrelated to the assertion, which is the worst kind of test
+  failure — it sends you debugging correct code.
 
 ## Conventions
 

@@ -246,8 +246,9 @@ def tilted_policy(pi_ref: np.ndarray, r: np.ndarray, beta: float) -> np.ndarray:
         is only identified up to a per-prompt constant -- which is precisely why
         a per-prompt baseline (GRPO's group mean) is free.
     """
-    z = np.where(pi_ref > 0, np.log(pi_ref), -np.inf) + r/beta 
-    return softmax_np(z)
+    supported = pi_ref > 0
+    log_ref = np.where(supported, np.log(np.where(supported, pi_ref, 1.0)), -np.inf)
+    return softmax_np(log_ref + r / beta)
 
 
 def regularized_objective(pi: np.ndarray, pi_ref: np.ndarray, r: np.ndarray,

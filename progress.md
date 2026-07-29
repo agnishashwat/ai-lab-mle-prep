@@ -2,16 +2,21 @@
 
 ## Current Status
 
-- Current week: **Week 03 COMPLETE** — RL foundations for post-training
-- Current day: Week 3 Day 05 done (KL-constrained RL; `code/kl_rl.py` 94/94 staged checks in 16 s;
-  closed-form optimum `π* ∝ π_ref e^{r/β}`, `J* = β log Z`, `dE[r]/dKL = β` to rtol 1e-4;
-  reverse-KL support confinement; k1/k2/k3 with the variance crossover; Goodhart hump at β=0.16).
-  Week-summary + retrospective written. **213 property-based checks across the week.**
-- Next: **Week 04 — RLHF & PPO for LLMs**, which assembles Days 1-5 into the InstructGPT
-  pipeline. **All five Week-4 `session.md` plans are written** (not yet taught); start with
-  "Start Week 4 Day 1". Week 4's ground-truth vehicle is a token-level LM environment small
-  enough to **enumerate every terminating sequence**, so `exact_J` / `exact_sequence_kl` /
-  exact ∇J are available all week with EOS, variable length and token logprobs all literal.
+- Current week: **Week 04 — RLHF & PPO for LLMs** (Day 01 of 5 done)
+- Current day: Week 4 Day 01 done (InstructGPT pipeline + Bradley-Terry RM;
+  `code/toy_rlhf.py` **73/73 staged checks in 13.3 s**, `--fast` 3.4 s). Built the week's
+  ground-truth vehicle: a token-level env with a real EOS, enumerable to **121 terminating
+  sequences**, giving exact `J`, exact sequence KL and a sequence-level exponential tilt.
+  Headline: BT reward is identified only up to a **per-prompt constant** (refit from another
+  init ⇒ centered scores agree to 8.2e-15, raw differ by 1.74; cross-prompt accuracy 0.445 =
+  worse than chance vs 0.974 within-prompt), and **RM error grows 27.6× along a KL ladder**
+  ⇒ the KL penalty is a *confidence region for the reward model*.
+- Also closed the carried-forward W3 chore: `kl_rl.py` `tilted_policy` now guards inside the
+  log; re-verified 94/94 under `-W error::RuntimeWarning`.
+- Next: **Week 4 Day 2 — the PPO objective.** The ratio's gradient at θ=θ_old is shown to BE
+  the Week-3 policy gradient, and clipping is shown to be an implicit local KL trust region
+  that does something different from D5's explicit penalty. Day-1 interview drills were not
+  run (out of clock) — carried to D2.
 
 ### Diagnostic (Day 01)
 
@@ -25,7 +30,7 @@
 | 01 | LM foundations + PyTorch | Complete (5/5) | Tiny LM train/eval/ablation harness |
 | 02 | Transformers + generation | Complete (5/5) | Decoder-only mini-impl + debug suite |
 | 03 | RL foundations | Complete (5/5) | Toy policy-gradient implementation (213 checks) |
-| 04 | RLHF + PPO | Plans written (0/5 taught) | PPO/RLHF explainer notebook |
+| 04 | RLHF + PPO | In progress (1/5) | PPO/RLHF explainer notebook |
 | 05 | DPO + preference optimization | Not started | DPO trainer |
 | 06 | GRPO + RLVR | Not started | Mini RLVR repo |
 | 07 | Evals + reward modeling | Not started | Eval harness |
@@ -72,6 +77,29 @@ Topics to revisit:
 - [ ] k1/k2/k3 KL estimators: k1 unbiased but negative on 20-44% of samples; k2 biased and the bias is INVISIBLE at small KL; k3 unbiased + ≥0 pointwise. **var(k3)/var(k1) crosses over: 423× better at KL=0.004, 4.4× WORSE at KL=0.65** (ρ is a likelihood ratio)
 - [ ] Per-token KL as reward shaping == the sequence KL: `E[Σ_t penalty] = β·KL(p_θ(τ)‖p_ref(τ)) = β Σ_t E_{d_t}[KL_t]` (ρ₀ and P cancel — same reason PG is model-free). Measured 0.77787 vs 0.78974 exact. k3 shaping: same mean, 1.47× less variance, and k1 pays a BONUS on 24.5% of tokens
 - [ ] Over-optimization = Goodhart: proxy monotone in 1/β while true reward peaks interior (1.1286 @ β=0.16) then falls BELOW the reference (−2.3250 vs 0.0270). Negative control: tilting by the TRUE reward is monotone (D5 drill 0.35 — did not cite the numbers)
+- [x] **Bradley-Terry NLL + gradient `sigma(-delta)`**: gradient magnitude is monotone
+  decreasing in how right the model already is (→0 confidently correct, exactly 1/2 at a tie,
+  →1 confidently wrong) ⇒ the fit is dominated by near-ties and misrankings, which is exactly
+  where annotators disagree ⇒ RM accuracy has a noise ceiling in the 70s (W4 D1, derivation 0.8)
+- [x] **RM identified only up to a per-prompt constant `c(x)`** — hypothesis consumed: both
+  completions in a pair share the same prompt. Verified by refitting from a different init
+  (centered agree 8.2e-15, raw differ 1.74). Three consequences: cross-prompt scores
+  incomparable (0.445 = worse than chance), GRPO's per-prompt group mean is free, per-prompt
+  centering is the only safe normalization (W4 D1)
+- [ ] **The KL penalty is a CONFIDENCE REGION for the reward model**, not a regularizer:
+  `pi_ref = pi_SFT` = the RM's own sampling distribution, so KL literally measures distance from
+  the RM's training data. Measured 0.177 → 4.89 (27.6×) along a KL ladder. ⇒ beta is a property
+  of the RM's DATA (better RM earns a wider trust region ⇒ retune beta after improving the RM;
+  or retrain the RM on current-policy samples = iterated RLHF) (W4 D1 Part 3 — was "not sure")
+- [ ] Over-estimation is the asymmetry that matters: under-estimates are harmless, over-estimates
+  are SOUGHT by an argmax. Collapses 86× from 300 → 20 000 comparisons (W4 D1)
+- [ ] Four RLHF networks + permissions: only `pi_theta` can WRITE; 7B bill 112/112/14/14 = 252 GB
+  naive → ~126 GB by sharing the trunk and caching reference logprobs at rollout time (they never
+  change); LoRA makes `pi_ref` "the same weights with the adapter off". PPO is a training job AND
+  an inference job in one loop, which is the real source of RLHF infra complexity (W4 D1)
+- [ ] All `C(K,2)` comparisons from one prompt must share a batch: statistical (else each
+  completion is seen K−1 times/epoch ⇒ overfits after one epoch) AND compute (K forwards serve
+  all pairs ⇒ ~(K−1)× cheaper) (W4 D1)
 - [ ] PPO ratio / clipping (as an IMPLICIT local KL trust region vs D5's explicit penalty)
 - [ ] DPO derivation — `r = β log(π*/π_ref) + β log Z`; `Z(x)` intractable because the action is a whole COMPLETION (`|V|^T`), not because logits are unavailable; it depends on the PROMPT only ⇒ cancels pairwise (W3 D5 Part 4, seen unprompted)
 - [ ] GRPO group baseline
