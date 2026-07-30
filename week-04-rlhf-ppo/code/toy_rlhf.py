@@ -361,14 +361,10 @@ def sample_preferences(rng: np.random.Generator, gold_r: np.ndarray,
     rand2 = rng.uniform(0, 1, n_pairs)
     labels_noisy = np.where(rand2>noise, labels_bt, -labels_bt)
 
-    labeled_pairs = np.zeros((n_pairs, 3), dtype=np.long)
-    labeled_pairs[:, 0] = prompts
     winner = np.where(labels_noisy>0, a, b)
     loser = np.where(labels_noisy>0, b, a)
-    labeled_pairs[:, 1] =winner
-    labeled_pairs[:, 2] =loser
-
-    return labeled_pairs
+    
+    return np.stack([prompts, winner, loser], axis=-1)
 
 
 # ---------------------------------------------------------------------------

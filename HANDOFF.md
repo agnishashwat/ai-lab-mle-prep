@@ -13,10 +13,10 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
   baselines/advantage → GAE → KL-constrained RL. **213 property-based checks across the week**,
   all against exact or finite-difference ground truth. `week-summary.md` + `retrospective.md`
   written.
-- **Week 04 — RLHF & PPO for LLMs: Day 01 DONE, Days 02-05 planned (not yet taught).**
+- **Week 04 — RLHF & PPO for LLMs: Days 01-02 DONE, Days 03-05 planned (not yet taught).**
   Day 1 pipeline + Bradley-Terry RM (`toy_rlhf.py`, **73/73**); Day 2 PPO objective
-  (`ppo_loss.py`); Day 3 token-level PPO + value head (`token_ppo.py`); Day 4 failure modes
-  (`failure_modes.py`); Day 5 capstone loop + adaptive β (`ppo_rlhf.py`).
+  (`ppo_loss.py`, **112/112**); Day 3 token-level PPO + value head (`token_ppo.py`); Day 4
+  failure modes (`failure_modes.py`); Day 5 capstone loop + adaptive β (`ppo_rlhf.py`).
 
 ## SESSION-FORMAT PREFERENCE (he stated this explicitly on W4 D1 — obey it)
 
@@ -28,20 +28,32 @@ Block 3 had to be re-delivered in full.
 
 ## Next session
 
-Start with the prompt: **"Start Week 4 Day 2"**. Read
-`week-04-rlhf-ppo/day-02-ppo-objective/session.md` and teach it.
+Start with the prompt: **"Start Week 4 Day 3"**. Read
+`week-04-rlhf-ppo/day-03-token-level-llm-ppo/session.md` and teach it.
 
-**Carried into D2 (not done on D1, out of clock): the two D1 interview drills.**
-1. *"Walk me through RLHF end to end, and tell me what each stage can and cannot fix."* Then:
-   the base model refuses a capability the RM rewards — which stage do you touch, and why can't
-   RL fix it? (Wants support confinement, elicit-vs-teach, SFT first.)
-2. *"Someone hands you an RM with 78% pairwise accuracy on a held-out set. What do you still not
-   know?"* Wants FIVE things: accuracy is on-distribution and the policy leaves it (cite
-   0.177→4.89, 27.6×); error asymmetry — over-estimates are SOUGHT (cite 86×); per-prompt
-   identifiability so raw scores don't compare (cite 0.445 cross-prompt vs 0.974 within);
-   where the errors sit — `sigma(-delta)` means near-ties dominate the fit, so 78% may be AT the
-   annotator noise ceiling; calibration ≠ accuracy. A polished version is already written in
-   D1's `deliverable.md` — quiz him COLD first, then compare.
+**Carried into D3 AT HIS REQUEST — D2's two interview drills, asked COLD in the recall quiz.**
+He asked to defer them so they test next-day retrieval, which is his known error mode; that was a
+good call and it is the same pattern that worked for D1's drills. Polished answers to both are
+already in D2's `deliverable.md` — **quiz him cold first, then compare.**
+1. *"Derive PPO's clipped objective and tell me exactly what it guarantees."* The second half is
+   the scored half: it guarantees only *no reward for going further out* — NOT a bound on ρ, NOT a
+   bound on the KL to the reference, and nothing at all about the walk over many iterations. Must
+   cite the drift numbers (5.3% clip fraction, 4.68 nats vs 0.75, 6.2×). Follow-up: *most
+   candidates say clipping "keeps the policy close to the old one" — is that true?* (No: PPO
+   deletes the gradient, it does not enforce a bound; nothing stops ρ from being 5.)
+2. *"Why not one sequence-level ratio instead of per-token ratios?"* Wants the product-of-T
+   log-normal argument stated DISTRIBUTIONALLY (mean EXACTLY 1 because it is a likelihood ratio,
+   median collapses) with his measured numbers (σ(T)=σ₁√T to 1.1%; ESS 0.38 out of 1024 at T=500
+   with 88.5% of tokens inside the band). Then the senior half: *what does the per-token choice
+   COST you?* (It is no longer an unbiased IS estimator of the sequence-level objective — a correct
+   high-variance estimator swapped for a biased usable one, the identical trade to clipping.)
+
+**Also carried to D3 from D2's derivation block: the THREE GAPS (he had 1 of 3, and his (i) was
+really the soft-vs-hard point already made in Part 2).** Re-ask cold: (i) per TOKEN, so T tokens at
+the boundary give sequence KL `T ε²/2`, unbounded in T (10 nats at T=500, ε=0.2); (ii) per SAMPLE
+and only where the clip BINDS, so it says nothing about `E[KL]` — note the two cells where the
+gradient flows are cells where ρ is ALREADY outside the band; (iii) relative to `π_old`, which
+RESETS every iteration ⇒ N bounded steps in a consistent direction is an unbounded walk.
 
 **Week 4's central design decision (mirrors Week 3's finite-MDP ground truth).** Day 1 builds
 a **token-level LM environment small enough to enumerate every terminating sequence** — a
@@ -122,24 +134,40 @@ support consequence; why `Z` is intractable (**the action is a whole COMPLETION,
 (423× better at KL=0.004, 4.4× WORSE at KL=0.65); and that per-token KL shaping IS the sequence
 KL because `ρ₀` and `P` cancel.
 
-**Perennials still open (updated after W4 D1):**
-- **Sources of REINFORCE variance — 0.2 on D1, the worst score yet.** Asked only to name the
-  standing miss, he answered "we use sampled values, we can reduce variance by using expected
-  values" — which is **Rao-Blackwellization, a MECHANISM**, and it is the *second* time he has
-  filed it as a source. The standing miss is **reward-model NOISE**. Taught the discriminator on
-  D1: *a source is something you would still have if you never wrote any variance-reduction
-  code.* Re-ask on D2 and demand the source/mechanism split explicitly.
-- **Off-policy-by-accident — 0.65 on D1, recovering from 0.45.** Support-vs-reweighting is now
-  clean and unprompted. Still missing: the **fix ORDER** (the actual fix is *sample rollouts at
-  T=1.0 untruncated*; everything else is mitigation) and **why clipping is PER-TOKEN** (a
-  sequence IS ratio is a PRODUCT of T per-token ratios whose variance compounds multiplicatively
-  ⇒ clip each factor instead of the product). That second half is Day 2's motivation, so it
-  should land there naturally.
-- **k1/k2/k3 — 0.5 on D1.** Definitions and classification all correct; the *mechanism* for why
-  k3 is both unbiased and ≥0 was missing (unbiased via the `E[rho]=1` control variate,
-  non-negative via convexity of `-log rho` — two independent facts, which is why k1 and k2 each
-  get only one), and the entire crossover was missing (423× at KL 0.004 → 0.23× at KL 0.65).
+**Perennials still open (updated after W4 D2):**
+- **Sources of REINFORCE variance — 0.85 on D2, BEST OF SIX ATTEMPTS, and the standing miss is
+  closed.** RM estimation error finally appeared in the left column, and he held the
+  source/mechanism discipline throughout (no mechanisms filed as sources) after the D1
+  discriminator: *a source is something you would still have if you never wrote any
+  variance-reduction code.* He gave six: zeroth-order estimator class (kill = DPO/pathwise —
+  a genuinely good answer), temporal mis-assignment, uncentered weights, RM noise, horizon/state
+  space, sparse terminal reward. **Still missing three:** the policy's own ENTROPY; ENVIRONMENT
+  stochasticity (worth naming BECAUSE it is zero for LLMs — deterministic append, a free win over
+  classic RL); and OFF-POLICY-ness itself. And his kill for RM noise was wrong — "use expectation"
+  is Rao-Blackwellization and there is no tractable conditional here; the real levers are RM
+  ENSEMBLING, reward whitening, and multiple samples per prompt. **Downgrade to a light re-ask.**
+- **Off-policy-by-accident — 0.72 on D2 (0.45 → 0.65 → 0.72).** Support-vs-reweighting clean and
+  unprompted; the per-token half now lands. **Still owed: the FIX ORDER.** (1) sample at T=1.0
+  untruncated = the only actual fix; (2) IS-weight by `π_θ/q` with q the ACTUAL sampler — works for
+  temperature, **provably fails for top-p because IS needs `supp(π_θ) ⊆ supp(q)` and truncation
+  violates it in the wrong direction: no estimator recovers mass you never observed**; (3)
+  mitigation only. He offered "clip gradients per token" as a fix — taught the three-way split:
+  gradient-NORM clipping (optimizer), PPO RATIO clipping (deliberate off-policy from reuse), top-p
+  TRUNCATION (accidental off-policy from sampling). Re-ask the ORDER and the top-p impossibility.
+- **k1/k2/k3 — 0.5 on D1, NOT re-asked on D2.** Definitions and classification all correct; the
+  *mechanism* for why k3 is both unbiased and ≥0 was missing (unbiased via the `E[rho]=1` control
+  variate, non-negative via convexity of `-log rho` — two independent facts, which is why k1 and k2
+  each get only one), and the entire crossover was missing (423× at KL 0.004 → 0.23× at KL 0.65).
   His `O(rho^2)` vs `O(rho)` small-KL argument was correct and better than the usual hand-wave.
+  **Re-ask on D3** — and note D2 gave a new hook: `log ρ` IS k1, and `k2 = ½(log ρ)²` is where the
+  ε² in the clip's implied per-token KL comes from (he produced both correctly on D2).
+- **NEW — the two D1 drills, both 0.6, both for the same reason.** Drill 1: he answered "walk me
+  through RLHF" and never touched "what each stage can and cannot fix," which IS the question
+  (recurring gap #1, sixth week). Drill 2: 4 of 5 items cold but **ZERO measured numbers** on a
+  question that explicitly asked for them, and the item he missed entirely was per-prompt
+  identifiability — the same result he had scored 0.9 on in cold recall FORTY MINUTES EARLIER.
+  ⇒ his failure is retrieval under a CHANGE OF FRAMING: he owns the theorem, he does not yet reach
+  for it when the question is posed as a diagnostic. Re-ask both, phrased as diagnostics.
 
 Retire: EGLP (1.0 on D3), attention-NaN checklist (D4), γ vs λ (1.0 on D5), **why `Z` is
 intractable (1.0 cold on D1 — `|A|^T`, the action is a whole completion)**, **wrong LEVEL vs
@@ -154,20 +182,30 @@ critic error enters, and **the KL term is not a Ψ at all** — it either modifi
 every rung) or sits in the loss.
 
 **Recurring behavioural gaps to police:**
-1. **He answers the first clause and stops.** FIFTH day. On D1 it hit cold-recall item 2 (gave
-   both β limits, omitted the three consequences) and quiz Q1 (defined k1/k2/k3, skipped both
-   the mechanism and the crossover). **But there is real progress: quiz Q2 came back with four
-   parts for four clauses, including an explicit "don't remember" for the part he couldn't do.**
-   That is the habit working. Keep scoring the second half as a separate line item.
-2. **He does not quote his own measured numbers.** Still the most reliable point-loser. On D1
-   the hump numbers were blank for the SECOND time (1.1286 @ β=0.16 → −2.3250 vs the reference's
-   0.0270), and the λ numbers were absent again. Everything else in his answer was right both
-   times. Prescription: when a question says "your measured numbers," treat a missing number as
-   a wrong answer, not a stylistic omission.
-3. **Retrieval, not comprehension, is the Week-3 error mode.** Every D5 quiz error was a fact he
-   demonstrably knew: the λ/bias direction was stated correctly in a table and inverted two pages
-   later; `β→∞` was answered with the special case. ⇒ Week 4 should add a short **cold recall of
-   CONCLUSIONS** block (one line per result, no whiteboard) distinct from the derivation block.
+1. **He answers the first clause and stops.** SIXTH day, and on D2 it cost the majority of a
+   drill: *"Walk me through RLHF end to end, and tell me what each stage can and cannot fix"* got
+   a flawless pipeline (Eq. (2) reproduced exactly, all three terms) and **not one word about what
+   any stage can or cannot do** — which is the entire question. Also hit cold-recall item 4 (gave
+   the mechanism, skipped the data-size sweep) and item 7 (gave the sign, skipped the shape).
+   Keep scoring the second half as a separate line item, and **say out loud which clause is the
+   scored one** — when told that on the D2 drills he did engage both halves.
+2. **He does not quote his own measured numbers.** THIRD consecutive session and still the most
+   reliable point-loser. On D2 the RM-error numbers were blank for the second day running
+   (0.177→4.89, 27.6×; 86×) and the 78%-RM drill came back with **four of five items and zero
+   numbers**, on a question where the prompt explicitly asked for them. Prescription that is now
+   standing policy: **treat a missing number as a wrong answer.** Tell him the deliverable's
+   numbers ARE the flashcards and the prose is not.
+3. **Retrieval under a CHANGE OF FRAMING is the specific failure, not retrieval in general.** The
+   D2 evidence is clean: he scored 0.9 on BT identifiability in cold recall, then forty minutes
+   later omitted it entirely from "what do you still not know about this RM?" — the same result,
+   asked as a diagnostic instead of as a theorem. The cold-recall block fixes decay (Ψ ladder
+   recovered 5/7 → 7/7) but does not fix reframing. ⇒ **ask at least one item per day in
+   applied/diagnostic form rather than in the form it was taught.**
+4. **He leans on invariants he did not assert.** Three D2 functions were correct only because
+   `_pack` zeroes `advantages` at padding; `gate`, `ρ` and the one-hot are all computed on padding
+   as if it were real. Fine here, and he was told it is load-bearing — but the habit to build is
+   `np.where(mask, x, 0.0)` over `x * mask`, because multiplication does not sanitise (`0 * inf`
+   and `0 * nan` are both `nan`). Same lesson as W1 D3's `-inf`-then-sum masking bug.
 4. **He drops the term the theorem is about, and drops factors when rewriting.** D2 Part 2 (`ρ₀`,
    `P`), D4 Part 4 (`∇log π`), D5 Q2 (dropped `γ^l` off the reward sum twice, having written it
    correctly one line earlier). Habit: *write it out in full once, confirm every factor is on the
@@ -544,6 +582,71 @@ every rung) or sits in the loss.
   Closed the W3 chore (`tilted_policy` log guard, 94/94 under `-W error::RuntimeWarning`).
   Deliverable written with a polished five-part answer to the 78%-RM drill.
   **Interview drills NOT run (out of clock) — carried to D2.**
+
+- **W4 D2 — The PPO Objective: Ratio, Clipping, Epochs.** Built
+  `week-04-rlhf-ppo/code/ppo_loss.py` (**112 staged checks, 5.3 s; `--fast` 109 in 1.5 s**):
+  `token_logratios`, `is_surrogate`, `clipped_surrogate` (+ `clip_frac`/`oob_frac`/`frac_high`/
+  `frac_low`), `surrogate_gradient` (analytic, with the clip GATE), `ppo_update` (epoch ×
+  minibatch reuse), `sequence_ratio_stats` (exact by enumeration), `drift_experiment` (4 modes).
+  **Design win: `exact_batch`** returns all 85 sequences with `weights = p_θold(y)` instead of
+  `1/B`, so an estimator on it is not an estimate but the exact expectation — that is what makes
+  the ρ=1 identity an assertion at 1e-11 rather than a claim about standard errors.
+  **Headline — clipping bounds the STEP, never the WALK.** 25 iterations, β=1.0: clip-only reached
+  **KL(π‖π_ref) = 4.6836 nats at a mean clip fraction of 5.3%** (max 16.5%) while the β-penalised
+  run **plateaued at 0.7497** (last 8 iterations span 0.034 nats; clip-only rose another 1.33 over
+  the same window). **6.2×.** `both` tightest at 0.7488, `none` loosest at 5.6133. Mean
+  per-iteration step KL 0.017 vs a 4.68 walk = **270×**, the arithmetic of the whole result.
+  **Second — the β frontier, and `dE[r]/dKL = +β` MEASURED.** β 0.7/1.0/1.5/2.5 → KL
+  1.890/0.849/0.342/0.115, J 2.910/2.085/1.475/1.046. All three secant slopes **bracket their β
+  pair** (0.793∈[0.7,1.0], 1.203∈[1.0,1.5], 1.892∈[1.5,2.5]) and **fall as KL grows** ⇒ concavity,
+  measured. This closes the D1 sign error and the D2 cold-recall shape gap in one experiment.
+  **Third — the session plan was WRONG about clipping and the code corrected it.** Clipping makes
+  the angle to the true ∇J **worse** (43.8° vs 11.8° at K=64) while cutting KL travelled **29.3×**
+  ⇒ **it protects step SIZE, not DIRECTION**, and those 32° ARE the deliberate bias of Part 4,
+  measured. The no-clip run also scores higher J on the same batch (2.46 vs 0.58) = Goodhart from
+  the inside. Negative control clean: K=1/1 minibatch, clip == no-clip at **0.00e+00** and the
+  direction is **exactly 0°** from ∇J.
+  **Fourth — the log-normal law, exactly.** `E_old[ρ]=1` to 1e-15 at every T while p99/median goes
+  1.06→2.50 and ESS/n 0.9991→0.8387 over T=1..12; `σ(T)=σ₁√T` to **1.1%**, `ESS/n=exp(−σ²)` to
+  **1.6%**, `ESS/n = 1/(1+χ²)` exactly. Extrapolated with σ₁=0.1257 measured while **88.5% of
+  tokens sit INSIDE the ε=0.2 band**: at T=500, ESS/n = 3.7e-4 ⇒ **0.38 effective sequences out of
+  1024.** Other verified: grad == W3's score-function gradient **elementwise at 0.0** and the
+  enumerated FD at 1.9e-11; rows sum to zero 2.1e-16; centring moves the gradient 9.7e-17 (a
+  baseline is free, exactly); `L_CLIP ≤ L_IS` pointwise; ε→∞ reproduces `is_surrogate` exactly;
+  gradient EXACTLY 0.0 in the two clipped cells; only ONE cell unbounded (−4.0→−12.0, linear in ρ).
+  **Cold recall 5.1/7** (Ψ ladder **7/7 recovered** from 5/7 — the new block is working; `dE[r]/dKL`
+  sign fixed; **numbers still blank on the RM-error item, 2nd day running**; "two reasons pairs
+  batch together" answered with VARIANCE — it is OVERFITTING). **Quiz 2.52/4** (BT derivation and
+  σ(−Δ) clean; **Q2 sequence-KL two routes was "not sure" — 0.15**, taught in full since it is D3's
+  load-bearing lemma). **Derivation 3.15/4 — his best derivation block yet**, up from 2.35 on D1:
+  ρ=1 identity clean, 2×2 table fully correct with values/gradients/intents, k1→ε and k2→ε²/2 both
+  right with 0.2/0.02 nats. Slips: called the frozen advantages `π_ref`-computed (they are
+  `π_old`'s — the very distinction the day is about); named TWO unbounded cells; pulled `min`
+  outside an expectation (`E[min] ≤ min(E,E)`, Jensen); **3 gaps 1 of 3.**
+  **Live code review — strong.** Every function correct within 1-2 iterations. His single-`np.add.at`
+  whole-row scatter is **cleaner than my reference's two scatters** and sidesteps the tuple-index
+  trap entirely. Bugs caught: `array[actions]` indexes axis 0 (4th "name the axis" event);
+  `take_along_axis` needs the new axis on the gathered axis (`[..., None]` not `[:, None]`); two
+  missing broadcast axes — **both RAISED instead of hiding, purely because V=5, T=3, B=85 are
+  distinct** (with D1's `vocab=4, t_max=4` the second would have silently broadcast time against
+  vocab); **`frac_high`/`frac_low` SWAPPED, which MY HARNESS DID NOT CATCH** (the only check was
+  `frac_high + frac_low == clip_frac`, symmetric in them) ⇒ added semantic checks, and the general
+  rule: *a check on an aggregate cannot validate a decomposition*; logratios computed once per
+  EPOCH instead of per minibatch (the concept block's "ρ≠1 even within epoch 1" as a live bug);
+  `list - list`; `drift_experiment` returning a tuple instead of a dict.
+  **MY HARNESS WAS WRONG 4× BEFORE ANY LEARNER CODE RAN (sixth session running), all caught by
+  building a private reference first and running it:** (1) asserted the A<0 cell has an unbounded
+  **gradient** — false in a tabular softmax, since driving ρ up saturates π and `e_a − p → 0`, so it
+  read exactly 0.0; the unboundedness lives in the OBJECTIVE and in ρ, not in this
+  parameterisation ⇒ restated as "value is exactly linear in ρ, other three cells flat";
+  (2) two exact-equality checks ignoring the 4e-7 of mass that still terminates early with eos at
+  −14 rather than −inf ⇒ one-step-bandit fixture instead; (3) the concavity assertion had the
+  inequality **backwards** (iterating by increasing β is *decreasing* KL); (4) a `vocab=2` spread
+  fixture that was a **silent null experiment** — with one real token its probability is already ~1,
+  so perturbing the logit changes nothing and σ read 0.0000 at every T. Also `--fast` truncating
+  the T ladder made a true extrapolation assertion false ⇒ restated as an effective sample COUNT.
+  **D2's own two interview drills deferred to D3's recall quiz at his request** (cold next-day
+  retrieval, which is the right call given his error mode). Polished answers are in the deliverable.
 
 ## Learner profile (quick facts)
 
@@ -1003,7 +1106,88 @@ every rung) or sits in the loss.
   size. Report it, don't assert it. Same family: a correlation over 6 points is not a test.
 - **`--fast` must shrink DATA and loosen TOLERANCES, never gradient STEPS.** Cutting steps made a
   true assertion false for reasons unrelated to the assertion, which is the worst kind of test
-  failure — it sends you debugging correct code.
+  failure — it sends you debugging correct code. (D2 hit the same family again: `--fast` truncating
+  a T ladder moved a measured σ₁ and broke a threshold. Fix = state the claim in units that do not
+  move with the fixture — an effective sample COUNT, not a fraction.)
+- **PPO in one sentence: the answer to "how many gradient steps can I take on data I already
+  collected?"** Rollouts cost 10-100× a gradient step (T sequential forwards, bandwidth-bound) so
+  vanilla PG uses the expensive thing once. Reuse ⇒ off-policy at step 2 ⇒ ratio ⇒ variance ⇒ clip.
+  **`grad L_IS` at θ=θ_old IS the W3 policy gradient; ρ=1 is an EVALUATION POINT, not an
+  assumption**, consumed in exactly one place (the ρ_t factor). Everything past the first step is a
+  different algorithm. Structural payoff of the IS form: **π_old is θ-free, so θ leaves the MEASURE
+  and enters the INTEGRAND** — the surrogate is honestly differentiable where `J(θ)` is not, which
+  is what all of Week 3's machinery existed to work around.
+- **DELIBERATE vs ACCIDENTAL off-policy are different situations with the same words.** Deliberate
+  (reuse): you chose it, you know π_old exactly, its logprobs are cached, you can correct it.
+  Accidental (temp/top-p): the sampler silently isn't the policy, q may not be in closed form, and
+  for top-p it is **provably uncorrectable**. PPO's ratio fixes the first; it is not a fix for the
+  second, and conflating them is the standard confusion.
+- **`Var(ρf) ~ 1 + χ²(π_θ‖π_old)`, and `ESS/n = 1/E[ρ²] = 1/(1+χ²)` because `E[ρ]=1` always.** IS is
+  unbiased for ANY θ — that is not the problem; it is *correct and worthless* simultaneously once
+  the distributions separate. Same shape as W3 D5's k3 crossover (423× better at KL 0.004, 4.4×
+  worse at KL 0.65) and for the same reason: everything built from a likelihood ratio degrades
+  exponentially in the log-difference.
+- **Why PER-TOKEN ratios: `prod_t ρ_t` is LOG-NORMAL.** Mean exactly 1 (likelihood ratio), median
+  `e^{−σ²/2}`, so the mean is held up by a vanishing fraction of samples. `σ(T)=σ₁√T` (verified to
+  1.1%) ⇒ `ESS/n = exp(−σ₁²T)`, **exponential in sequence length**. Measured: at T=500 with 88.5% of
+  tokens inside the ε=0.2 band, a 1024-sequence batch has ESS **0.38**. Cost of going per-token: it
+  is no longer an unbiased IS estimator of the sequence-level objective — a correct high-variance
+  estimator swapped for a biased usable one, **the identical trade as clipping**. Don't clip the
+  product; clip each factor — the same instinct as working in log space.
+- **The 2×2 clip table.** `A>0, ρ>1+ε`: value `(1+ε)A`, **grad 0**. `A>0, ρ<1−ε`: `ρA`, grad flows
+  (pull back UP). `A<0, ρ<1−ε`: `(1−ε)A`, **grad 0**. `A<0, ρ>1+ε`: `ρA`, grad flows, **UNBOUNDED**
+  (value exactly linear in ρ; dual-clip patches it with an outer `max(., cA)`, c≈3). Clipping is
+  one-sided PER CELL, and the two cells where the gradient flows are cells where ρ is ALREADY
+  outside the band. `L_CLIP ≤ L_IS` pointwise by cases — the `min` makes it a pessimistic bound,
+  which is the honest content of "trust region". **In a tabular softmax the θ-gradient stays bounded
+  even in the unbounded cell**, because saturating π sends `e_a − p → 0`; the unboundedness is in
+  the objective and in ρ.
+- **CLIPPING BOUNDS THE STEP, NEVER THE WALK.** Three gaps, one per level of aggregation: (i) per
+  TOKEN ⇒ `T ε²/2`, unbounded in T (10 nats at T=500, ε=0.2); (ii) per SAMPLE and only where the
+  clip BINDS ⇒ nothing about `E[KL]`; (iii) relative to **π_old, which RESETS every iteration** ⇒ N
+  bounded steps in a consistent direction is an unbounded walk. Measured: **4.68 nats at a 5.3% clip
+  fraction vs 0.75 for the β run, 6.2×**; mean step KL 0.017 against that 4.68 walk = 270×.
+  ⇒ **log the WALK, not just the step**, and this is why InstructGPT ships clip AND penalty.
+- **PPO approximates a constraint by DELETING THE GRADIENT, not by enforcing a bound.** Nothing
+  stops ρ from being 5; the clip only declines to pay for the trip. "Clipping keeps the policy close
+  to the old one" is FALSE as stated and is the discriminating interview follow-up. Contrast
+  **TRPO: `KL(π_old‖π_θ) ≤ δ` — FORWARD, mass-covering, second-order (Fisher-vector product + line
+  search)** vs **InstructGPT's `KL(π_θ‖π_ref)` — REVERSE, mode-seeking, support-confining.**
+- **Clipping protects step SIZE, not DIRECTION** (43.8° vs 11.8° to the true ∇J at K=64, while
+  cutting KL travelled 29.3×). Those degrees ARE the bias: the clip gate depends on ρ hence on
+  `a_t`, so it is **action-dependent** — a baseline is unbiased only because it is constant in `a`
+  and therefore FACTORS OUT of `E_{a∼π}[∇log π]`; an action-dependent multiplier does not factor
+  out, so no theorem forces its contribution to vanish. It is also θ-dependent ⇒ `L_CLIP` is not
+  differentiable at the boundary and you are doing SUBGRADIENT ascent. **PPO is deliberately biased
+  and the bias is the product.** And the unclipped run scores higher J on the same batch = Goodhart
+  from the inside.
+- **The PPO loss curve is uninformative BY CONSTRUCTION**: `L_IS(θ_old) = E[Â] ≈ 0`. Read clip
+  fraction, `KL(π_θ‖π_ref)`, entropy, explained variance (D3) — never the loss. Sharper: with
+  `Σ_t`, the value is `Σ_b w_b len(y_b) Â_b`, so the residual is pure **LENGTH/advantage
+  covariance** (measured +0.010993; exactly 0.0 in a one-step bandit). RLHF length bias, visible two
+  days before D4 names it.
+- **`clip_frac` ≠ `oob_frac`** (0.237 vs 0.570 measured). Every out-of-band token is a candidate;
+  only those whose sign of A points further out lose the gradient. **`frac_high` rising = trying to
+  escape upward; `frac_low` rising = entropy collapse** — opposite responses, so a transposed
+  dashboard is worse than none. `ε=0.0` is NOT `ε=None`: at ε=0 the band is `{1}` and the gate still
+  closes on two of four cells. **Epochs × MINIBATCHES is how far off-policy you are, not epochs** —
+  "we only do 4 epochs" is not a safety argument; the clip fraction is the measurement.
+- **The KL penalty is REWARD SHAPING, not a loss term**: `r(y) − β[log p_old(y) − log p_ref(y)]`
+  applied before the advantages, so no estimator knows it exists (consistent with "the KL term is
+  not a Ψ — it modifies `r`, changing every rung at once"). Uses only rollout-time quantities ⇒
+  **π_ref can be dropped after rollout** (14 GB of a frozen 7B never resident). Stale after step 1,
+  exactly like the ratio.
+- **`E[min(X,Y)] ≤ min(E X, E Y)`, never `=`** (Jensen, `min` concave). Same family as pulling a
+  `max` out of an expectation, which shows up constantly in RL appendices.
+- **Don't switch an instrument off with the mechanism it measures.** Reporting `oob_frac = 0` when
+  clipping is disabled asserts "nothing drifted" — false exactly in the run where you need the
+  reading. Compute it at a fixed reference ε regardless. Same failure as logging only `kl_step`.
+- **A check on an AGGREGATE cannot validate a DECOMPOSITION.** `frac_high`/`frac_low` swapped passed
+  112 checks because the only assertion touching them was their SUM. When the content is in how a
+  total splits, assert the split.
+- **Freeze by CONSTRUCTION, not by discipline.** Putting `logp_old` and `advantages` in an immutable
+  `Batch` makes "θ_old and the advantages are frozen" unforgeable: the reuse loop has access to
+  nothing else. In a real stack `logp_old` is the only thing kept from the rollout worker.
 
 ## Conventions
 

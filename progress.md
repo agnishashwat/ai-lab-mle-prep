@@ -2,21 +2,23 @@
 
 ## Current Status
 
-- Current week: **Week 04 — RLHF & PPO for LLMs** (Day 01 of 5 done)
-- Current day: Week 4 Day 01 done (InstructGPT pipeline + Bradley-Terry RM;
-  `code/toy_rlhf.py` **73/73 staged checks in 13.3 s**, `--fast` 3.4 s). Built the week's
-  ground-truth vehicle: a token-level env with a real EOS, enumerable to **121 terminating
-  sequences**, giving exact `J`, exact sequence KL and a sequence-level exponential tilt.
-  Headline: BT reward is identified only up to a **per-prompt constant** (refit from another
-  init ⇒ centered scores agree to 8.2e-15, raw differ by 1.74; cross-prompt accuracy 0.445 =
-  worse than chance vs 0.974 within-prompt), and **RM error grows 27.6× along a KL ladder**
-  ⇒ the KL penalty is a *confidence region for the reward model*.
-- Also closed the carried-forward W3 chore: `kl_rl.py` `tilted_policy` now guards inside the
-  log; re-verified 94/94 under `-W error::RuntimeWarning`.
-- Next: **Week 4 Day 2 — the PPO objective.** The ratio's gradient at θ=θ_old is shown to BE
-  the Week-3 policy gradient, and clipping is shown to be an implicit local KL trust region
-  that does something different from D5's explicit penalty. Day-1 interview drills were not
-  run (out of clock) — carried to D2.
+- Current week: **Week 04 — RLHF & PPO for LLMs** (Days 01-02 of 5 done)
+- Current day: Week 4 Day 02 done (the PPO objective; `code/ppo_loss.py` **112 staged checks in
+  5.3 s**, `--fast` 109 in 1.5 s). **Headline: clipping bounds the STEP, never the WALK** —
+  25 iterations at a mean clip fraction of **5.3%**, every step inside the trust region, and the
+  policy still walked **4.68 nats** from `π_ref`, against **0.75** for a β-penalised run that
+  plateaued (6.2×). Also: `grad L_IS` at θ=θ_old equals W3's score-function gradient
+  **elementwise at 0.0** and the enumerated finite difference at 1.9e-11; the β frontier's three
+  secant slopes each **bracket their β pair** and fall as KL grows (concavity measured);
+  `σ(T) = σ₁√T` verified to **1.1%** ⇒ at T=500 a 1024-sequence batch has ESS **0.38**.
+  Correction to the plan: clipping makes the update DIRECTION worse (43.8° vs 11.8° at K=64)
+  while cutting KL travelled **29.3×** — it protects step size, not direction.
+- Day-1 interview drills were run on D2 (0.6 / 0.6 — structure right, **zero measured numbers**
+  on the second). D2's own two drills are carried to D3's recall quiz at his request, so they
+  are asked cold a day later.
+- Next: **Week 4 Day 3 — token-level PPO for LLMs**: a value head trained by regression (so D4's
+  critic error is *earned*, not injected), the full InstructGPT loss, and per-token KL wired into
+  the reward — which D2's Q2 already proved equals the sequence KL via the occupancy identity.
 
 ### Diagnostic (Day 01)
 
@@ -30,7 +32,7 @@
 | 01 | LM foundations + PyTorch | Complete (5/5) | Tiny LM train/eval/ablation harness |
 | 02 | Transformers + generation | Complete (5/5) | Decoder-only mini-impl + debug suite |
 | 03 | RL foundations | Complete (5/5) | Toy policy-gradient implementation (213 checks) |
-| 04 | RLHF + PPO | In progress (1/5) | PPO/RLHF explainer notebook |
+| 04 | RLHF + PPO | In progress (2/5) | PPO/RLHF explainer notebook |
 | 05 | DPO + preference optimization | Not started | DPO trainer |
 | 06 | GRPO + RLVR | Not started | Mini RLVR repo |
 | 07 | Evals + reward modeling | Not started | Eval harness |
@@ -50,11 +52,24 @@ Topics to revisit:
 - [x] The Ψ_t ladder (R(τ) → G_t → G_t−b → Q^π → A^π → δ_t → GAE) with bias/variance for each (W3 D3, 7/7 rungs + bias column; ordering principle still needs both mechanisms named)
 - [ ] PG regularity conditions: ∇/Σ swap; **support of p_θ must not depend on θ** (top-p violates it); R(τ) not θ-dependent (D3 quiz gap)
 - [ ] Score-function vs pathwise/reparameterization; why RL is forced into SF (discrete actions + black-box reward)
-- [ ] Six sources of REINFORCE variance + which technique kills each (STILL WEAK: 1/6 cold on D2, 3/5 re-drill, ~2.5/6 on D3, **4/7 on D4 — best yet**. Two persistent misses: "reward SCALE" is NOT a source (it's reward-model **noise**), and the LLM-specific sparse-terminal-reward one. Batch size costs 4× compute to halve noise)
+- [ ] Six sources of REINFORCE variance + which technique kills each (1/6 cold on W3 D2, 3/5
+  re-drill, ~2.5/6 on D3, 4/7 on D4, **0.2 on W4 D1 (filed Rao-Blackwellization as a source)**,
+  **6 sources at 0.85 on W4 D2 — best yet, and RM noise finally present**. Discriminator that
+  fixed it: *a source is something you would still have if you never wrote any variance-reduction
+  code.* Still missing: the policy's own ENTROPY; ENVIRONMENT stochasticity (worth naming because
+  it is ZERO for LLMs — deterministic append); OFF-POLICY-ness itself. And the kill for RM noise is
+  NOT "use expectation" — it is ensembling / reward whitening / multiple samples per prompt)
 - [ ] `Ψ_t` need NOT be `h_t`-measurable — that requirement is on the **subtracted baseline** only. A state-only `Ψ` gives an identically zero gradient by EGLP, so non-measurability of `G_t` is the point, not a defect (D4 question — he applied the baseline test to the signal)
 - [ ] Why the policy gradient carries `γ^t`: it is the leftover from re-basing `Σ_{t'≥t} γ^{t'} r_{t'}` into `γ^t G_t`; the textbook `d^π_γ` form absorbs it into the state measure. PPO/GRPO drop it (D4 question)
 - [ ] `Σ_t` in a policy gradient always traces back to the product over timesteps in `p_θ(τ)` — log of a product; `ρ₀` and `P` vanish because they are θ-free (D4 question — reproducible on demand but not yet automatic)
-- [ ] Off-policy-by-accident: temp/top-p rollouts ≠ π_θ → entropy collapse; IS ratio → PPO clipping; top-p is a SUPPORT mismatch (D3: 0.7, has support argument, missing the mode-reinforcement MECHANISM + entropy/KL instrumentation)
+- [ ] Off-policy-by-accident (W3 D3 0.7 → W4 D1 0.65 → **W4 D2 0.72**): support-vs-reweighting now
+  clean and unprompted (temperature reweights, top-p TRUNCATES); the per-token half now lands too.
+  **Still owed: the FIX ORDER.** (1) sample at T=1.0 untruncated — the only actual fix; (2) IS-weight
+  by `pi_theta/q` using the ACTUAL sampler — works for temperature, **provably fails for top-p
+  because IS needs `supp(pi_theta) ⊆ supp(q)` and truncation violates it in the wrong direction: no
+  estimator recovers mass you never observed**; (3) mitigation only (clip, short reuse). Keep the
+  three clip-like things separate: gradient-NORM clipping (optimizer), PPO RATIO clipping
+  (deliberate off-policy from reuse), top-p TRUNCATION (accidental off-policy from sampling)
 - [x] A valid baseline must be h_t-measurable; an episode-internal G_t mean is BIASED (W3 D3: measured, mean 38% too small)
 - [x] Measurability = "if I tell you h_t you can tell me X"; it (not θ-dependence) is the discriminator (W3 D3)
 - [x] Action-dependent baseline b=Q^π DELETES the gradient (mean exactly 0), it doesn't merely bias it (W3 D3)
@@ -100,7 +115,51 @@ Topics to revisit:
 - [ ] All `C(K,2)` comparisons from one prompt must share a batch: statistical (else each
   completion is seen K−1 times/epoch ⇒ overfits after one epoch) AND compute (K forwards serve
   all pairs ⇒ ~(K−1)× cheaper) (W4 D1)
-- [ ] PPO ratio / clipping (as an IMPLICIT local KL trust region vs D5's explicit penalty)
+- [x] **`grad L_IS` at θ=θ_old IS the Week-3 policy gradient** (ρ=1 is an EVALUATION POINT, not an
+  assumption; consumed in exactly one place — the ρ_t factor multiplying ∇log π). ⇒ PPO is
+  REINFORCE-with-advantages plus permission to keep going. Asserted elementwise at 0.0 vs W3's
+  estimator and 1.9e-11 vs the enumerated FD (W4 D2, derivation 0.9)
+- [x] **The 2×2 clip table** (value / gradient / intent per cell), gradient EXACTLY 0 in the two
+  clipped cells, one-sided per cell, `L_CLIP ≤ L_IS` pointwise by cases (W4 D2, 0.85 — the only
+  slip was naming TWO unbounded cells; it is only `A<0, rho>1+eps`, which dual-clip patches)
+- [ ] **Clipping bounds the STEP, never the WALK — the three gaps, one per level of aggregation:**
+  (i) per TOKEN (T tokens at the boundary ⇒ sequence KL `T eps²/2`, 10 nats at T=500, eps=0.2);
+  (ii) per SAMPLE and only where the clip BINDS (says nothing about `E[KL]`); (iii) relative to
+  `pi_old`, which RESETS every iteration ⇒ N bounded steps in one direction is an unbounded walk.
+  **Measured: 4.68 nats of drift at a 5.3% clip fraction vs 0.75 for the β run (6.2×).** He had
+  1 of 3 on D2 (and his (i) was really the soft-vs-hard point) — RE-ASK
+- [ ] **PPO approximates a constraint by DELETING THE GRADIENT, not by enforcing a bound.**
+  Nothing stops rho from being 5; the clip only declines to pay for the trip. "Clipping keeps the
+  policy close to the old one" is FALSE as stated — that is the discriminating interview follow-up
+- [ ] **Clipping protects step SIZE, not DIRECTION** (measured: 43.8° vs 11.8° angle to the true
+  ∇J at K=64, while cutting KL travelled 29.3×). Those degrees ARE the deliberate bias. The
+  no-clip run also scores HIGHER J on the same batch = Goodhart from the inside
+- [ ] **Why per-token and not per-sequence ratios**: `prod_t rho_t` is log-normal, so mean is
+  EXACTLY 1 (likelihood ratio) while the median collapses. `sigma(T) = sigma_1 sqrt(T)` verified
+  to 1.1%, `ESS/n = exp(-sigma²)` to 1.6%, `ESS/n = 1/(1+chi²)` exactly ⇒ **at T=500 a
+  1024-sequence batch has an effective size of 0.38**, with 88.5% of tokens inside the eps=0.2
+  band. Cost of the per-token choice: it is no longer an unbiased IS estimator of the
+  sequence-level objective — same trade as clipping
+- [ ] **The PPO loss curve is uninformative BY CONSTRUCTION** (`L_IS(theta_old) = E[A] ≈ 0`), and
+  the residual is `sum_b w_b len(y_b) A_b` — nonzero only through LENGTH/advantage covariance
+  (measured +0.010993; exactly 0 in a one-step bandit). Read clip fraction, `KL(pi||pi_ref)`,
+  entropy, explained variance
+- [ ] **`clip_frac` ≠ `oob_frac`** (0.237 vs 0.570 measured): every out-of-band token is a
+  candidate, only those whose sign of A points further out lose the gradient. `frac_high` rising =
+  trying to escape upward; `frac_low` rising = entropy collapse. Equal ⇒ you clipped both sides
+- [ ] **TRPO constrains `KL(pi_old||pi_theta)` — FORWARD, mass-covering** ("don't abandon what the
+  old policy did"); InstructGPT penalises `KL(pi_theta||pi_ref)` — REVERSE, support-confining.
+  Different objects; a real interview contrast
+- [x] **`dE[r]/dKL = +beta` at the optimum, and the frontier is CONCAVE** — measured on four
+  β-plateaus: every secant slope brackets its β pair (0.793∈[0.7,1.0], 1.203∈[1.0,1.5],
+  1.892∈[1.5,2.5]) and the slopes FALL as KL grows. Concavity argument: KL is convex in π ⇒
+  `{KL ≤ κ}` is convex and growing ⇒ R(κ) is a max of a linear functional over it = a perturbation
+  function. β is a PRICE, and the price falls as you buy more nats (W4 D2 — sign fixed, shape was
+  the gap)
+- [ ] **The KL penalty is REWARD SHAPING, not a loss term**: `r(y) - beta[log p_old(y) - log
+  p_ref(y)]` applied before the advantages ⇒ no estimator knows it exists (consistent with "the KL
+  term is not a Psi — it modifies r"). Uses only rollout-time quantities ⇒ `pi_ref` can be dropped
+  after rollout. Stale after step 1, exactly like the ratio
 - [ ] DPO derivation — `r = β log(π*/π_ref) + β log Z`; `Z(x)` intractable because the action is a whole COMPLETION (`|V|^T`), not because logits are unavailable; it depends on the PROMPT only ⇒ cancels pairwise (W3 D5 Part 4, seen unprompted)
 - [ ] GRPO group baseline
 - [x] KV-cache memory math (`2·L·n_kv·d_head·T·B·bytes`; 512 KiB/tok, 2 GiB@4k, 64 GiB@8k×16; done W2 D4)
