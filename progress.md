@@ -2,8 +2,8 @@
 
 ## Current Status
 
-- Current week: **Week 04 — RLHF & PPO for LLMs** (Days 01-02 of 5 done)
-- Current day: Week 4 Day 02 done (the PPO objective; `code/ppo_loss.py` **112 staged checks in
+- Current week: **Week 04 — RLHF & PPO for LLMs** (Days 01-03 of 5 done)
+- Previous day: Week 4 Day 02 (the PPO objective; `code/ppo_loss.py` **112 staged checks in
   5.3 s**, `--fast` 109 in 1.5 s). **Headline: clipping bounds the STEP, never the WALK** —
   25 iterations at a mean clip fraction of **5.3%**, every step inside the trust region, and the
   policy still walked **4.68 nats** from `π_ref`, against **0.75** for a β-penalised run that
@@ -16,9 +16,29 @@
 - Day-1 interview drills were run on D2 (0.6 / 0.6 — structure right, **zero measured numbers**
   on the second). D2's own two drills are carried to D3's recall quiz at his request, so they
   are asked cold a day later.
-- Next: **Week 4 Day 3 — token-level PPO for LLMs**: a value head trained by regression (so D4's
-  critic error is *earned*, not injected), the full InstructGPT loss, and per-token KL wired into
-  the reward — which D2's Q2 already proved equals the sequence KL via the occupancy identity.
+- Current day: Week 4 Day 03 done (token-level PPO + learned value head; `code/token_ppo.py`
+  **144 staged checks in 7.6 s**, `--fast` 144 in 6.9 s). **Headline: a critic cannot bias you
+  as a BASELINE, only as a BOOTSTRAP** — at λ=1 *every* critic (zero, pure noise, anti-correlated,
+  V\*+25) reproduces the enumerated finite-difference gradient to **2.8e-10**; at λ=0.5 the same
+  zero critic is **0.796** off. Bias tracks the state-VARYING error: Spearman(bias, ‖ẽ‖) =
+  **+0.995**, Spearman(bias, EV) = **−0.995**, and a real regression's error is almost entirely
+  the expensive kind (‖ẽ‖ ≈ ‖e‖ at every checkpoint).
+  **Correction to the plan, and the day's best result:** `session.md` claimed `V+c` shows
+  near-zero bias generally. It shifts advantages by exactly `−c·λ^(L−1−t)` (asserted to 3.6e-15),
+  so with EOS SUPPRESSED a wrong LEVEL costs **1.5e-10** (the FD floor — literally nothing) while
+  a wrong RANKING of identical ‖e‖ costs **0.97**; with EOS live the same level error costs
+  **0.447**. "Wrong level is free" is a statement about the BASELINE role — under bootstrapping it
+  needs FIXED length, and an LLM never has that. Also: per-token KL shaping = **0.405113796560**
+  vs `β·KL_seq` = **0.405113796560** (1e-11, both k1 and k3); EV converges to an analytic ceiling
+  of **0.4280**, not 1; zero-baseline probe reads **−42.6%** (exact V\*) / **+128.1%**
+  (anti-critic); c₁ is **non-monotone** (neutral at 0.1–0.5, keeps only **2.5%** of the gain at 5).
+- D2's two interview drills were carried into D3's recall quiz and asked cold as planned.
+- Next: **Week 4 Day 4 — RLHF failure modes**: the D1 reward model gets over-optimized on purpose
+  (Goodhart hump from finite noisy preference data), off-policy-by-accident finally gets MEASURED
+  against exact ∇J, and length exploitation shows up because the env has an EOS token. D3 already
+  seeded all three: the rare-state tail (critic still off by **0.942** where occupancy < 1e-4,
+  which is exactly where an over-optimizing policy goes), `reduce="mean"` moving weight on len≤2
+  from **0.3371 → 0.5522**, and level-error-costs-only-with-EOS.
 
 ### Diagnostic (Day 01)
 
@@ -32,7 +52,7 @@
 | 01 | LM foundations + PyTorch | Complete (5/5) | Tiny LM train/eval/ablation harness |
 | 02 | Transformers + generation | Complete (5/5) | Decoder-only mini-impl + debug suite |
 | 03 | RL foundations | Complete (5/5) | Toy policy-gradient implementation (213 checks) |
-| 04 | RLHF + PPO | In progress (2/5) | PPO/RLHF explainer notebook |
+| 04 | RLHF + PPO | In progress (3/5) | PPO/RLHF explainer notebook |
 | 05 | DPO + preference optimization | Not started | DPO trainer |
 | 06 | GRPO + RLVR | Not started | Mini RLVR repo |
 | 07 | Evals + reward modeling | Not started | Eval harness |

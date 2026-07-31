@@ -13,10 +13,11 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
   baselines/advantage → GAE → KL-constrained RL. **213 property-based checks across the week**,
   all against exact or finite-difference ground truth. `week-summary.md` + `retrospective.md`
   written.
-- **Week 04 — RLHF & PPO for LLMs: Days 01-02 DONE, Days 03-05 planned (not yet taught).**
+- **Week 04 — RLHF & PPO for LLMs: Days 01-03 DONE, Days 04-05 planned (not yet taught).**
   Day 1 pipeline + Bradley-Terry RM (`toy_rlhf.py`, **73/73**); Day 2 PPO objective
-  (`ppo_loss.py`, **112/112**); Day 3 token-level PPO + value head (`token_ppo.py`); Day 4
-  failure modes (`failure_modes.py`); Day 5 capstone loop + adaptive β (`ppo_rlhf.py`).
+  (`ppo_loss.py`, **112/112**); Day 3 token-level PPO + learned value head (`token_ppo.py`,
+  **144/144**); Day 4 failure modes (`failure_modes.py`); Day 5 capstone loop + adaptive β
+  (`ppo_rlhf.py`).
 
 ## SESSION-FORMAT PREFERENCE (he stated this explicitly on W4 D1 — obey it)
 
@@ -28,32 +29,44 @@ Block 3 had to be re-delivered in full.
 
 ## Next session
 
-Start with the prompt: **"Start Week 4 Day 3"**. Read
-`week-04-rlhf-ppo/day-03-token-level-llm-ppo/session.md` and teach it.
+Start with the prompt: **"Start Week 4 Day 4"**. Read
+`week-04-rlhf-ppo/day-04-rlhf-failure-modes/session.md` and teach it.
 
-**Carried into D3 AT HIS REQUEST — D2's two interview drills, asked COLD in the recall quiz.**
-He asked to defer them so they test next-day retrieval, which is his known error mode; that was a
-good call and it is the same pattern that worked for D1's drills. Polished answers to both are
-already in D2's `deliverable.md` — **quiz him cold first, then compare.**
-1. *"Derive PPO's clipped objective and tell me exactly what it guarantees."* The second half is
-   the scored half: it guarantees only *no reward for going further out* — NOT a bound on ρ, NOT a
-   bound on the KL to the reference, and nothing at all about the walk over many iterations. Must
-   cite the drift numbers (5.3% clip fraction, 4.68 nats vs 0.75, 6.2×). Follow-up: *most
-   candidates say clipping "keeps the policy close to the old one" — is that true?* (No: PPO
-   deletes the gradient, it does not enforce a bound; nothing stops ρ from being 5.)
-2. *"Why not one sequence-level ratio instead of per-token ratios?"* Wants the product-of-T
-   log-normal argument stated DISTRIBUTIONALLY (mean EXACTLY 1 because it is a likelihood ratio,
-   median collapses) with his measured numbers (σ(T)=σ₁√T to 1.1%; ESS 0.38 out of 1024 at T=500
-   with 88.5% of tokens inside the band). Then the senior half: *what does the per-token choice
-   COST you?* (It is no longer an unbiased IS estimator of the sequence-level objective — a correct
-   high-variance estimator swapped for a biased usable one, the identical trade to clipping.)
+**D3's two interview drills were NOT run — he ran out of time in the coding block. Ask them
+COLD in D4's recall quiz**, which is the same defer-a-day pattern that worked for D1→D2 and
+D2→D3. Polished answers are in D3's `deliverable.md`; quiz him first, then compare.
+1. *"Write the full RLHF objective and defend every term."* Second half is the scored half:
+   *why is the KL in the REWARD rather than as a loss penalty?* Lead with **density** (a scalar
+   loss term gives one number per sequence; the reward form gives the critic something to
+   predict at every t → raises EV → makes GAE's bootstrap trustworthy at smaller λ), then
+   credit-assignment-through-the-advantage, then the exactness number **0.405113796560 vs
+   0.405113796560** (β=0.3, seq KL 1.350379 nats). Must also say `c₂ = 0` in InstructGPT and why.
+2. *"Your value head has an R² of 0.1 after 500 steps. Is your policy gradient biased?"* Wants:
+   **it depends on λ** — as a baseline it CANNOT bias (h_t-measurable by construction, measured
+   2.8e-10 for every critic at λ=1); inside GAE with λ<1 it bootstraps and the state-VARYING
+   part biases (0.796 for the same zero critic at λ=0.5). Then: measure **EV not MSE** (V+25 →
+   MSE +625, EV unchanged); run the **zero-baseline probe** (−42.6% healthy, +128.1%
+   anti-correlated); λ→1 as the hedge; warm up the critic; check the target isn't
+   horizon-mismatched.
 
-**Also carried to D3 from D2's derivation block: the THREE GAPS (he had 1 of 3, and his (i) was
-really the soft-vs-hard point already made in Part 2).** Re-ask cold: (i) per TOKEN, so T tokens at
-the boundary give sequence KL `T ε²/2`, unbounded in T (10 nats at T=500, ε=0.2); (ii) per SAMPLE
-and only where the clip BINDS, so it says nothing about `E[KL]` — note the two cells where the
-gradient flows are cells where ρ is ALREADY outside the band; (iii) relative to `π_old`, which
-RESETS every iteration ⇒ N bounded steps in a consistent direction is an unbounded walk.
+**Carried into D4 from D3 — three things D3 measured that D4 is built to exploit:**
+- **The rare-state tail.** After 4000 steps the critic is still off by up to **0.942** at states
+  with occupancy < 1e-4 (gradient ∝ occupancy ⇒ ~3000× slower there). A critic can post a
+  healthy EV and be badly wrong exactly where an over-optimising policy is about to go. That is
+  the over-optimisation channel, already visible.
+- **Length is an action.** `reduce="mean"` moves weight on len≤2 from **0.3371 → 0.5522**, and
+  a level-only critic error costs **nothing** at fixed length but **0.4468** with EOS live.
+  Both say the same thing, and D4's length exploitation is the payoff.
+- **c₁ is non-monotone** — a warning about drawing tuning conclusions from small sweeps.
+
+**Still owed from D2, unchanged:** the off-policy fix ORDER (his #1 regressed perennial, five
+asks, collapsed to 0.1 again on reframing) — D4 is where it stops being a drill and gets
+MEASURED against exact ∇J, with a constant-reward negative control and an IS fix that works
+for temperature and provably fails for top-p.
+
+**Process gaps still costing more than content** (unchanged from D3's grading): quoting his own
+measured numbers, and answering the SECOND clause of a two-clause question. Enforce the
+clause-counting rubric out loud.
 
 **Week 4's central design decision (mirrors Week 3's finite-MDP ground truth).** Day 1 builds
 a **token-level LM environment small enough to enumerate every terminating sequence** — a
@@ -606,6 +619,54 @@ every rung) or sits in the loss.
   measured. The no-clip run also scores higher J on the same batch (2.46 vs 0.58) = Goodhart from
   the inside. Negative control clean: K=1/1 minibatch, clip == no-clip at **0.00e+00** and the
   direction is **exactly 0°** from ∇J.
+- **W4 D3 — Token-Level PPO: Value Heads, Sequence Rewards, Per-Token KL.** Built
+  `code/token_ppo.py` (**144 staged checks in 7.6 s**; 8 TODOs, 12 stages, fixture env
+  vocab=5/t_max=4 so V=5, T=4, S=85, B=341 are four different numbers and value arrays are
+  `(B, T+1)` against everything else's `(B, T)`). He implemented all of it bar
+  `zero_baseline_probe` and the `instructgpt_loss` plumbing, which were finished for him at
+  his request when he ran out of time.
+  **First — the reconciliation, measured.** At λ=1 the critic enters ONLY as a subtracted
+  `V(s_t)`, so it is `h_t`-measurable, so it is a baseline: **every** critic — zero, pure
+  noise σ=6, anti-correlated −V\*, V\*+25 — reproduces the enumerated finite-difference
+  gradient to **2.8e-10**. At λ=0.5 the same zero critic is **0.796** off. Same critic, same
+  rollouts; only the estimator's USE of it changed. That IS checkpoint question 3.
+  **Second — bias tracks the state-VARYING error.** Occupancy-weighted `e = ē + ẽ` along a
+  real 4000-step regression: Spearman(bias, ‖ẽ‖) = **+0.995**, Spearman(bias, EV) =
+  **−0.995**, Pythagoras asserted. A learned critic's error is almost entirely the EXPENSIVE
+  kind (‖ẽ‖ ≈ ‖e‖ at every checkpoint; ē dies in the first 200 steps) — gradient descent
+  fixes the free component first, so what remains is the part that bites.
+  **Third — the session plan was WRONG about the negative control, and the correction is the
+  day's best result.** `session.md` claimed `V+c` gives near-zero bias. Truth: it shifts
+  advantages by exactly **`−c·λ^(L−1−t)`** (asserted elementwise to 3.6e-15). Suppress EOS so
+  every rollout runs to `t_max` and the remaining horizon is a function of `t` ALONE ⇒
+  `h_t`-measurable ⇒ a baseline ⇒ a wrong LEVEL costs **1.5e-10**, the FD floor, *literally
+  nothing*, while a wrong RANKING of identical ‖e‖=1.5 costs **0.9724**. Put EOS back and the
+  same level error costs **0.4468**. ⇒ **"Wrong level is free" is a claim about the BASELINE
+  role; under bootstrapping it additionally requires FIXED length, and an LLM never has that.**
+  The pinned terminal row (V=0, unshiftable) is what breaks the uniformity. This is the fourth
+  session running where checking the CLAIM before the code was right.
+  **Fourth — EV vs MSE, exactly.** `V\*+25`: MSE grows by **exactly c²=625**, EV changes by
+  **0.0** (bit-identical, 0.428000392162 both), gradient at λ=1 bit-identical to 1.7e-15.
+  EV converges to an **analytic ceiling of 0.4280, not 1** (irreducible within-state return
+  variance) — a critic at EV 0.43 in this env is perfect. EV can be negative (−3.65 at
+  noise 2.5) = worse than predicting the mean.
+  **Fifth — the decisive experiment, wired in and owned** (closes the standing D4 drill gap he
+  twice scored ~0.1 on): `zero_baseline_probe` recomputes gradient variance on the SAME
+  rollouts — none 4.582, depth-only 4.306 (**−6.0%**), exact V\* 2.632 (**−42.6%**),
+  anti-correlated 10.453 (**+128.1%**), all four unbiased at λ=1 so the comparison is pure
+  variance. Note this env has NO horizon mismatch (every prefix state has a unique depth), so
+  W3 D3's +27% is not reproducible here — the anti-critic replaces it.
+  **Sixth — shaping exactness at the EOS boundary.** `E[Σ_t penalty_t]` = **0.405113796560**
+  vs `β·exact_sequence_kl` = **0.405113796560** (1e-11), for **both** k1 and k3, now with an
+  honest terminal state and variable length. k1/k3 same mean to 1e-12; k1 pays a BONUS on
+  **28.2%** of token weight, k3 never; variance ratio **k3/k1 = 0.865**. MC at n=20k: 0.40376.
+  **Also measured:** value target = `Â + V_old` equals `G_t` at λ=1 to **8.9e-16** and has
+  lower variance at λ<1 (0.9016 vs 1.9649); the value clip PUNISHES a critic that jumps
+  straight to the right answer (plain 0 → clipped **16**); centering leaves the exact gradient
+  identical (2.8e-17) while per-group std division amplifies a low-variance group **5×**
+  (Dr. GRPO, in two lines); c₁ is **NON-monotone** — neutral at 0.1–0.5, keeps only **2.5%**
+  of the gain at 5.0, so "we tuned c₁ and saw nothing" is not evidence of safety;
+  `reduce="mean"` moves weight on len≤2 completions from **0.3371 → 0.5522**.
   **Fourth — the log-normal law, exactly.** `E_old[ρ]=1` to 1e-15 at every T while p99/median goes
   1.06→2.50 and ESS/n 0.9991→0.8387 over T=1..12; `σ(T)=σ₁√T` to **1.1%**, `ESS/n=exp(−σ²)` to
   **1.6%**, `ESS/n = 1/(1+χ²)` exactly. Extrapolated with σ₁=0.1257 measured while **88.5% of
@@ -1385,3 +1446,69 @@ every rung) or sits in the loss.
   to a broken attention mask — use a RANDOM model (logits depend on all positions). And a passing test
   can be wrong for the wrong reason (`zeros_like(bool_mask)` → isfinite trivially True; use float + check
   AFTER softmax).
+- **The critic bias rule, in one sentence:** a critic can never bias you as a BASELINE (it is
+  `h_t`-measurable by construction) but can bias you through BOOTSTRAPPING (λ<1 makes its error
+  a function of `(s_t, a_t)` — an action-dependent baseline). Measured W4 D3: at λ=1 EVERY
+  critic hits the FD gradient to 2.8e-10; at λ=0.5 the same zero critic is 0.796 off.
+- **Bias tracks ‖ẽ‖ (state-VARYING error), not ‖e‖ and not ē.** Spearman +0.995 vs ‖ẽ‖, −0.995
+  vs EV (W4 D3, a real 4000-step regression). A learned critic's error is almost entirely the
+  expensive kind — GD fixes the free constant first.
+- **"Wrong LEVEL is free" needs a caveat: FIXED length.** A constant critic offset shifts GAE
+  advantages by exactly `−c·λ^(L−1−t)`. With L fixed that is a function of t alone ⇒
+  h_t-measurable ⇒ a true baseline (measured 1.5e-10 = FD floor). With EOS live, L is an ACTION,
+  so the shift is action-dependent and it biases (0.4468 at identical ‖e‖). **An LLM always has
+  variable length.** Corrects the naive W3 D4 statement.
+- **EV not MSE, and say WHY:** Var is shift-invariant and the shift is exactly the free
+  component, so EV's invariance MATCHES the theorem's invariance. `V+25` → MSE +625 exactly,
+  EV bit-identical. General habit: choose a diagnostic whose invariances match the invariances
+  of the thing you are detecting. EV can be negative = worse than predicting the mean. EV also
+  has an analytic ceiling below 1 (irreducible within-state return variance; 0.4280 in W4 D3's
+  env) — do not read EV<1 as a broken critic.
+- **The decisive critic experiment (say it as ONE sentence):** zero the baseline and recompute
+  the gradient VARIANCE on the SAME rollouts. Healthy critic reduces it (−42.6%), mis-specified
+  increases it (+128.1%). Decisive because it needs NO ground-truth gradient — which a real
+  stack does not have, which is why "compare against true gradients" is unusable.
+- Value target is `Â_t + V_old(s_t)`, NOT `G_t`: at λ=1 they are equal by telescoping (8.9e-16,
+  algebra); at λ<1 the target is bootstrapped with lower variance (0.9016 vs 1.9649). The critic
+  rides the same bias/variance dial as the actor.
+- The value clip is a `max` = pessimism applied to a regression, and it **punishes correctness**:
+  a critic that jumps straight to the right answer has plain loss 0 and clipped loss 16. No
+  theoretical justification; in every implementation. `clip_frac` counts where the max SELECTED
+  the clipped branch, not where V left the band (overshooting AWAY from the target leaves the
+  plain branch larger) ⇒ `clip_frac ≤ oob_frac`, same as L^CLIP.
+- Advantage whitening: CENTERING is a batch-level constant baseline (exact gradient identical,
+  2.8e-17). STD DIVISION within one batch is only a per-batch LR rescale; **across groups it
+  reweights them** — two groups with a 5× spread, per-group scaling amplifies the low-variance
+  one 5×. That is Dr. GRPO's critique of GRPO, same bug different letterhead.
+- `c₁` (shared trunk) is **NON-MONOTONE**: neutral at 0.1–0.5, then keeps only 2.5% of the gain
+  at 5.0. "We swept c₁ and saw no difference" is NOT evidence the coupling is harmless.
+- k1 vs k3 per-token KL: same mean EXACTLY (1e-12), k1 pays a BONUS on 28.2% of token weight,
+  k3 is ≥0 pointwise (`e^x ≥ 1+x`), variance ratio k3/k1 = 0.865. `E[e^{lr}] = 1` is what makes
+  `e^{lr}−1` a zero-mean control variate. Per-token shaping IS the sequence-KL objective sampled:
+  0.405113796560 both ways, at the EOS boundary.
+- **GATHER vs SCATTER are adjoints.** `V = φ[ids]` forward (one read per token, `phi[ids]`),
+  `dφ[ids] += dV` backward (many tokens collide on one state ⇒ **`np.add.at`**, never `+=`).
+  Test: "can two inputs land on the same output slot?" Gather no, scatter yes. (W4 D3: used
+  `np.add.at` for a gather — it raised; then the reverse trap is the silent one.)
+- `np.zeros_like(index_array)` inherits **int64** — a float critic/gradient stored there
+  truncates silently (0.7 → 0). Third sighting after W3 D2's `np.long` buffer. Allocate
+  accumulators with an explicit float dtype, never off the shape of an index array.
+- `δ_t = r_t + γ(1−done_t)V(s_{t+1}) − V(s_t)`: the baseline subtraction is **UNCONDITIONAL**;
+  `(1−done)` attaches ONLY to the bootstrap term. Pulling `V(s_t)` inside the paren zeroes it at
+  every terminal token. (W4 D3 — and the correct formula was three lines above in the docstring:
+  the standing "state the theorem, then point at where each hypothesis is consumed" gap, in code.)
+- **States ≠ sequences.** The reward model scores COMPLETED TEXT, not a state — there is no
+  `r(s)` in RLHF. The final state is the prefix WITHOUT the last token, so reconstructing a
+  sequence from a state id also drops the EOS that `ends_clean` tests. If you are inverting an
+  index to recover something the batch already carries, you reached for the wrong object.
+- **`bool("scale") is True`** — a bool parameter fed a mode string fails SILENTLY and both
+  branches take the same path. Pass `center_only=(mode == "center")`, and raise on unknown modes.
+- **`E[A²] − E[A]²` is numerically unusable** when the variance is ~0: catastrophic cancellation
+  gave −1.78e-15 ⇒ `sqrt` ⇒ nan. Use the two-pass `Σw(A−μ)²`, non-negative by construction.
+  AND: **`nan < 1e-5` is False** — NaN compares False to everything, so a guard placed AFTER the
+  nan is created INVERTS and passes through exactly the case it was written to catch.
+- `log.append(phi)` appends a REFERENCE; with in-place `phi -= ...` every snapshot aliases the
+  final value. `.copy()`, or rebind with `phi = phi - lr*g`. W3 D3's `history.append(tensor)`.
+- A staged harness's `_fail_fast` must touch ONLY the TODOs its own stage needs. Touching all of
+  them makes a finished function report "[TODO] not implemented" — a guard that emits a FALSE
+  failure is worse than no guard. (Fixed mid-session on W4 D3.)
