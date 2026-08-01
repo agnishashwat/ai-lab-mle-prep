@@ -404,6 +404,19 @@ def _gold_reward(env: TokenEnv):
 # ---------------------------------------------------------------------------
 # Exercises (TODO bodies)
 # ---------------------------------------------------------------------------
+def top_p_filter(theta, top_p):
+    if top_p >= 1: return theta
+    prob = softmax_np(theta)
+    idx_sorted = np.argsort(prob, axis=-1)[:, ::-1]
+    prob_sorted = np.sort(prob, axis=-1)[:, ::-1]
+
+    cum_prob = np.cumsum(prob_sorted, axis=-1)
+    remove_sorted = cum_prob >= top_p
+    remove_sorted[:, 1:] = remove_sorted[:, :-1].copy()
+    remove_sorted[:, 0] = False
+    remove = np.zeros_like(theta, dtype=bool)
+    np.put_along_axis(remove, idx_sorted, remove_sorted, axis=-1)
+    return np.where(remove, -float('inf'), theta)
 
 
 def distorted_policy(theta: np.ndarray, temperature: float = 1.0,
@@ -444,7 +457,9 @@ def distorted_policy(theta: np.ndarray, temperature: float = 1.0,
     nuisance to be patched with an epsilon -- it is the entire top-p lesson, and
     `importance_weights` below is built to detect it.
     """
-    raise NotImplementedError("TODO: distorted_policy")
+    theta_temp = theta/temperature
+    theta_topp = top_p_filter(theta_temp, top_p)
+    return softmax_np(theta_topp, axis=-1)
 
 
 def token_entropy(env: TokenEnv, pi: np.ndarray, occupancy: np.ndarray) -> float:
@@ -474,7 +489,9 @@ def token_entropy(env: TokenEnv, pi: np.ndarray, occupancy: np.ndarray) -> float
 
     0 * log 0 is 0. With top-p rows this is not a corner case, it is most of them.
     """
-    raise NotImplementedError("TODO: token_entropy")
+    log_pi_safe = np.log(np.where(pi>0, pi, 1))
+    H = -(pi * log_pi_safe).sum(axis=-1)
+    return (occupancy * H).sum()/occupancy.sum()
 
 
 def offpolicy_gradient(env: TokenEnv, theta: np.ndarray, mu: np.ndarray,
@@ -524,7 +541,15 @@ def offpolicy_gradient(env: TokenEnv, theta: np.ndarray, mu: np.ndarray,
     on-policy check in stage `entropy_collapse` will not catch it because in that case
     they are equal.
     """
-    raise NotImplementedError("TODO: offpolicy_gradient")
+    sequences = enumerate_sequences(env)
+    seq_sampler_weights = sequence_dist_from_probs(env, mu)
+    if is_weights is not None:
+        seq_sampler_weights = seq_sampler_weights * is_weights
+
+    returns = np.array([reward_fn(sequence) for sequence in sequences])
+    batch = _pack(env, sequences, theta, returns, seq_sampler_weights, center)
+
+    return score_function_gradient(env, theta, batch)
 
 
 def importance_weights(env: TokenEnv, theta: np.ndarray,
@@ -558,7 +583,16 @@ def importance_weights(env: TokenEnv, theta: np.ndarray,
     floating point -- that identity is what stage `is_repair` checks first, and it is
     the same `E[rho] = 1` that made k3 a control variate on Day 3.
     """
-    raise NotImplementedError("TODO: importance_weights")
+    sequences = enumerate_sequences(env)
+    seq_logp_theta = np.array([sequence_logprob(env, theta, seq) for seq in sequences])
+    seqp_theta = np.exp(seq_logp_theta)
+    seqp_mu = sequence_dist_from_probs(env, mu)
+    violation = np.where((seqp_mu==0) & (seqp_theta>0), True, False)
+    is_zero = seqp_mu == 0
+    is_valid = False if violation.any() else True
+    seqp_mu_safe = np.where(seqp_mu > 0, seqp_mu, 1)
+    imp_ratio = np.where(violation, 0, seqp_theta/seqp_mu_safe)
+    return (imp_ratio, is_valid)
 
 
 def sample_length_confounded_preferences(rng: np.random.Generator, gold: np.ndarray,
@@ -591,8 +625,20 @@ def sample_length_confounded_preferences(rng: np.random.Generator, gold: np.ndar
 
     Returns (n_pairs, 3) int rows of (0, winner_idx, loser_idx).
     """
-    raise NotImplementedError("TODO: sample_length_confounded_preferences")
-
+    n = len(gold)
+    a = rng.choice(n, size=n_pairs, p=sampler)
+    b = rng.choice(n, size=n_pairs, p=sampler)
+    resample = a == b
+    while resample.any():
+        b[resample] = rng.choice(n, size=int(resample.sum()), p=sampler)
+        resample = a == b
+    delta = gold[a] - gold[b] + kappa * (lengths[a] - lengths[b])
+    p_a_wins = 1/(1 + np.exp(-delta))
+    winner = rng.random(n_pairs) < p_a_wins
+    winner_noisy = np.where(rng.random(n_pairs) < noise, ~winner, winner)
+    winner = np.where(winner_noisy, a, b)
+    loser = np.where(winner_noisy, b, a)
+    return np.stack([np.zeros(n_pairs, dtype=int), winner, loser], axis=-1)
 
 def length_coefficient(psi: np.ndarray, lengths: np.ndarray,
                        weights: np.ndarray) -> float:
@@ -620,7 +666,11 @@ def length_coefficient(psi: np.ndarray, lengths: np.ndarray,
     moments; `E[x^2] - E[x]^2` is the shape that produced a `sqrt(-1.78e-15) -> nan`
     on Day 3.
     """
-    raise NotImplementedError("TODO: length_coefficient")
+    l_mean = (lengths * weights).sum()
+    psi_mean = (psi * weights).sum()
+    var_w_L = ((lengths - l_mean)**2 * weights).sum()
+    cov_w = ((psi-psi_mean)*(lengths-l_mean)*weights).sum()
+    return cov_w/var_w_L
 
 
 def predict_beta_star(kappa: float, kl_per_token: float,
@@ -650,7 +700,8 @@ def predict_beta_star(kappa: float, kl_per_token: float,
     finite number here would let stage `length_prediction` claim a turnover exists when
     the derivation says it does not.
     """
-    raise NotImplementedError("TODO: predict_beta_star")
+    if kl_per_token == 0: return float('inf')
+    return (kappa + delta_r_content)/kl_per_token
 
 
 def debias_length_rm(psi: np.ndarray, lengths: np.ndarray,
@@ -681,11 +732,12 @@ def debias_length_rm(psi: np.ndarray, lengths: np.ndarray,
     that matters -- but stage `length_fix` compares levels, and a gratuitous shift
     there would look like an effect.
     """
-    raise NotImplementedError("TODO: debias_length_rm")
-
+    kappa_hat = length_coefficient(psi, lengths, weights)
+    len_mean = (lengths * weights).sum()
+    return psi - kappa_hat * (lengths - len_mean)
 
 def td_fit(phi: np.ndarray, phi_next: np.ndarray, rewards: np.ndarray,
-           weights: np.ndarray, gamma: float, n_steps: int, lr: float,
+           visitation: np.ndarray, gamma: float, n_steps: int, lr: float,
            mc_targets: np.ndarray | None = None,
            clip: float | None = None) -> np.ndarray:
     """Fit a LINEAR value head V(s) = phi(s) @ w by semi-gradient TD, and return the
@@ -697,7 +749,7 @@ def td_fit(phi: np.ndarray, phi_next: np.ndarray, rewards: np.ndarray,
 
     Any two are safe. All three can diverge. The value head is a shared-trunk linear
     model (that is the function approximation), the target is bootstrapped (that is
-    the `Ahat + V_old` of Day 3), and `weights` is where off-policy-ness enters --
+    the `Ahat + V_old` of Day 3), and `visitation` is where off-policy-ness enters --
     which is exactly the thing stages `entropy_collapse` and `is_repair` are about.
     A distorted sampler does not only bias the ACTOR; it is also the third leg that
     lets the CRITIC diverge.
@@ -710,7 +762,11 @@ def td_fit(phi: np.ndarray, phi_next: np.ndarray, rewards: np.ndarray,
                  terminal successor, which is how V(terminal) = 0 becomes DATA rather
                  than an `if` -- the same decision as Day 3's pinned terminal row.
     rewards    : (n_transitions,) reward on each transition.
-    weights    : (n_transitions,) how often each transition is visited. Sums to 1.
+    visitation : (n_transitions,) how often each transition is VISITED -- the DATA
+                 distribution, not the model parameters. Sums to 1. NOTE this is a
+                 different object from `w`, the value head's weight vector that this
+                 function fits and returns: `visitation` is indexed by TRANSITION and
+                 is given to you, `w` is indexed by FEATURE and is what you learn.
                  UNIFORM is the on-policy case here; concentrating the mass on the
                  early transitions is the off-policy case.
     gamma      : discount.
@@ -719,7 +775,7 @@ def td_fit(phi: np.ndarray, phi_next: np.ndarray, rewards: np.ndarray,
     mc_targets : (n_transitions,) fixed regression targets. When given, the target
                  does NOT depend on w and this is plain weighted least squares --
                  which is the NEGATIVE CONTROL: same features, same off-policy
-                 weights, no bootstrap, and therefore no divergence. Without that
+                 visitation, no bootstrap, and therefore no divergence. Without that
                  control you cannot attribute the divergence to bootstrapping rather
                  than to the feature tying or the weighting.
     clip       : if not None, limit each update so |w_new - w| <= clip componentwise.
@@ -730,14 +786,26 @@ def td_fit(phi: np.ndarray, phi_next: np.ndarray, rewards: np.ndarray,
     target contains w. So the update chases a target that moves when you move -- and
     if the successor's feature is larger than the state's own, each step moves the
     target FURTHER than it moves the prediction. Write the update, then look at the
-    sign of `sum_i weights_i * phi_i * (gamma * phi_next_i - phi_i)`: positive means
+    sign of `sum_i visitation_i * phi_i * (gamma * phi_next_i - phi_i)`: positive means
     every step amplifies w, and that scalar is the entire divergence condition.
 
     Append a COPY of w each step. Day 3's `log.append(phi)` appended a reference and
     every snapshot aliased the final value -- W3 D3's `history.append(tensor)` for
     the third time.
     """
-    raise NotImplementedError("TODO: td_fit")
+    w = np.zeros(phi.shape[-1], dtype=np.float64)
+    history = [w.copy()]
+    for _ in range(n_steps):
+        pred = phi @ w
+        target = rewards + gamma * (phi_next @ w) if mc_targets is None else mc_targets
+        delta = target - pred
+        grad = -(visitation[:, None] * phi * delta[:, None]).sum(axis=0) 
+        w_new = w - lr * grad
+        if clip is not None:
+            w_new = np.clip(w_new, w-clip, w + clip)
+        w = w_new.copy()
+        history.append(w.copy())
+    return np.array(history)
 
 
 def diagnose(history: RunHistory) -> list[tuple[str, str]]:
@@ -781,7 +849,72 @@ def diagnose(history: RunHistory) -> list[tuple[str, str]]:
     levels, so the function transfers to a run with a different reward scale -- the
     same reason Day 3 preferred EV over MSE.
     """
-    raise NotImplementedError("TODO: diagnose")
+    h = history
+    out: list[tuple[str, str]] = []
+    if len(h.proxy) < 2:
+        return out
+
+    def rel(xs: list[float]) -> float:
+        """Relative change across the run. Scale-free, so the thresholds transfer."""
+        if len(xs) < 2:
+            return 0.0
+        return (xs[-1] - xs[0]) / max(abs(xs[0]), 1e-9)
+
+    proxy_up = rel(h.proxy) > 0.10
+    length_up = bool(h.length) and rel(h.length) > 0.25
+    # Gold is a luxury -- available here, absent in production. Used ONLY to
+    # distinguish "the objective is wrong" from "the optimizer is broken", which is
+    # the one thing the training-time instruments genuinely cannot settle.
+    gold_down = bool(h.gold) and h.gold[-1] < max(h.gold) - 0.05 * abs(max(h.gold))
+
+    # --- branch 1: the objective is wrong -----------------------------------
+    # Length is checked FIRST because it is the more specific diagnosis: every
+    # length-exploiting run is also an over-optimizing run, so testing for hacking
+    # first would shadow it and the more actionable verdict would never fire.
+    if length_up and (gold_down or not h.gold):
+        out.append(("length_exploitation",
+                    f"mean length {h.length[0]:.2f} -> {h.length[-1]:.2f} "
+                    f"({rel(h.length) * 100:+.0f}%)"
+                    + (f" while gold fell {max(h.gold) - h.gold[-1]:.3f} from its peak"
+                       if h.gold else "")))
+    elif proxy_up and gold_down:
+        out.append(("reward_hacking",
+                    f"proxy {h.proxy[0]:.3f} -> {h.proxy[-1]:.3f} "
+                    f"({rel(h.proxy) * 100:+.0f}%) while gold peaked at "
+                    f"{max(h.gold):.3f} and fell to {h.gold[-1]:.3f}"))
+    elif length_up:
+        out.append(("length_exploitation",
+                    f"mean length {h.length[0]:.2f} -> {h.length[-1]:.2f} "
+                    f"({rel(h.length) * 100:+.0f}%)"))
+
+    # --- branch 2: the optimizer is broken ----------------------------------
+    # Deliberately NOT gated on KL. A sharpened policy sits inside the reference's
+    # support, so entropy collapse is routinely invisible in the KL -- reporting the
+    # KL alongside the entropy is the point, not a condition for firing.
+    if h.entropy and rel(h.entropy) < -0.20:
+        kl_note = f" at KL {h.kl[-1]:.2f}" if h.kl else ""
+        out.append(("entropy_collapse",
+                    f"per-token entropy {h.entropy[0]:.3f} -> {h.entropy[-1]:.3f} "
+                    f"({rel(h.entropy) * 100:.0f}%){kl_note}"))
+
+    # EV is the critic instrument, not MSE (Day 3: Var is shift-invariant and the
+    # shift is exactly the free component). Negative EV = worse than predicting the
+    # mean, which is an absolute statement and worth firing on by itself.
+    ev = [v for v in h.ev if not np.isnan(v)]
+    if len(ev) >= 2 and (ev[-1] < 0.0 or rel(ev) < -0.5):
+        out.append(("value_divergence",
+                    f"explained variance {ev[0]:.3f} -> {ev[-1]:.3f}"
+                    + (" (negative = worse than predicting the mean)"
+                       if ev[-1] < 0 else "")))
+
+    # --- the walk, not the step ---------------------------------------------
+    # Clipping bounds the per-iteration step and says nothing about the composition
+    # of many steps, so drift is only visible in KL measured ACROSS iterations.
+    if h.kl and h.kl[-1] > 4.0:
+        out.append(("policy_drift",
+                    f"KL(pi||pi_ref) walked to {h.kl[-1]:.2f} nats over "
+                    f"{len(h.kl)} iterations"))
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -1543,8 +1676,10 @@ def stage_value_divergence(ctx: Ctx) -> None:
     on_policy = np.full(3, 1.0 / 3.0)
     off_policy = np.array([0.90, 0.09, 0.01])           # rarely visit the terminal step
 
-    def cond(w):
-        return float((w[:, None] * phi * (gamma * phi_next - phi)).sum())
+    def cond(visitation):
+        """A = sum_i visitation_i * phi_i * (gamma * phi'_i - phi_i). Positive => every
+        step multiplies the weight vector by (1 + lr*A) > 1, i.e. divergence."""
+        return float((visitation[:, None] * phi * (gamma * phi_next - phi)).sum())
 
     print(f"  divergence condition  sum_i w_i phi_i (gamma phi'_i - phi_i)")
     print(f"    on-policy   {cond(on_policy):+.4f}   (negative -> every step contracts)")
