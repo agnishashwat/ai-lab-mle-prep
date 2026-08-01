@@ -13,11 +13,11 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
   baselines/advantage → GAE → KL-constrained RL. **213 property-based checks across the week**,
   all against exact or finite-difference ground truth. `week-summary.md` + `retrospective.md`
   written.
-- **Week 04 — RLHF & PPO for LLMs: Days 01-03 DONE, Days 04-05 planned (not yet taught).**
+- **Week 04 — RLHF & PPO for LLMs: Days 01-04 DONE, Day 05 planned (not yet taught).**
   Day 1 pipeline + Bradley-Terry RM (`toy_rlhf.py`, **73/73**); Day 2 PPO objective
   (`ppo_loss.py`, **112/112**); Day 3 token-level PPO + learned value head (`token_ppo.py`,
-  **144/144**); Day 4 failure modes (`failure_modes.py`); Day 5 capstone loop + adaptive β
-  (`ppo_rlhf.py`).
+  **144/144**); Day 4 failure modes (`failure_modes.py`, **96/96**, ten stages, all under
+  `-W error::RuntimeWarning`); Day 5 capstone loop + adaptive β (`ppo_rlhf.py`).
 
 ## SESSION-FORMAT PREFERENCE (he stated this explicitly on W4 D1 — obey it)
 
@@ -29,44 +29,123 @@ Block 3 had to be re-delivered in full.
 
 ## Next session
 
-Start with the prompt: **"Start Week 4 Day 4"**. Read
-`week-04-rlhf-ppo/day-04-rlhf-failure-modes/session.md` and teach it.
+Start with the prompt: **"Start Week 4 Day 5"**. Read
+`week-04-rlhf-ppo/day-05-toy-ppo-rlhf-loop/session.md` and teach it.
 
-**D3's two interview drills were NOT run — he ran out of time in the coding block. Ask them
-COLD in D4's recall quiz**, which is the same defer-a-day pattern that worked for D1→D2 and
-D2→D3. Polished answers are in D3's `deliverable.md`; quiz him first, then compare.
-1. *"Write the full RLHF objective and defend every term."* Second half is the scored half:
-   *why is the KL in the REWARD rather than as a loss penalty?* Lead with **density** (a scalar
-   loss term gives one number per sequence; the reward form gives the critic something to
-   predict at every t → raises EV → makes GAE's bootstrap trustworthy at smaller λ), then
-   credit-assignment-through-the-advantage, then the exactness number **0.405113796560 vs
-   0.405113796560** (β=0.3, seq KL 1.350379 nats). Must also say `c₂ = 0` in InstructGPT and why.
-2. *"Your value head has an R² of 0.1 after 500 steps. Is your policy gradient biased?"* Wants:
-   **it depends on λ** — as a baseline it CANNOT bias (h_t-measurable by construction, measured
-   2.8e-10 for every critic at λ=1); inside GAE with λ<1 it bootstraps and the state-VARYING
-   part biases (0.796 for the same zero critic at λ=0.5). Then: measure **EV not MSE** (V+25 →
-   MSE +625, EV unchanged); run the **zero-baseline probe** (−42.6% healthy, +128.1%
-   anti-correlated); λ→1 as the hedge; warm up the critic; check the target isn't
-   horizon-mismatched.
+**D4's two interview drills WERE run** (0.52 and 0.44) — no drills are owed into D5. What IS
+owed is below.
 
-**Carried into D4 from D3 — three things D3 measured that D4 is built to exploit:**
-- **The rare-state tail.** After 4000 steps the critic is still off by up to **0.942** at states
-  with occupancy < 1e-4 (gradient ∝ occupancy ⇒ ~3000× slower there). A critic can post a
-  healthy EV and be badly wrong exactly where an over-optimising policy is about to go. That is
-  the over-optimisation channel, already visible.
-- **Length is an action.** `reduce="mean"` moves weight on len≤2 from **0.3371 → 0.5522**, and
-  a level-only critic error costs **nothing** at fixed length but **0.4468** with EOS live.
-  Both say the same thing, and D4's length exploitation is the payoff.
-- **c₁ is non-monotone** — a warning about drawing tuning conclusions from small sweeps.
+### What D4 measured that D5 must exploit
 
-**Still owed from D2, unchanged:** the off-policy fix ORDER (his #1 regressed perennial, five
-asks, collapsed to 0.1 again on reframing) — D4 is where it stops being a drill and gets
-MEASURED against exact ∇J, with a constant-reward negative control and an IS fix that works
-for temperature and provably fails for top-p.
+- **`diagnose(history)` is a finished, tested artifact and D5's loop imports it.** It reports
+  **nothing** on a healthy run (the false-positive check is part of the artifact), is
+  deliberately **not gated on KL** (entropy collapse fires at KL 0.30, length at 0.55), uses
+  `gold` in exactly one place, and quotes numbers in its reasons. When D5's runs become real
+  rather than synthetic, the first thing to check is that the healthy run still returns empty.
+- **The bounded-resistance result CONSTRAINS what adaptive β can achieve.** The resistance
+  `β·KL̄_per_token` is bounded (max **0.1411**/token measured) because it vanishes at both ends
+  of the β ladder — at large β the policy never moved, at small β it saturated. So a controller
+  that hits a KL setpoint **cannot** fix a length confound: κ = **0.6276** beats every
+  achievable resistance, and length ran to the ceiling (**5.0/5.0**) at every β. State this
+  when β becomes a dual variable — it is the sharpest available demonstration that adaptive β
+  is not a universal remedy.
+- **≥3 seeds is now MANDATORY, not advisory.** Seed spread in gold amplifies **89× / 259× /
+  667×** with optimization pressure; at n=30 the spread (**±1.60**) exceeds the entire mean
+  improvement over π_ref (**+0.95**). Any D5 ablation grid run at one seed is uninterpretable
+  at the aggressive end of the ladder.
+- **`A = Σ visitation·φ(γφ′ − φ)`** is a one-line pre-flight check for critic divergence:
+  compute it before looping and you know whether the fit will explode (**−3.70** converges,
+  **+1.07** → 4.4e13).
 
-**Process gaps still costing more than content** (unchanged from D3's grading): quoting his own
-measured numbers, and answering the SECOND clause of a two-clause question. Enforce the
-clause-counting rubric out loud.
+### D4 corrections to the plan (both from measurement, both worth keeping)
+
+1. **A TABULAR RM cannot show Gao's data-size trend** — it has no generalization, so its
+   starved tail never improves no matter how many pairs you add. The fixture was rebuilt as a
+   **linear model over 23 features (3 real + 20 spurious)**, and the spurious weights shrinking
+   (**32.07 → 5.82 → 4.29**) is the mechanism made printable. Transferable note: results about
+   "reward models" are often really results about **function approximators**.
+2. **Gold does not fall below π_ref's own gold in this env**, because this gold also pays for
+   length indirectly (longer completions contain more content tokens). Whether over-optimization
+   goes *below* baseline depends on the geometry of the TRUE reward, not only on the proxy being
+   wrong. W3 D5's hand-specified proxy did show it (−2.3250 vs 0.0270); a learned RM here does
+   not. The instrument that fires either way is **tokens-per-nat** (+1.42 vs −0.72).
+
+### Perennials — status after D4
+
+- **OFF-POLICY-BY-ACCIDENT: CLOSED AND RETIRED.** (0.45 → 0.65 → 0.72 → measured.) Six asks
+  across three weeks. He now has the fix order, the support argument, and a table where the
+  impossible repair is a NUMBER: temperature **0.2284 → 2.953e-10**, top-p **0.1169 → 0.1267
+  (it got WORSE)**, **7.2%** of π's mass unreachable. **Do not re-ask as a drill.** One thing
+  worth re-asking once, because he predicted it wrong and the correction is the interesting
+  part: **severity and repairability are ORTHOGONAL** — top-p 0.9 is the *gentler* per-step
+  distortion (it removes only the last 10% of mass and entropy is mass-weighted) and the
+  unrepairable one; temperature reshapes the bulk and repairs exactly. What IS intrinsic to
+  top-p is the **one-way ratchet**: the excluded tail takes the `−p_k` share of every update
+  and never the `+1[k=a]` share, so there is no recovery path across iterations.
+- **Quoting his own measured numbers — STILL THE #1 POINT-LOSER, FOURTH CONSECUTIVE SESSION.**
+  D4 drill 1 part (c) scored **0.25**: six numbers available, one vague number given, on a
+  question whose prompt explicitly said to quote them. The diagnosis is now specific and should
+  be said to him in these words: **it is not that he forgets numbers, it is that he does not
+  reach for them when the question is framed as a DIAGNOSTIC rather than as a RESULT.** (D2
+  evidence: 0.9 on BT identifiability in cold recall, omitted entirely forty minutes later when
+  asked as a diagnostic. Same shape on D4.) **Prescription for D5: before answering any "debug
+  this" question, he names the three numbers he intends to cite BEFORE he starts talking.**
+- **The two-clause habit is IMPROVING but not fixed.** Quiz Q2 landed both clauses cleanly
+  ("algebraic, telescoping") — real progress on a seventh-week gap. But drill 2 part 4 came back
+  **"not sure"** on a question he had DERIVED four hours earlier, and drill 1 part (e) gave two
+  instruments out of six. Keep announcing which clause is the scored one.
+- **Ψ ladder: 0.95 on D4** — 7/7 with "KL divergence is not here." Recovered from D1's 5/7 and
+  held. Downgrade to an occasional check.
+- **Sources of REINFORCE variance: not re-asked on D3 or D4.** Still owed the three missing
+  (the policy's own ENTROPY; ENVIRONMENT stochasticity — worth naming BECAUSE it is zero for
+  LLMs; and OFF-POLICY-ness itself, which he has now *measured*). Light re-ask on D5.
+- **Clipping ≠ trust region: 1 of 3 on BOTH D2 and D4 cold recall.** His (ii) and (iii) are the
+  same soft-constraint point wearing two hats — and that point is a good one ("PPO approximates
+  a constraint by DELETING THE GRADIENT, not by enforcing a bound"). **Re-teach the mnemonic as
+  THREE LEVELS OF AGGREGATION:** token (`T·ε²/2` = 10 nats at T=500), sample (clip_frac 0.237
+  vs oob_frac 0.570, and only where it BINDS), iteration (`π_old` RESETS ⇒ **4.68 nats at a
+  5.3% clip fraction** vs 0.75, **6.2×**). **This is the one content gap that has not moved.**
+
+### D4 grading summary
+
+Block 0 cold recall **4.45/8**, Block 1 quiz **3.55/7**, drills **0.52** and **0.44**.
+Quiz Q1 was **0.9** — a large jump on a single pass (he added the sparsity indicator `1[t=L−1]`,
+`c₂=0`, the value clip, and turned "trains the value head" into an actual job). Coding was the
+strong part: **he implemented nine of the ten TODOs**, and `offpolicy_gradient` was correct
+first try *including* the trap the docstring warned about (packing with `theta`, never a logit
+form of `mu`) — the one place that function could have been wrong invisibly, because the
+on-policy check cannot see it. `diagnose` was written for him at his request at the end.
+
+### Bug families from D4 (three of five are repeats — police these)
+
+1. **`np.where` is NOT short-circuit; SANITIZE INPUTS, NOT OUTPUTS.** Four instances on D4,
+   **six sightings in three weeks** (W3 D5's unguarded `np.log(pi_ref)`; W4 D3's `nan < 1e-5`
+   guard that INVERTED). Both branches are fully evaluated, so a guard downstream of a dangerous
+   op only LAUNDERS the result. Ask "can this operation PRODUCE a non-finite value?", never
+   "will one survive?" Idiom: outer `where` selects, **inner `where` makes the input safe**.
+2. **Gather/scatter/axis.** `np.add.at` used for a sort permutation (a BIJECTION ⇒ no collisions
+   ⇒ `put_along_axis`), and a 2-D index array silently addressing axis 0. Third sighting.
+   Matched set: `argsort(axis=k)` → `take_along_axis` → `put_along_axis`.
+3. **Dtype by accident.** `np.zeros(n)` → float64 contaminating an index array — the **mirror
+   image** of D3's `zeros_like(index_array)` → int64 truncating a float critic. Third sighting.
+4. **NEW: sign errors need an ASYMMETRIC probe.** Two on D4 (entropy, and the BT sigmoid).
+   `H(uniform over V) = log V` catches one instantly; **`sigmoid(0) = 0.5` for BOTH signs** and
+   cannot catch the other. Same lesson as W2 D5's toothless cached-vs-uncached test: a test is
+   only as sensitive as its input.
+5. **NEW: read the parameter list as a CHECKLIST before writing the body.** Three parameters
+   (`visitation`, `clip`, `mc_targets`) went unused in `td_fit` and the fail-fast probe still
+   passed. Unweighted = uniform = the ON-POLICY case, i.e. exactly the one case where "forgot
+   the weights" and "did it right" agree.
+
+**RESOLVED on D4 — the off-policy fix ORDER** (his #1 regressed perennial, six asks). It is no
+longer a drill: it was MEASURED against exact ∇J, with a constant-reward negative control and an
+IS fix that repairs temperature to 2.953e-10 and provably fails for top-p. See "Perennials —
+status after D4" above. **Retired.**
+
+**Process gaps still costing more than content** (unchanged through D4's grading): quoting his
+own measured numbers — now diagnosed precisely as *retrieval under a DIAGNOSTIC framing* rather
+than retrieval in general — and answering the SECOND clause of a two-clause question, which is
+improving but not fixed. Enforce the clause-counting rubric out loud.
 
 **Week 4's central design decision (mirrors Week 3's finite-MDP ground truth).** Day 1 builds
 a **token-level LM environment small enough to enumerate every terminating sequence** — a
@@ -709,6 +788,50 @@ every rung) or sits in the loss.
   **D2's own two interview drills deferred to D3's recall quiz at his request** (cold next-day
   retrieval, which is the right call given his error mode). Polished answers are in the deliverable.
 
+- **W4 D4 — RLHF Failure Modes: Hacking, Length, Entropy Collapse, Drift.** Built
+  `code/failure_modes.py` — **96/96 staged checks**, ten stages, all under
+  `-W error::RuntimeWarning`, all against enumeration or exact finite-difference ground truth.
+  **He implemented nine of the ten TODOs**; `diagnose` was written for him at his request at
+  the end. Deliberate design choice worth reusing: **no Monte Carlo anywhere** — the distorted
+  sampler's sequence distribution is ENUMERATED, so "the gradient under a broken sampler" is an
+  exact expectation and every bias number is an assertion rather than a plot.
+  **Five headlines, all measured.** (1) **Off-policy-by-accident, the perennial, CLOSED**:
+  on-policy **2.95e-10** vs exact ∇J; temp 0.7 **0.2284**; temp 0.5 **0.4466**; top-p 0.9
+  **0.1169**; stacked **0.3127**. IS repairs temperature to **2.953e-10** and on top-p makes it
+  **WORSE** (0.1169 → 0.1267) with **7.2%** of π's mass unreachable — reweighting the visible
+  part to compensate for the invisible part over-corrects, so *a fix that does not apply is not
+  neutral*. (2) **Zero-reward control**: uncentered constant reward gives **9.72e-17**
+  on-policy but **7.46e-02** at temp 0.7, and the step moves π TOWARD μ (KL(μ‖π)
+  **0.0666 → 0.0587**) — a pure MLE/distillation step, entropy falling with no reward
+  information present. The identity `E[∇log π]=0` needs the expectation under π; under μ it is
+  false, and that one measure IS the bug. (3) **Goodhart is a VARIANCE result**: seed spread in
+  gold amplifies **89× / 259× / 667×** with pressure, and at n=30 the spread (**±1.60**)
+  exceeds the entire mean improvement over π_ref (**+0.95**) ⇒ the outcome is seed-determined;
+  max |spurious RM weight| **32.07 → 5.82 → 4.29** is the mechanism printed. (4) **The length
+  derivation predicts a measurement in BOTH directions**: `β*` is a FIXED POINT, the resistance
+  `β·KL̄_t` is **BOUNDED** (max **0.1411**/token), κ = **+0.6276** beats it ⇒ predicted runaway
+  at every β ⇒ measured **5.0000 of 5.0**; weak-confound control κ = **0.0504** < **0.2205** ⇒
+  stopped at **3.9549**. Debiasing drove the coefficient to **1.71e-16** (algebraic — residuals
+  are orthogonal to the regressor), excess length **+0.8656 → +0.1790**, gold
+  **5.7706 → 5.9311**, within-length ranking bit-identical. (5) **Deadly triad with
+  off-policy-ness as its THIRD leg**: same data, same features, only the visitation changed —
+  A = **−3.70** converges (EV +1.000000), A = **+1.07** diverges to **4.366e13** (EV
+  **−1.9e27**); MC-target control isolates bootstrapping; the value clip bounds the step
+  (**0.010000**) and not the walk (**−6.0** after 600 steps).
+  **MY HARNESS WAS WRONG 3× BEFORE ANY LEARNER CODE RAN (seventh session running), all caught
+  by building a private reference solution first and running it:** (1) asserted the
+  over-optimization turnover moves right with RM data — **false for a TABULAR RM**, which has
+  no generalization, so its starved tail never improves; fixture rebuilt as a linear model over
+  23 features (3 real + 20 spurious) and the claim restated as the variance result, which is
+  stronger; (2) asserted gold falls below π_ref's own gold — false here because this gold also
+  pays for length indirectly, so the claim was restated around tokens-per-nat (**+1.42** vs
+  **−0.72**); (3) the entropy step size in `zero_reward` was large enough to leave the linear
+  regime and moved KL the wrong way. Also fixed a **runner bug inherited from D3**: the
+  all-clear was gated on whether a stage THREW, not on the check TALLY, so "All invariants
+  passed" could print underneath a failing check — a status line that lies.
+  **His D4 numbers are in `day-04-rlhf-failure-modes/deliverable.md`, which is built as tables
+  BECAUSE the tables are the flashcards and the prose is not.**
+
 ## Learner profile (quick facts)
 
 - Strong: PhD-level math/optimization, senior ML eng, real post-training experience
@@ -1249,6 +1372,73 @@ every rung) or sits in the loss.
 - **Freeze by CONSTRUCTION, not by discipline.** Putting `logp_old` and `advantages` in an immutable
   `Batch` makes "θ_old and the advantages are frozen" unforgeable: the reuse loop has access to
   nothing else. In a real stack `logp_old` is the only thing kept from the rollout worker.
+
+- **The failure taxonomy, and the split that goes FIRST:** over-optimization = the OBJECTIVE is
+  wrong (hacking, length); optimization pathology = the OPTIMIZER is broken (entropy collapse,
+  value divergence). **Identical on a reward curve, OPPOSITE fixes.** And **two of the four do
+  not move the KL** — entropy collapse happens INSIDE π_ref's support, length exploitation
+  changes one decision (EOS) many times ⇒ **KL is NECESSARY, not SUFFICIENT** (caught at KL
+  0.30 and 0.55). Best single line for "reward up, eval down."
+- **The KL penalty is a CONFIDENCE REGION for the RM, not a regularizer.** `π_ref = π_SFT` IS
+  the RM's own sampling distribution, so KL literally measures distance from the RM's training
+  data ⇒ β is a property of the RM's DATA (retune it after improving the RM), or retrain the RM
+  on current-policy samples = iterated RLHF.
+- **Why pessimism works and averaging does not:** `E[max] > max E`, so averaging SHRINKS the
+  error but never changes its SIGN and the optimizer harvests it anyway. **The minimum converts
+  DISAGREEMENT into a PENALTY** — uncertainty becomes cost. It is an LCB from offline RL.
+- **`β*` for length is a FIXED POINT, not a formula**, and the resistance `β·KL̄_per_token` is
+  **BOUNDED** (it vanishes at both ends of the β ladder: large β = a policy that never moved,
+  small β = a saturated one). Measured max **0.1411**/token vs κ **+0.6276** ⇒ **no β stops the
+  lengthening**. Plus: **in-distribution FILLER has KL_t ≈ 0 ⇒ the penalty gives no resistance
+  at any β**, because the penalty is proportional to SURPRISE. That is why RLHF'd models are
+  verbose but unsurprising — the house style derived from a two-line inequality.
+- **Sum vs mean is a LENGTH PRIOR, not a normalization**: mean lengthens iff `Δ > R̄` (beat the
+  running average) vs sum's `Δ > 0`. PPO uses sum-over-tokens, mean-over-sequences ⇒ no brake.
+  Same choice that makes GRPO length-biased and that Dr. GRPO changes. Third sighting.
+- **Marginal ≠ partial, and it is why the metric is LENGTH-CONTROLLED win rate:** a gold reward
+  that penalizes length at −0.4/token still has a marginal slope of **+0.1751**, because longer
+  completions contain more content tokens. Length correlates with quality even when explicitly
+  penalized.
+- **Severity and repairability are ORTHOGONAL.** top-p 0.9 is the GENTLER per-step distortion
+  (removes only the last 10% of mass; entropy is mass-weighted) and the UNREPAIRABLE one;
+  temperature reshapes the bulk and repairs to 3e-10. Not intrinsic (top-p 0.5 beats temp 0.9);
+  what IS intrinsic is top-p's **one-way ratchet** — the excluded tail takes the `−p_k` share of
+  every update and never the `+1[k=a]` share.
+- **The bug, in one sentence:** sampling from μ and attributing to π is exactly equivalent to
+  optimizing `r̃(y) = w(y)·r(y)` with `w = μ/π` — you are paying a bonus for BEING LIKELY.
+  Entropy collapse stated as an objective rather than as a vibe.
+- **A control that CANNOT fail is not a control.** With advantage centering, a constant reward
+  gives `Â ≡ 0` exactly and every arm reports "no bug" — the zero-reward experiment has to be
+  run UNCENTERED or it silently returns a false negative. Same family as D3's `nan < 1e-5`
+  guard that inverted.
+- **`np.where` is NOT short-circuit — SANITIZE INPUTS, NOT OUTPUTS.** Sixth sighting in three
+  weeks. Both branches are fully evaluated, so a guard downstream of a dangerous op only
+  LAUNDERS the result (and still fires the warning). Outer `where` selects; **inner `where`
+  makes the input safe**: `np.log(np.where(p>0, p, 1.0))`.
+- **`argsort(axis=k)` → `take_along_axis` → `put_along_axis` are a MATCHED SET.** A 2-D index
+  array in plain fancy indexing addresses **axis 0 only**; `axis=` names the one axis whose
+  coordinate is REPLACED, all others matched positionally. A sort permutation is a BIJECTION ⇒
+  no collisions ⇒ `np.add.at` was never the tool. Collisions → `add.at`; permutation →
+  `put_along_axis`.
+- **`&` binds TIGHTER than `==` and `>`** — `a==0 & b>0` parses as `a == (0 & b) > 0`, a chained
+  comparison on a bitwise-and. Parenthesize every comparison combined with `&`/`|`. (In pure
+  Python `and` binds looser and reads fine; NumPy forces `&`, which sits on the other side of
+  the precedence table.)
+- **Sign errors need an ASYMMETRIC probe.** `H(uniform over V) = log V` catches an entropy sign
+  instantly, but **`sigmoid(0) = 0.5` for BOTH signs** and cannot catch a flipped BT likelihood.
+  Check the input whose answer you know in closed form — and pick the one where the two
+  hypotheses DISAGREE MOST. Same lesson as W2 D5's toothless invariant test.
+- **Read the parameter list as a CHECKLIST before writing the body.** Three unused parameters in
+  one function still satisfied the fail-fast probe. And note the specific trap: **unweighted =
+  uniform = the ON-POLICY case**, i.e. exactly where "forgot the weights" and "did it right"
+  agree.
+- **Probabilities and logits are the same TYPE** (`ndarray (S, V)`) and Python cannot tell them
+  apart. `log_softmax(0)` is FINITE, so feeding a probability table to a logprob function
+  silently converts top-p's exact zeros into ordinary small numbers and every support check
+  stops firing. When a docstring shouts PROBABILITIES in caps, that is load-bearing.
+- **A status line that lies is worse than no status line.** D3's runner gated "All invariants
+  passed" on whether a stage THREW rather than on the check TALLY, so it printed underneath a
+  failing check. Fixed on D4.
 
 ## Conventions
 
