@@ -80,6 +80,17 @@ term raises the proxy (0.8728 vs 0.6153) and lowers the gold (4.9098 vs 5.1501)*
   √KL with an interior maximum, so the final policy is systematically the wrong one to ship.
 - **A single metric is a hypothesis; a pair is a test.** The panel is read in pairs, and a
   reward-only dashboard detects none of the four failures.
+- **PPO's critic is a CAPABILITY, not a refinement — and this is the Week 6 hook.** GRPO's group
+  mean is a statistic of *whole completions from the same prompt*, i.e. an estimate of `V(s_0)`,
+  so it **cannot vary with `t`**: one scalar per sequence, broadcast to every token. That is
+  valid (it is a function of `s_0`, hence measurable w.r.t. `h_t`, hence unbiased by EGLP — and
+  it removes exactly BT's un-identified `c(x)`) but **coarse**: exact at `t=0` and increasingly
+  stale as `t` grows. It cannot be fixed by a better group mean, because recovering `V(s_t)`
+  needs samples that **share the prefix** — that is tree search, not group sampling. Only a
+  critic gives values at *intermediate* states. With a terminal reward and `γ=λ=1`,
+  `A_t = R − V(s_t)` and **all** per-token structure comes from the critic — which is exactly
+  why D5's `no_critic` arm lost nothing at T=5, and why that result is an argument **for** GRPO
+  in short-horizon terminal-reward settings.
 
 ## Key Equations
 
@@ -129,3 +140,8 @@ term raises the proxy (0.8728 vs 0.6153) and lowers the gold (4.9098 vs 5.1501)*
   failure mode whose detector I never built.
 - **Shared trunk.** `c₁` coupling is simulated here; the real object is two heads contending over
   shared parameters.
+- **GRPO with PROCESS supervision** (DeepSeekMath) sets `Â_{i,t} = Σ_{j: index(j) ≥ t} r̃_{i,j}`,
+  which *does* vary along the sequence — so "GRPO is sequence-level" is only true of **outcome**
+  supervision. The credit is bought back with a **PRM**, i.e. paid for in step-level annotation
+  rather than in a value head, and it is still **step**-level, not token-level. Check this
+  against the paper in Week 6 before repeating it in an interview.
