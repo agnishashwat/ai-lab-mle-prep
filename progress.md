@@ -2,7 +2,46 @@
 
 ## Current Status
 
-- Current week: **Week 04 — RLHF & PPO for LLMs** (Days 01-04 of 5 done)
+- Current week: **Week 04 — RLHF & PPO for LLMs — COMPLETE (5/5)**. Next: Week 05 — DPO.
+- Current day: **Week 4 Day 05 DONE — WEEK 4 COMPLETE** (toy PPO-RLHF loop; `code/ppo_rlhf.py`
+  **90 staged checks**, ten stages, under `-W error::RuntimeWarning`, full suite 26 s). He
+  implemented five of six TODOs; `train_rlhf` logging, `select_checkpoint` and `ablate` were
+  written for him late in the session at his request.
+  **Headline 1 — adaptive β IS dual gradient ascent, and its FIXED POINT is the envelope
+  theorem.** `g(β)=max_θ L` is a max of AFFINE functions of β ⇒ convex *regardless of the
+  primal*; `∂g/∂β = δ − KL` ⇒ `β ← β(1+K_β(KL/δ−1))`. Controller fixed point vs `dE[r]/dKL`
+  measured as a secant slope of two enumerated tilts (no β anywhere in its computation):
+  δ=0.25 **1.23079 vs 1.17216 (5.00%)**, δ=0.5 **0.83637 vs 0.82765 (1.05%)**, δ=1.0
+  **0.56914 vs 0.55652 (2.27%)**, δ=2.0 **0.37505 vs 0.35735 (4.95%)**. Frontier concave at
+  **100%** of secant slopes.
+  **Headline 2 — the caveat MEASURED.** Dual ascent assumes the inner max is exact; PPO takes K
+  clipped epochs. Same controller, exact primal **β=0.6173** vs PPO primal **β=0.1563** at the
+  same KL 0.8646 ⇒ **gap 74.7%**. A justification, not a proof, with a number on it.
+  **Headline 3 — the chained regression closes.** REINFORCE → +baseline → +critic → GAE(λ) →
+  PPO → KL shaping all recovered from ONE code path by flipping switches, elementwise to
+  **7.749e-15**. The EGLP/baseline check is non-vacuous by **1.3e11×** (advantages moved
+  9.897e-04, gradient moved 7.749e-15).
+  **Headline 4 — the ablation grid, 7 arms × 3 seeds, fixed budget.** π_ref gold **4.4191**.
+  full **5.1501 ±0.109** (proxy 0.6153, KL 0.361); **no_kl gold 4.9098 ±0.407 with proxy
+  0.8728** ⇒ **the inversion: proxy UP, gold DOWN**. reinforce 4.7112; top-p 0.9 **4.8559**.
+  Two honest surprises: **no_clip ≈ full** (5.1508) — under a tight KL budget the PENALTY is
+  the binding constraint, not the clip — and **no_critic BEAT full** (5.1786, spread ±0.036 vs
+  ±0.109) ⇒ **the critic's value is a function of HORIZON, and this horizon is 5**.
+  **Headline 5 — early stopping is the ESTIMATOR.** No-KL run: gold peaks **5.1894 at iter 8
+  (KL 0.503)**, ends **3.9372 at KL 3.605** — **below π_ref's 4.4191**. Shipping the final
+  checkpoint costs **1.2522**. `select_checkpoint` returns #8 of 40. (This is the case D4 said
+  a learned RM did NOT produce; **starving the RM to 30 comparisons produces it**.)
+  **Headline 6 — `diagnose` survived contact with real runs**: SILENT on the healthy arm, and
+  it fired **`value_divergence` (EV → −5.19e9) on the top-p arm unprompted** — the deadly triad
+  assembling itself with the sampler as its off-policy leg. Also measured the **top-p ratchet**
+  as a crash: reachable sequences **40 → 39 → 18 → 17 → 12 → 9** until `B < n_minibatches`.
+  **The silent-bug probe:** `std(log ρ)` = **0.098999** on a real 4-epoch update and exactly 0
+  if `logp_old` is recomputed in the loop — `clip_frac` reads a healthy 0.000 under BOTH
+  hypotheses and cannot discriminate.
+  **Two `diagnose` calibration findings:** `rel()` divides by a first value that is exactly 0
+  (the RM is standardised under π_ref and the policy starts there) ⇒ reason strings read
+  "+111362994095%"; and the −20% entropy threshold sits INSIDE the range a healthy budgeted run
+  occupies (monotone-gold run at δ=0.4 dropped 26%).
 - Previous day: Week 4 Day 03 (token-level PPO + learned value head; `code/token_ppo.py`
   **144 staged checks**). **Headline: a critic cannot bias you as a BASELINE, only as a
   BOOTSTRAP** — at λ=1 *every* critic reproduces the enumerated FD gradient to **2.8e-10**;
@@ -65,7 +104,7 @@
 | 01 | LM foundations + PyTorch | Complete (5/5) | Tiny LM train/eval/ablation harness |
 | 02 | Transformers + generation | Complete (5/5) | Decoder-only mini-impl + debug suite |
 | 03 | RL foundations | Complete (5/5) | Toy policy-gradient implementation (213 checks) |
-| 04 | RLHF + PPO | In progress (4/5) | PPO/RLHF explainer notebook |
+| 04 | RLHF + PPO | Complete (5/5) | Toy PPO-RLHF loop + failure-mode demos (515 checks) |
 | 05 | DPO + preference optimization | Not started | DPO trainer |
 | 06 | GRPO + RLVR | Not started | Mini RLVR repo |
 | 07 | Evals + reward modeling | Not started | Eval harness |
@@ -76,6 +115,48 @@
 ## Review Queue
 
 Topics to revisit:
+
+- [x] **Adaptive β IS DUAL GRADIENT ASCENT** (W4 D5): `g(β)=max_θ L` is a max of AFFINE
+  functions of β ⇒ **convex regardless of the primal being non-convex** — a 1-D convex problem
+  sitting on a hopeless one, which is why K_β needs no tuning intuition. Envelope theorem gives
+  `∂g/∂β = δ − KL` ⇒ the sign is FORCED. Multiplicative because it is a step in **log β**
+  (scale-free) and because **β<0 is INFEASIBLE**, not merely bad — β is the multiplier on an
+  inequality constraint. **Fixed point verified against `dE[r]/dKL` on the closed-form frontier
+  to 1.05–5.00% at four budgets, by two routes sharing no code.**
+- [ ] **The caveat, with a number** (W4 D5): dual ascent's guarantee assumes the inner max is
+  solved to optimality; PPO takes K clipped epochs. Exact primal β **0.6173** vs PPO primal
+  **0.1563** at the same KL ⇒ **74.7% gap**. Say "justification, not proof" and quote it.
+- [ ] **K_β is a GAIN with two opposite failure modes** (W4 D5): 0.01 never settles (overshoot
+  1.97 sustained), 0.50 settles in 8, **2.00 never settles with std(log β) = 6.00** (β ringing
+  ~400×) and overshoot **6.60**. And the input is a SAMPLED KL — **k1 is negative on 20–44% of
+  samples**, so at high gain β chases a sign-flipping quantity. ⇒ **fix the sensor (k3) before
+  detuning the gain**; lowering K_β low-passes the noise and permanently costs response speed.
+- [ ] **`std(log ρ)` is the probe `clip_frac` cannot be** (W4 D5): `clip_frac = 0.000` is
+  produced by BOTH "logp_old recomputed in the loop" and "policy barely moved" — a SYMMETRIC
+  statistic. `std(log ρ)` is exactly 0 under the bug and **0.098999** on a real 4-epoch update.
+  And the loss cannot help: `L_IS(θ_old) = E[A] ≈ 0` **by construction**.
+- [ ] **Early stopping is the ESTIMATOR for the optimum, not regularization** (W4 D5): in SL the
+  training optimum is a place you decline to reach; in RLHF the PROXY's optimum is in the wrong
+  place and gold's is at a finite interior KL, so convergence OVERSHOOTS. Measured: gold peaks
+  **5.1894 at KL 0.503**, ends **3.9372 at KL 3.605** — **below π_ref's 4.4191**, costing
+  **1.2522** to ship the final checkpoint.
+- [ ] **The ablation grid's two honest surprises** (W4 D5): **no_clip ≈ full** (5.1508 vs
+  5.1501) because under a tight KL budget the **penalty**, not the clip, is binding; and
+  **no_critic BEAT full** (5.1786 vs 5.1501, spread ±0.036 vs ±0.109) because **the critic's
+  value is a function of HORIZON** and this horizon is 5. Do not generalize "PPO needs a critic"
+  from a short-horizon terminal-reward task.
+- [ ] **A test is only as sensitive as its input — THIRD SIGHTING** (W4 D5): the check named
+  "beta stays strictly positive" PASSED while β could reach exactly 0, because it ran at
+  `k_beta·clip = 0.06` and the failure needs `k_beta·clip = 1.0`. **When you write a guard, ask
+  what input drives it to its boundary and test THAT.** (D4: `sigmoid(0)=0.5`; W2 D5: the
+  toothless cache test.)
+- [ ] **A defensive guard that alters SHAPE is worse than no guard** (W4 D5): adding an
+  unnecessary `[batch.mask]` to the KL flattened the batch axis and produced a **2.16×** error
+  on a 3-row batch — a clean factor of **B** on any sampled batch, which would pin β at the clip
+  ceiling forever and look like a working budget. Use `np.where` when you want a mask.
+- [ ] **Zero is a MULTIPLICATIVE ABSORBING STATE** (W4 D5): the β floor is not numerical
+  hygiene — a dead multiplier means the inequality constraint has silently ceased to exist.
+  1e-12 recovers (`→ 2e-12` on the next over-budget step); 0 never does.
 
 - [x] MDP tuple + Markov property; Bellman expectation (E_π) vs optimality (max_a); γ-contraction ⇒ unique fixed point (W3 D1)
 - [x] Value functions V^π/Q^π, advantage A^π=Q−V, and E_{a∼π}[A]=0 per state = why V is the natural baseline (W3 D1)
