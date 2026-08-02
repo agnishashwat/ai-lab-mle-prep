@@ -371,8 +371,23 @@ def sft_reference(env: TokenEnv, demos: list[tuple[int, ...]], n_steps: int = 40
     `theta0=None` means start from zeros (a uniform policy), which is the honest
     "before SFT" condition. Do not normalise, clip or temperature-scale the result.
     """
-    # TODO
-    raise NotImplementedError
+    if theta0 is None:
+        theta = np.zeros((env.n_states, env.vocab), dtype=np.float64)
+    else:
+        theta = theta0.copy()
+    
+    pairs   = [(env.state_id(y[:t]), a) for y in demos for t, a in enumerate(y)]
+    states  = np.array([s for s, _ in pairs], dtype=np.int64)   # (N,) int64
+    actions = np.array([a for _, a in pairs], dtype=np.int64)   # (N,) int64
+    onehot  = np.eye(env.vocab)[actions]                        # (N, vocab) float
+    N = len(states)
+    
+    for _ in range(n_steps):
+        grad = np.zeros_like(theta, dtype=np.float64)
+        prob = softmax_np(theta, axis=-1)
+        np.add.at(grad, states, prob[states] - onehot)
+        theta -= lr * grad/actions.shape[0]
+    return theta 
 
 
 def kl_controller(beta: float, kl: float, kl_target: float, k_beta: float,
@@ -411,8 +426,8 @@ def kl_controller(beta: float, kl: float, kl_target: float, k_beta: float,
 
     Return a plain Python float.
     """
-    # TODO
-    raise NotImplementedError
+    error = np.clip(kl / kl_target - 1.0, -clip, clip)
+    return float(max(beta * (1 + k_beta * error), 1e-12))
 
 
 def rlhf_iteration(env: TokenEnv, theta_old: np.ndarray, phi_old: np.ndarray, beta: float,
@@ -481,8 +496,99 @@ def rlhf_iteration(env: TokenEnv, theta_old: np.ndarray, phi_old: np.ndarray, be
 
     Do not mutate `theta_old`, `phi_old` or `batch`.
     """
-    # TODO
-    raise NotImplementedError
+    theta = theta_old.copy()
+    record = {'clip_frac': 0.0, 'oob_frac': 0.0, 'logratio_std': 0.0}
+    batch = collect(env, theta_old, theta_ref, cfg, rng)
+    rewards = shape_rewards(env, batch, theta_old, proxy_fn, beta, cfg.kl_estimator)
+    values = value_predict(phi_old, batch.value_ids)
+    adv = gae_advantages(rewards, values, batch.dones, cfg.gamma, cfg.lam)
+    targets = value_targets(adv, values)
+
+    if cfg.whiten_mode is None: 
+        pass
+    elif cfg.whiten_mode == 'center':
+        adv = whiten(adv, batch.tok_w, batch.mask, True)
+    else:
+        adv = whiten(adv, batch.tok_w, batch.mask, False)
+
+    if cfg.reduce == 'mean':
+        adv = adv / batch.lengths[:, None]
+
+    ppo_batch = batch.as_ppo_batch(adv)
+    n_steps_taken = 0
+    for _ in range(cfg.n_epochs):
+        split_idx_permuted = np.array_split(rng.permutation(batch.B), cfg.n_minibatches)
+        for i in range(cfg.n_minibatches):
+            # An EMPTY split is reachable and not hypothetical: under top-p the reachable
+            # sequence set ratchets down (measured 40 -> 9 in twelve iterations), and once
+            # B < n_minibatches `array_split` hands back a zero-row array. Its weights sum
+            # to 0, so every downstream mean is 0/0. A minibatch with no tokens carries no
+            # gradient -- skip it, and count only the steps actually taken.
+            if len(split_idx_permuted[i]) == 0:
+                continue
+            minibatch = ppo_batch.subset(split_idx_permuted[i])
+            logratios = token_logratios(env, theta, minibatch)
+            loss_clipped, log_clipped = clipped_surrogate(logratios, minibatch, cfg.eps)
+            record["clip_frac"] += log_clipped['clip_frac']
+            record["oob_frac"] += log_clipped['oob_frac']
+            # Token-weighted std of log rho, overwritten each step so the FINAL step's
+            # value survives. This is the probe: it is exactly 0 iff logp_old was
+            # recomputed from the live theta, which clip_frac cannot distinguish.
+            w_mb = minibatch.weights[:, None] * minibatch.mask
+            w_mb = w_mb / w_mb.sum()
+            mu_lr = float((w_mb * logratios).sum())
+            record["logratio_std"] = float(np.sqrt((w_mb * (logratios - mu_lr) ** 2).sum()))
+            g = surrogate_gradient(env, theta, minibatch, cfg.eps)
+            theta = theta + cfg.lr * g
+            n_steps_taken += 1
+    record["clip_frac"] /= max(n_steps_taken, 1)
+    record["oob_frac"] /= max(n_steps_taken, 1)
+    
+    if cfg.use_critic:
+        phi_new, log_vf = fit_value_head(env, batch, targets, cfg.value_steps, cfg.value_lr, phi_old)
+        value_mse = float(log_vf['mse'][-1])
+    else:
+        phi_new = phi_old.copy()
+        value_mse = float('nan')
+    
+    lr = (np.where(batch.mask, batch.logp_ref, 0) - np.where(batch.mask, batch.logp_old, 0))
+    if cfg.kl_estimator == 'k1':
+        kl = (batch.weights * (-lr).sum(axis=-1)).sum()
+    else:
+        kl = (batch.weights * (-lr + np.exp(lr) - 1).sum(axis=-1)).sum()
+    record['kl_hat'] = float(kl)
+
+    if cfg.adaptive_beta:
+        beta_new = kl_controller(beta, kl, cfg.kl_target, cfg.k_beta, cfg.beta_clip)
+    else:
+        beta_new = beta
+
+    # ---- the panel ---------------------------------------------------------
+    # Every entry a PLAIN PYTHON FLOAT (D3's rule: a log you cannot diff across
+    # iterations is not an instrument). np.float64 is not float and the checks say so.
+    m, w = batch.mask, batch.tok_w
+    adv_mean = float((w * adv).sum())
+    record.update(
+        beta=float(beta),
+        beta_new=float(beta_new),
+        clip_frac=float(record["clip_frac"]),
+        oob_frac=float(record["oob_frac"]),
+        # Moments of the advantages ACTUALLY handed to the surrogate -- after whitening
+        # and after the sum/mean reduce, because that is what the gradient saw.
+        adv_mean=adv_mean,
+        adv_std=float(np.sqrt((w * (adv - adv_mean) ** 2).sum())),
+        # EV of the critic we ROLLED OUT with, scored against the targets it is about to
+        # be fitted to. Boolean-mask flattening is correct HERE: EV is a scalar over a bag
+        # of tokens with no per-sequence structure to preserve -- the opposite verdict
+        # from the KL two lines up, and the difference is why one of them was a bug.
+        ev=float(ev_weighted(values[:, :-1][m], targets[m], w[m])),
+        value_mse=value_mse,
+        proxy_batch=float(sum(batch.weights[b] * proxy_fn(batch.seqs[b])
+                              for b in range(batch.B))),
+        mean_len=float((batch.weights * batch.lengths).sum()),
+    )
+
+    return (theta, phi_new, beta_new, record)
 
 
 def train_rlhf(env: TokenEnv, theta_ref: np.ndarray, cfg: RLHFConfig,
@@ -508,8 +614,39 @@ def train_rlhf(env: TokenEnv, theta_ref: np.ndarray, cfg: RLHFConfig,
 
     Set `history.label = label`; `diagnose` must never read it.
     """
-    # TODO
-    raise NotImplementedError
+    theta = theta_ref.copy()
+    phi = value_table_init(env)
+    beta = float(cfg.beta0)
+    history = RunHistory()
+    history.label = label
+    checkpoints: list[dict] = []
+    proxy_fn = sequence_reward_fn(env, proxy)   # the closure, built ONCE
+
+    def record_panel(step: int, ev: float) -> None:
+        # Reads theta/phi/beta from the ENCLOSING scope, so it always sees the values
+        # the loop most recently rebound -- a closure captures the variable, not a
+        # snapshot of it. Same mechanism as `proxy_fn` above.
+        panel = exact_panel(env, theta, theta_ref, proxy, gold)
+        history.log(proxy=panel["proxy"], gold=panel["gold"], kl=panel["kl"],
+                    entropy=panel["entropy"], length=panel["length"], ev=ev)
+        if step == 0 or step % cfg.checkpoint_every == 0:
+            # .copy() or every checkpoint aliases the same live array and they all come
+            # out identical -- the failure that makes checkpoint selection meaningless
+            # while looking like it worked.
+            checkpoints.append(dict(iter=step, theta=theta.copy(), phi=phi.copy(),
+                                    beta=float(beta), **panel))
+
+    # Iteration 0 IS a checkpoint: pi_ref is the bar, its KL is exactly 0, and on a
+    # badly-configured run "ship the SFT model" is the correct answer. `ev` is nan here
+    # because no critic has been fitted yet -- and nan, not 0.0, because `diagnose`
+    # filters nans and would read a 0.0 as a real (and alarming) explained variance.
+    record_panel(0, float("nan"))
+    for step in range(1, cfg.n_iters + 1):
+        theta, phi, beta, rec = rlhf_iteration(env, theta, phi, beta, cfg, rng,
+                                               proxy_fn=proxy_fn, theta_ref=theta_ref)
+        record_panel(step, rec["ev"] if cfg.use_critic else float("nan"))
+
+    return history, checkpoints
 
 
 def select_checkpoint(history: RunHistory, checkpoints: list[dict],
@@ -536,8 +673,24 @@ def select_checkpoint(history: RunHistory, checkpoints: list[dict],
     choosing on an eval set, and the whole game is whether that eval is independent of
     the RM.
     """
-    # TODO
-    raise NotImplementedError
+    golds = np.array([float(c[gold_key]) for c in checkpoints])
+    kls = np.array([float(c.get("kl", 0.0)) for c in checkpoints])
+    # Tie-break toward the SMALLER KL: two checkpoints with equal gold are not equally
+    # good, because the closer one to pi_ref has less RM extrapolation behind it and is
+    # therefore the safer estimate of the same quantity.
+    cand = np.flatnonzero(golds >= golds.max() - 1e-12)
+    idx = int(cand[int(np.argmin(kls[cand]))])
+    reason = (
+        f"gold peaks at {golds[idx]:.4f} at iteration "
+        f"{checkpoints[idx].get('iter', idx)} (KL {kls[idx]:.3f}); the final iterate "
+        f"scores {golds[-1]:.4f} at KL {kls[-1]:.3f}, so shipping it would cost "
+        f"{golds[idx] - golds[-1]:+.4f} gold for {kls[-1] - kls[idx]:+.3f} extra nats "
+        f"of drift. Early stopping here is the ESTIMATOR for the optimum, not a "
+        f"regulariser. Caveat: selected on a GOLD eval that exists only because this "
+        f"environment is synthetic -- in production this is an eval set, and the whole "
+        f"game is whether it is independent of the RM."
+    )
+    return idx, reason
 
 
 def ablate(env: TokenEnv, theta_ref: np.ndarray, base: RLHFConfig, arms: dict,
@@ -563,8 +716,31 @@ def ablate(env: TokenEnv, theta_ref: np.ndarray, base: RLHFConfig, arms: dict,
     SELECTED checkpoint's gold and KL, and the union of `diagnose` verdicts across seeds.
     Keep one `RunHistory` per seed so the stage can re-run `diagnose` itself.
     """
-    # TODO
-    raise NotImplementedError
+    out: dict = {}
+    for name, overrides in arms.items():
+        # replace() so "we changed exactly one thing" is structural, not a promise.
+        cfg = replace(base, **overrides)
+        finals, hists = [], []
+        for seed in seeds:
+            hist, ckpts = train_rlhf(env, theta_ref, cfg,
+                                     np.random.default_rng(1000 + seed),
+                                     proxy=proxy, gold=gold, label=name)
+            i, _ = select_checkpoint(hist, ckpts)
+            finals.append(dict(gold=hist.gold[-1], proxy=hist.proxy[-1], kl=hist.kl[-1],
+                               entropy=hist.entropy[-1], length=hist.length[-1],
+                               sel_gold=ckpts[i]["gold"], sel_kl=ckpts[i]["kl"]))
+            hists.append(hist)
+        agg: dict = {}
+        for k in ("gold", "proxy", "kl", "entropy", "length"):
+            v = np.array([f[k] for f in finals])
+            agg[f"{k}_mean"] = float(v.mean())
+            agg[f"{k}_spread"] = float(v.max() - v.min())   # RANGE over seeds, not std
+        agg["selected_gold"] = float(np.mean([f["sel_gold"] for f in finals]))
+        agg["selected_kl"] = float(np.mean([f["sel_kl"] for f in finals]))
+        agg["verdicts"] = sorted({v for h in hists for v, _ in diagnose(h)})
+        agg["histories"] = hists
+        out[name] = agg
+    return out
 
 
 # ---------------------------------------------------------------------------
