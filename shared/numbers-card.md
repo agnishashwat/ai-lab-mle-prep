@@ -75,16 +75,37 @@ Format: `quantity = value (condition)`.
 
 ## Week 5 — DPO & preference optimization
 
-- (D1) noiseless transitive tournament, 8 items / 28 pairs: **not strongly connected**;
-  ‖r̂‖ = **11.48 → 14.42 → 22.73 → 26.80 → 36.79 → 41.21** at t = 1e3…2e5 (logarithmic,
-  unbounded); loss **4.1e-04**; accuracy **1.0**; direction converges, **cos = 0.999998**
-- (D1) same items, ε-flip labels ⇒ **strongly connected**, ‖r̂‖ converges. Max fitted margin
-  **7.06 / 5.99 / 4.78 / 3.68 / 2.11 / 0.94** at ε = 0 / .02 / .05 / .10 / .20 / .35
-- (D1) saturated per-pair cap `logit(1−ε)` = **3.892 / 2.944 / 2.197 / 1.386 / 0.619** at
-  ε = .02 / .05 / .10 / .20 / .35 — matched to **3 decimals** by a 2M-sample fit
-- (D1) perfect matching (the DPO shape): **not strongly connected**; ‖r̂‖ **8.78 → 12.04 →
-  15.30**; **min r̂_i = −5.41** and falling ⇒ the rejected logprob
-- (D1) `tilt(c·r, c·β) == tilt(r, β)` to **3.3e-16**; same β=0.5, reward scale ×0.5/1/2/4 ⇒
-  KL **1.1515 / 1.7568 / 2.1647 / 2.2727**
-- (D3) cDPO optimal implicit margin = `logit(1−ε)/β`, verified: **29.4444 / 21.9722 / 10.9861**
+*(D1 values are from `week-05-.../code/preference_models.py`, 72 checks, 28 s.)*
+
+- **existence.** 8 completions, strict ordering. Deterministic annotator, all 28 pairs ⇒
+  wins-digraph **not strongly connected**. Fit re-centred every step, so the location gauge
+  is fixed and the divergence is not the additive constant:
+  ‖r̂‖ = **6.22 / 14.42 / 17.77 / 26.80 / 31.03 / 41.21 / 45.66** at t = 100 … 2e5.
+  Monotone, unbounded. nll **2.086e-04**, pairwise accuracy **exactly 1.0**, max margin **49.97**
+- **the contrast.** *Same items, same 28 comparisons*, labels flipped at ε=0.10 ⇒ **strongly
+  connected**, ‖r̂‖ **converges to 4.6967**. Relative change over the last decade:
+  clean **1.081e-01** (still moving) vs noisy **0.000e+00** (converged). Norms **45.66 vs 4.70**
+- **why it is invisible.** cos(r̂_t, r̂_2t) = **0.9999944 / 0.9999985** while ‖r̂_2t‖/‖r̂_t‖ =
+  **1.2321 / 1.1580 / 1.1081** ⇒ direction converges to the max-margin separator, norm grows
+  logarithmically (Soudry et al.). Nothing errors; accuracy reads 100%
+- **the DPO shape.** Perfect matching (each completion appears once): **not strongly
+  connected**; ‖r̂‖ **8.78 → 12.04 → 15.30**, **min r̂_i = −3.10 → −4.26 → −5.41**, min margin
+  **6.21 → 8.52 → 10.82**. *Flipping every label does not create a cycle* — in a matching,
+  annotator noise has nowhere to act
+- **the ε-cap, saturated** (2 items, exact win counts): fitted margin == `logit(1−ε)` to
+  **1e-14**. **3.8918 / 2.9444 / 2.1972 / 1.3863 / 0.6190** at ε = .02/.05/.10/.20/.35
+- **the ε-cap, parametric** (8 items, 28 pairs — BT is *misspecified* under flip noise, so
+  the fit compromises): spread **12.29 / 7.49 / 5.00 / 2.76 / 1.22**, monotone decreasing.
+  ε → 0 *is* the transitive tournament ⇒ the two results are one result
+- **scale ≡ β.** `tilt(c·r, c·β) == tilt(r, β)` to **3.9e-16**; location free in both the tilt
+  and the NLL to **<1e-15**; support confinement exact (`π*[a] == 0.0`). Consequence, **same
+  β=0.5**, only the reward's scale changing ×0.5/1/2/4 ⇒ KL = **1.0156 / 1.8047 / 2.6198 / 2.8802**
+- **Plackett–Luce at K=2 == Bradley-Terry to 0.000e+00**
+- **the accuracy ceiling.** Bayes ceiling **0.7675** (n=11200, SE **0.0040**); the *gold* reward
+  itself scores **0.7743** and the fitted RM scores **0.7743** — it reaches Bayes and not a hair
+  more. ⇒ the ceiling is set by the ANNOTATOR. Accuracy depends only on the SIGN of the margin,
+  so it is scale-invariant and cannot detect a diverging fit
+- (D3, algebra) cDPO optimal implicit margin = `logit(1−ε)/β` — **29.4444 / 21.9722 / 10.9861**
   at β=0.1, ε = .05/.10/.25
+- **useful conversions**: `logit(0.68) = 0.7538`, `logit(0.91) = 2.3137` ⇒ moving inter-annotator
+  agreement 68% → 91% is a **3.07×** larger achievable margin at fixed β
