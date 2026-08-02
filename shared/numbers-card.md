@@ -1,0 +1,90 @@
+# The Numbers Card
+
+**How to use this.** Retrieval has failed seven consecutive sessions under a diagnostic
+framing while derivation and mechanism recall are fine. So stop trying to retrieve.
+**Read this out loud at the START of every recall block**, then answer. Recognition works
+where retrieval does not. Add a line at the end of every session; never round in your favour.
+
+Format: `quantity = value (condition)`.
+
+---
+
+## Week 1-2 — LM foundations, transformers, inference
+
+- bf16 + Adam trainable = **16 bytes/param**; 7B ⇒ **112 GB** before activations
+- frozen inference-only = **2 bytes/param**
+- KV cache = `2·L·n_kv·d_head·T·B·bytes` = **512 KiB/token**, **2 GiB @ 4k**, **64 GiB @ 8k×16**
+  (vs **14 GB** of weights — the cache dwarfs the model)
+- decode arithmetic intensity ≈ **1 op/byte** ⇒ memory-bound
+- KV-cache decode speedup measured = **4.15×** @ N=200; **2.85×** in the debug lab
+- temperature entropy ladder: **0 → 1.744 → 2.079** (= ln V)
+
+## Week 3 — RL foundations
+
+- variance ladder, identical rollouts: total_return **20.033** → reward-to-go **6.317** (3.17×)
+  → +fitted baseline **1.765** (11.35×) → +`b*` **1.476** (13.57×) → +time-indexed `V_t`
+  **1.142** (**17.5× cumulative**)
+- oracle `V^π` baseline is unbiased but **increases** variance **27%** (7.769 vs 6.317)
+- biased within-episode baseline: lowest variance (**0.784**, 25.56×) with mean **38% wrong**
+- GAE: uniform critic offset **+2.174** biases by **0.0010**; ±1 state-varying skew biases by
+  **1.5557** (~**1500×** worse) ⇒ wrong LEVEL → variance, wrong RANKING → bias
+- entropy β sweep: β 0/0.5/2/5 → H **0.074/0.118/0.294/0.522**, return **7.966/7.925/7.634/6.375**
+- reverse KL confines support: `π*[a] == 0.0` exactly; forward KL puts **0.775** there
+- `var(k1)/var(k3)` = **423×** @ KL 0.004, **19.9×** @ 0.065, **3.0×** @ 0.23, **0.23×** @ ~0.65
+  ⇒ **it REVERSES**; k3's win is a small-KL phenomenon
+
+## Week 4 — RLHF & PPO
+
+- off-policy-by-accident vs exact ∇J: on-policy **2.95e-10**, temp 0.7 **0.2284**, temp 0.5
+  **0.4466**, top-p 0.9 **0.1169**, stacked **0.3127**
+- IS repairs temperature to **2.953e-10**; **cannot** repair top-p (**0.1169 → 0.1267, WORSE**)
+  because **7.2%** of π's mass is unreachable
+- top-p ratchet: reachable sequences **40 → 39 → 18 → 17 → 12 → 9** across iterations
+- clipping ≠ trust region: **token** `T·ε²/2` ≈ **10 nats** @ T=500; **sample** clip_frac
+  **0.237** vs oob_frac **0.570**; **iteration** **4.68 nats @ 5.3% clip fraction** vs **0.75**
+  with a penalty (**6.2×**) — π_old RESETS
+- `∏ρ_t` log-normal: `σ(T)=σ₁√T` to 1.1%, `ESS/n = exp(−σ²)` to 1.6%; **T=500, batch 1024
+  ⇒ ESS 0.38**; **88.5%** of tokens inside the ε=0.2 band
+- `dE[r]/dKL = β`, frontier **concave in KL**: secants **0.793∈[0.7,1.0]**, **1.203∈[1.0,1.5]**,
+  **1.892∈[1.5,2.5]**; concave at **100%** of secant slopes
+- adaptive β fixed point vs `dE[r]/dKL`: **5.00% / 1.05% / 2.27% / 4.95%** at δ = 0.25/0.5/1.0/2.0
+- dual-ascent caveat measured: exact primal **β=0.6173** vs PPO primal **β=0.1563** at the same
+  KL 0.8646 ⇒ **74.7% gap**
+- chained regression REINFORCE→PPO elementwise to **7.749e-15**; EGLP check non-vacuous by **1.3e11×**
+- ablation grid (7 arms × 3 seeds): π_ref gold **4.4191**; full **5.1501 ±0.109**;
+  **no_kl gold 4.9098 with proxy 0.8728** (proxy UP, gold DOWN); reinforce **4.7112**;
+  top-p **4.8559**; **no_clip ≈ full (5.1508)** — the PENALTY was binding, not the clip;
+  **no_critic BEAT full: 5.1786 ±0.036 vs 5.1501 ±0.109** ⇒ the critic's value is a function
+  of HORIZON, and this horizon is 5
+- early stopping: gold peaks **5.1894 @ iter 8 (KL 0.503)**, ends **3.9372 @ KL 3.605** —
+  below π_ref's **4.4191**. Shipping the last checkpoint costs **1.2522**
+- Goodhart is a VARIANCE result: seed spread amplifies **89× / 259× / 667×**; at 30 comparisons
+  spread **±1.60** exceeds the entire mean improvement **+0.95**; max spurious RM weight
+  **32.07 → 4.29**
+- RM error along a KL ladder: **0.177 → 4.89** (**27.6×**) with the RM unchanged
+- length: confound **κ = +0.6276** vs bounded per-token resistance **max 0.1411** ⇒ **no β stops
+  it**; weak control κ **0.0504 < 0.2205** ⇒ stopped at 3.95
+- gold reward with a **−0.4/token** explicit penalty has marginal slope **+0.1751** ⇒ win rate
+  must be length-CONTROLLED
+- deadly triad scalar `A`: **−3.70 converges**, **+1.07 diverges to 4.4e13**, EV **−1.9e27**
+- `diagnose` fired **value_divergence (EV → −5.19e9)** on the top-p arm unprompted
+- silent-bug probe: `std(log ρ)` = **0.098999** on a real 4-epoch update, exactly **0** if
+  `logp_old` is recomputed in the loop; `clip_frac` reads **0.000** under BOTH hypotheses
+- entropy collapse caught at KL **0.30**, length exploitation at KL **0.55** ⇒ **KL is
+  NECESSARY, not SUFFICIENT**
+
+## Week 5 — DPO & preference optimization
+
+- (D1) noiseless transitive tournament, 8 items / 28 pairs: **not strongly connected**;
+  ‖r̂‖ = **11.48 → 14.42 → 22.73 → 26.80 → 36.79 → 41.21** at t = 1e3…2e5 (logarithmic,
+  unbounded); loss **4.1e-04**; accuracy **1.0**; direction converges, **cos = 0.999998**
+- (D1) same items, ε-flip labels ⇒ **strongly connected**, ‖r̂‖ converges. Max fitted margin
+  **7.06 / 5.99 / 4.78 / 3.68 / 2.11 / 0.94** at ε = 0 / .02 / .05 / .10 / .20 / .35
+- (D1) saturated per-pair cap `logit(1−ε)` = **3.892 / 2.944 / 2.197 / 1.386 / 0.619** at
+  ε = .02 / .05 / .10 / .20 / .35 — matched to **3 decimals** by a 2M-sample fit
+- (D1) perfect matching (the DPO shape): **not strongly connected**; ‖r̂‖ **8.78 → 12.04 →
+  15.30**; **min r̂_i = −5.41** and falling ⇒ the rejected logprob
+- (D1) `tilt(c·r, c·β) == tilt(r, β)` to **3.3e-16**; same β=0.5, reward scale ×0.5/1/2/4 ⇒
+  KL **1.1515 / 1.7568 / 2.1647 / 2.2727**
+- (D3) cDPO optimal implicit margin = `logit(1−ε)/β`, verified: **29.4444 / 21.9722 / 10.9861**
+  at β=0.1, ε = .05/.10/.25
