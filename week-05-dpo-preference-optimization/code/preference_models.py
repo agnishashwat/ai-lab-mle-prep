@@ -115,8 +115,15 @@ def bt_nll_and_grad(r: np.ndarray, pairs: np.ndarray) -> tuple[float, np.ndarray
 
     Use `logsigmoid`, not `np.log(sigmoid(...))`.
     """
-    # TODO
-    raise NotImplementedError
+    r_win = r[pairs[:, 0]]
+    r_lose = r[pairs[:, 1]]
+    delta = r_win - r_lose
+    nll = -logsigmoid(delta).mean()
+    grad = np.zeros_like(r, dtype=np.float64)
+    np.add.at(grad, pairs[:, 0], -sigmoid(-delta))
+    np.add.at(grad, pairs[:, 1], sigmoid(-delta))
+    return (nll, grad/pairs.shape[0])
+
 
 
 def wins_digraph(pairs: np.ndarray, n_items: int) -> np.ndarray:
@@ -126,8 +133,10 @@ def wins_digraph(pairs: np.ndarray, n_items: int) -> np.ndarray:
     single edge -- existence is a QUESTION ABOUT STRUCTURE, not about counts, which is
     exactly why collecting more of the same comparisons cannot fix it.
     """
-    # TODO
-    raise NotImplementedError
+    digraph = np.zeros((n_items, n_items), dtype=bool)
+    digraph[pairs[:, 0], pairs[:, 1]] = True
+    digraph[np.arange(n_items), np.arange(n_items)] = False
+    return digraph
 
 
 def is_strongly_connected(adj: np.ndarray) -> bool:
@@ -142,8 +151,14 @@ def is_strongly_connected(adj: np.ndarray) -> bool:
     REFLEXIVE closure (`adj | I`) and square it about log2(n) times; strong connectivity
     is then "the closure is all True". n is small here, so clarity beats Tarjan.
     """
-    # TODO
-    raise NotImplementedError
+    closure = adj.copy()
+    np.fill_diagonal(closure, True)
+    steps = int(np.ceil(np.log2(adj.shape[0])))
+    
+    for _ in range(steps):
+        closure = closure @ closure
+
+    return True if np.all(closure) else False
 
 
 def fit_bt(pairs: np.ndarray, n_items: int, n_steps: int = 20_000,
@@ -167,8 +182,18 @@ def fit_bt(pairs: np.ndarray, n_items: int, n_steps: int = 20_000,
     gradient descent on separable logistic data is precisely the phenomenon being
     measured, and an optimizer with its own regularization would hide it.
     """
-    # TODO
-    raise NotImplementedError
+    reward = np.zeros(n_items, dtype=np.float64)
+    history = {}
+
+    for step in range(n_steps):
+        _, grad = bt_nll_and_grad(reward, pairs)
+        reward -= lr * grad
+        reward -= reward.mean()
+        if step+1 in record:
+            history[step+1] = reward.copy()
+
+    nll_final, _ = bt_nll_and_grad(reward, pairs)
+    return (reward.copy(), nll_final, history)
 
 
 def noisy_labels(rng: np.random.Generator, gold_r: np.ndarray, pairs: np.ndarray,
@@ -194,8 +219,22 @@ def noisy_labels(rng: np.random.Generator, gold_r: np.ndarray, pairs: np.ndarray
     mask indexing: `x[mask]` FLATTENS and drops the pair axis (fourth family sighting,
     after W4 D5's 2.16x KL error). `np.where` preserves shape.
     """
-    # TODO
-    raise NotImplementedError
+    rewards_a, rewards_b = gold_r[pairs[:, 0]], gold_r[pairs[:, 1]]
+    delta = rewards_a - rewards_b
+    if stochastic == False:
+        winner = np.where(delta > 0, pairs[:, 0], pairs[:, 1])
+        loser = np.where(delta > 0, pairs[:, 1], pairs[:, 0])
+    else:
+        prob = rng.random(pairs.shape[0])
+        winner = np.where(prob < sigmoid(delta), pairs[:, 0], pairs[:, 1])
+        loser = np.where(prob < sigmoid(delta), pairs[:, 1], pairs[:, 0])
+    
+    prob_noise = rng.random(pairs.shape[0])
+    winner_new = np.where(prob_noise > eps, winner, loser)
+    loser_new = np.where(prob_noise > eps, loser, winner)
+
+    pairs_sorted = np.stack([winner_new, loser_new], axis=1)
+    return pairs_sorted
 
 
 def plackett_luce_nll(r: np.ndarray, rankings: list) -> float:
@@ -214,8 +253,13 @@ def plackett_luce_nll(r: np.ndarray, rankings: list) -> float:
     Note it inherits the same location invariance -- the constant cancels in every
     factor. Use a stable log-sum-exp for the denominator.
     """
-    # TODO
-    raise NotImplementedError
+    nll_pl = 0
+    for ranking in rankings:
+        sorted_r = r[ranking]
+        sorted_r = sorted_r - sorted_r.max()
+        for i in range(sorted_r.shape[0]):
+            nll_pl -= sorted_r[i] - np.log(np.exp(sorted_r[i:]).sum())
+    return nll_pl/len(rankings)
 
 
 def tilt(r: np.ndarray, pi_ref: np.ndarray, beta: float) -> np.ndarray:
@@ -230,8 +274,12 @@ def tilt(r: np.ndarray, pi_ref: np.ndarray, beta: float) -> np.ndarray:
     the INPUT: `np.log(np.where(pi_ref > 0, pi_ref, 1.0))`, then force the forbidden
     entries to -inf explicitly. Sixth sighting of this family in three weeks.
     """
-    # TODO
-    raise NotImplementedError
+    r = r-np.max(r)
+    logpi_nonzero = np.log(np.where(pi_ref>0, pi_ref, 1)) + r/beta
+    logpi = np.where(pi_ref>0, logpi_nonzero, -np.inf)
+    pi = np.exp(logpi)
+    pi = pi / pi.sum()
+    return pi
 
 
 def bayes_accuracy(gold_r: np.ndarray, pairs: np.ndarray) -> float:
@@ -245,8 +293,11 @@ def bayes_accuracy(gold_r: np.ndarray, pairs: np.ndarray) -> float:
     means your pair distribution is easy or your labels are near-deterministic -- and
     near-deterministic labels are exactly the divergent regime.
     """
-    # TODO
-    raise NotImplementedError
+    r_a = gold_r[pairs[:, 0]]
+    r_b = gold_r[pairs[:, 1]]
+    p = sigmoid(r_a - r_b)
+    ceil = np.maximum(p, 1-p)
+    return ceil.mean()
 
 
 # ---------------------------------------------------------------------------
@@ -289,8 +340,18 @@ class Ctx:
 
     @cached_property
     def all_pairs(self):
+        """All 28 combinations, as UNORDERED candidates.
+
+        The column order is deliberately SCRAMBLED. If the rows were emitted as (i, j)
+        with i > j then column 0 would already be the gold winner on every row, and
+        `noisy_labels` implementations that ignore `gold_r` entirely and just return
+        column 0 would be indistinguishable from correct ones on this fixture. A
+        fixture on which the naive answer is right is not a fixture.
+        """
         n = self.N_ITEMS
-        return np.array([(i, j) for i in range(n) for j in range(n) if i > j])
+        pairs = np.array([(i, j) for i in range(n) for j in range(n) if i > j])
+        flip = np.random.default_rng(99).random(len(pairs)) < 0.5
+        return np.where(flip[:, None], pairs[:, ::-1], pairs)
 
     @cached_property
     def matching(self):
@@ -374,10 +435,13 @@ def stage_graph(ctx: Ctx) -> None:
     _check("adjacency is (n, n) boolean", adj.shape == (ctx.N_ITEMS, ctx.N_ITEMS)
            and adj.dtype == bool, f"{adj.shape}, {adj.dtype}")
     _check("no self-loops", not bool(np.diag(adj).any()))
-    _check("a deterministic annotator gives a TRANSITIVE TOURNAMENT (upper triangular)",
-           bool((adj == np.triu(np.ones_like(adj), 1)[::-1, ::-1].T[::-1, ::-1]).all())
-           or bool((np.tril(adj, -1) == adj).all()) or bool((np.triu(adj, 1) == adj).all()),
-           "every edge points the same way through the ordering")
+    naive = float(np.mean(ctx.gold[ctx.all_pairs[:, 0]] > ctx.gold[ctx.all_pairs[:, 1]]))
+    _check("the fixture's column order is SCRAMBLED, so 'return column 0' is wrong",
+           0.2 < naive < 0.8, f"gold accuracy of raw column 0 = {naive:.3f}")
+    _check("a deterministic annotator labels every comparison correctly",
+           float(np.mean(ctx.gold[ctx.tournament[:, 0]] > ctx.gold[ctx.tournament[:, 1]])) == 1.0)
+    _check("...so every edge points the same way through the ordering (a DAG)",
+           bool((np.tril(adj, -1) == adj).all()), "strictly lower-triangular")
 
     _check("transitive tournament is NOT strongly connected -> MLE at infinity",
            not is_strongly_connected(adj))
