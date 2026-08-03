@@ -2,7 +2,53 @@
 
 ## Current Status
 
-- Current week: **Week 04 — RLHF & PPO for LLMs — COMPLETE (5/5)**. Next: Week 05 — DPO.
+- Current week: **Week 05 — Preference Optimization: DPO & Variants — IN PROGRESS (1/5)**.
+  Week 04 COMPLETE (5/5).
+- Current day: **Week 5 Day 01 DONE** — *what preference data can and cannot identify*.
+  `code/preference_models.py`, **74 staged checks**, nine stages, 38 s full / 8 s `--fast`,
+  under `-W error::RuntimeWarning`. He implemented all eight TODOs.
+  Day 1 was re-scoped away from re-deriving Bradley-Terry (W4 D1 already did that) toward the
+  identification question, and the whole day has one thesis: **the scale of a BT reward is not
+  a property of quality, it is a measurement of annotator disagreement.**
+  **Headline 1 — Ford/Zermelo: the BT MLE is finite IFF the wins-digraph is strongly
+  connected.** So a noiseless annotator on a strictly ordered item set gives a transitive
+  tournament — a DAG — and **the MLE is at infinity with infinite data; more data adds edges
+  but never a cycle.** Measured with the fit RE-CENTRED every step, so the divergence provably
+  is not the additive constant: ‖r̂‖ = **6.22 / 14.42 / 17.77 / 26.80 / 31.03 / 41.21 / 45.66**
+  across t = 1e2..2e5, monotone, nll **2.086e-04**, accuracy **exactly 1.0**, max margin
+  **49.97**. Control: the *same* items and the *same* 28 comparisons relabelled at ε=0.10 are
+  strongly connected and converge to **4.6967** — relative change over the last decade
+  **1.081e-01 vs 0.000e+00**.
+  **Headline 2 — and it is invisible.** cos(r̂_t, r̂_2t) = **0.9999873 / 0.9999938 / 0.9999985**
+  while ‖r̂_2t‖/‖r̂_t‖ = **1.2321 / 1.1580 / 1.1081** ⇒ the direction converges to the max-margin
+  separator while the norm grows logarithmically (Soudry et al.). Nothing errors, the loss curve
+  is beautiful, accuracy reads 100%.
+  **Headline 3 — noise is the regularizer, and it is the SAME result.** Flip noise ε caps the
+  saturated per-pair margin at `logit(1−ε)`, matched to **1e-14**: **3.8918 / 2.9444 / 2.1972 /
+  1.3863 / 0.6190** at ε = .02/.05/.10/.20/.35. **ε → 0 IS the transitive tournament**, so the
+  existence theorem is the ε→0 limit of the cap, not a separate result. Honest scope: with n−1
+  parameters against C(n,2) pair frequencies BT is MISSPECIFIED under flip noise, so the
+  parametric fit compromises (spread **12.29 / 7.49 / 5.00 / 2.76 / 1.22**) — finite and
+  monotone is the claim, not the cap.
+  **Headline 4 — RM scale and β are ONE knob.** `tilt(c·r, c·β) == tilt(r, β)` to **3.886e-16**
+  ⇒ only `r/β` is identified by the policy. Chain: agreement rate ⇒ scale of r̂ ⇒ meaning of β ⇒
+  the KL you land at. Same β=0.5, reward scaled ×0.5/1/2/4 ⇒ KL **1.0156 / 1.8047 / 2.6198 /
+  2.8802**. **β is a property of the ANNOTATION PROCESS** — strictly stronger than W4 D5's "β is
+  a property of the RM's data" (that was about WHERE the data is; this is about how noisy its
+  LABELS are — independent axes, both retune β).
+  **Headline 5 — the DPO corollary, one week early.** A preference dataset is a **perfect
+  matching**: not strongly connected, min r̂ᵢ **−3.10 → −4.26 → −5.41**, min margin **10.82**,
+  nll 2.0e-05, accuracy 1.0. And **in a matching, annotator noise cannot help at all** —
+  flipping a label just swaps the winner, and a matching has no cycles under ANY labelling.
+  Cycles need an item in ≥2 comparisons ⇒ this is the real argument for K completions per
+  prompt and all C(K,2) pairs. Under D2's identification that min r̂ᵢ IS `β log(π/π_ref)`, i.e.
+  the rejected logprob ⇒ **"DPO drives log π(y_l) to −∞" is Ford's theorem, not a bug.**
+  **Headline 6 — the accuracy ceiling.** Bayes ceiling **0.7675** (n=11200, SE 0.0040); the GOLD
+  reward itself scores **0.7747** and the fitted RM scores **0.7747** — it reaches Bayes and not
+  a hair more. Accuracy depends only on the SIGN of the margin ⇒ scale-invariant ⇒ structurally
+  unable to detect a diverging fit. **A high reported accuracy is the alarm, not the
+  reassurance.**
+- Previous week: Week 04 — RLHF & PPO for LLMs — COMPLETE (5/5).
 - Current day: **Week 4 Day 05 DONE — WEEK 4 COMPLETE** (toy PPO-RLHF loop; `code/ppo_rlhf.py`
   **90 staged checks**, ten stages, under `-W error::RuntimeWarning`, full suite 26 s). He
   implemented five of six TODOs; `train_rlhf` logging, `select_checkpoint` and `ablate` were
@@ -116,6 +162,56 @@
 
 Topics to revisit:
 
+- [x] **FORD/ZERMELO: the BT MLE is finite IFF the wins-digraph is strongly connected**
+  (W5 D1). Equivalently: BT is logistic regression on `e_w − e_l`, so this is exactly linear
+  SEPARABILITY. ⇒ a noiseless annotator on a strictly ordered set gives a transitive tournament
+  (a DAG) ⇒ **MLE at infinity with INFINITE data; more data adds edges but never a cycle.**
+  Location invariance is a FLAT direction (constant likelihood, infinitely many finite
+  maximisers, gauge-fixable); separability is an ASCENT direction (**zero** maximisers,
+  centring cannot help). Measured with the fit re-centred every step: ‖r̂‖ **6.22 → 45.66**
+  monotone, nll **2.086e-04**, accuracy **exactly 1.0**
+- [ ] **The divergence is INVISIBLE** (W5 D1): cos(r̂_t, r̂_2t) → **0.9999985** while
+  ‖r̂_2t‖/‖r̂_t‖ stays **> 1.10** at every decade ⇒ direction converges to the max-margin
+  separator, norm grows logarithmically (Soudry et al., implicit bias of GD). Nothing errors,
+  loss curve is beautiful, accuracy 100%. **Plot ‖r̂‖ against steps, not the loss**
+- [ ] **Noise is the regularizer, and it is the SAME result** (W5 D1): flip noise gives
+  `p = (1−2ε)σ(Δ*) + ε`, not σ of anything; the saturated MLE caps at **`logit(1−ε)`**
+  (matched to 1e-14: **3.8918 / 2.9444 / 2.1972 / 1.3863 / 0.6190**). **ε → 0 IS the transitive
+  tournament** ⇒ existence is the ε→0 limit of the cap. Scope: BT is MISSPECIFIED under flip
+  noise (n−1 params vs C(n,2) frequencies), so a parametric fit compromises — finite and
+  monotone is the claim, not the cap
+- [ ] **RM scale and β are ONE knob** (W5 D1): `tilt(c·r, c·β) == tilt(r, β)` to **3.886e-16**
+  ⇒ only `r/β` is identified. Chain: agreement rate ⇒ scale of r̂ ⇒ meaning of β ⇒ the KL you
+  land at (same β=0.5, scale ×0.5/1/2/4 ⇒ KL **1.0156 / 1.8047 / 2.6198 / 2.8802**).
+  **β is a property of the ANNOTATION PROCESS.** Strictly stronger than W4 D5's "β is a property
+  of the RM's data" — that was about WHERE the data is, this is about how noisy its LABELS are.
+  `logit(0.68)=0.7538 → logit(0.91)=2.3137` is a **3.07×** larger margin ⇒ cleaning your data
+  triples your learning rate in reward-space without editing a config file
+- [ ] **A preference dataset is a PERFECT MATCHING** (W5 D1): not strongly connected,
+  min r̂ᵢ **−3.10 → −4.26 → −5.41**. And **noise cannot help at all in a matching** — flipping a
+  label just swaps the winner; cycles require an item in ≥2 comparisons ⇒ the real argument for
+  K completions per prompt and all C(K,2) pairs. ⇒ **"DPO drives log π(y_l) → −∞" is Ford's
+  theorem, not a bug**
+- [ ] **The RM accuracy ceiling is set by the ANNOTATOR** (W5 D1): Bayes = `E[max(p,1−p)]`;
+  measured **0.7675** with the gold reward itself at **0.7747** and the fitted RM at **0.7747**
+  — reaches Bayes and not a hair more. Accuracy depends only on the SIGN of the margin ⇒
+  scale-invariant ⇒ **cannot** detect a diverging fit. **96% is the alarm, not the reassurance**
+  (it implies ε ≲ 4%, i.e. the near-separable regime)
+- [ ] **`**` is ELEMENTWISE, not matrix power** (W5 D1): on a bool array `c ** 2.0` upcasts to
+  float64 and returns c UNCHANGED — silent, no warning, no shape change. Boolean `@` is what you
+  want and numpy does it logically (no overflow). Third sighting of *the wrong operation is
+  type-compatible* (W3 D2 `np.zeros(dtype=np.long)`, W2 D2 `TransformerBlock(d, n_heads, n_heads)`)
+- [ ] **A symmetric probe cannot detect a sign flip — SECOND sighting** (W5 D1): gradient ASCENT
+  on an NLL is undetectable on separable data, where ascent and descent both send ‖r‖ → ∞ and
+  differ only in sign. The asymmetric probe is data whose MLE is **finite and known in closed
+  form**: 80/20 wins ⇒ `logit(0.8) = 1.3863`, and the buggy fit returned **−317.66**
+- [ ] **When a function's output has the same type and shape as one of its inputs, test it on an
+  input where "return the input" is WRONG** (W5 D1). `noisy_labels` had a dead store that
+  discarded `gold_r` entirely and survived six stages, because the fixture emitted pairs as
+  (i, j) with i > j so column 0 was already the gold winner. Fourth sighting of *silent because
+  two things that should differ happen to coincide* (W1 D5 `T==V`, W2 D2 `n_heads`,
+  W3 D4 `Batch(..., n_iters, rng)`). **A fixture on which the naive answer is correct is not a
+  fixture**
 - [x] **Adaptive β IS DUAL GRADIENT ASCENT** (W4 D5): `g(β)=max_θ L` is a max of AFFINE
   functions of β ⇒ **convex regardless of the primal being non-convex** — a 1-D convex problem
   sitting on a hopeless one, which is why K_β needs no tuning intuition. Envelope theorem gives
@@ -289,7 +385,7 @@ Topics to revisit:
   p_ref(y)]` applied before the advantages ⇒ no estimator knows it exists (consistent with "the KL
   term is not a Psi — it modifies r"). Uses only rollout-time quantities ⇒ `pi_ref` can be dropped
   after rollout. Stale after step 1, exactly like the ratio
-- [ ] DPO derivation — `r = β log(π*/π_ref) + β log Z`; `Z(x)` intractable because the action is a whole COMPLETION (`|V|^T`), not because logits are unavailable; it depends on the PROMPT only ⇒ cancels pairwise (W3 D5 Part 4, seen unprompted)
+- [ ] DPO derivation (W5 D2) — `r = β log(π*/π_ref) + β log Z`; `Z(x)` intractable because the action is a whole COMPLETION (`|V|^T`), not because logits are unavailable; it depends on the PROMPT only ⇒ cancels pairwise (W3 D5 Part 4, seen unprompted)
 - [ ] GRPO group baseline
 - [x] KV-cache memory math (`2·L·n_kv·d_head·T·B·bytes`; 512 KiB/tok, 2 GiB@4k, 64 GiB@8k×16; done W2 D4)
 - [ ] Arithmetic intensity / roofline: decode ≈1 op/byte → memory-bound; batch to amortize weights (add BW-tied levers: quant, spec-decode)

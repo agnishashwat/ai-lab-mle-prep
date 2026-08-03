@@ -75,7 +75,7 @@ Format: `quantity = value (condition)`.
 
 ## Week 5 — DPO & preference optimization
 
-*(D1 values are from `week-05-.../code/preference_models.py`, 72 checks, 28 s.)*
+*(D1 values are from `week-05-.../code/preference_models.py`, **74 checks**, 38 s.)*
 
 - **existence.** 8 completions, strict ordering. Deterministic annotator, all 28 pairs ⇒
   wins-digraph **not strongly connected**. Fit re-centred every step, so the location gauge
@@ -85,9 +85,10 @@ Format: `quantity = value (condition)`.
 - **the contrast.** *Same items, same 28 comparisons*, labels flipped at ε=0.10 ⇒ **strongly
   connected**, ‖r̂‖ **converges to 4.6967**. Relative change over the last decade:
   clean **1.081e-01** (still moving) vs noisy **0.000e+00** (converged). Norms **45.66 vs 4.70**
-- **why it is invisible.** cos(r̂_t, r̂_2t) = **0.9999944 / 0.9999985** while ‖r̂_2t‖/‖r̂_t‖ =
-  **1.2321 / 1.1580 / 1.1081** ⇒ direction converges to the max-margin separator, norm grows
-  logarithmically (Soudry et al.). Nothing errors; accuracy reads 100%
+- **why it is invisible.** cos(r̂_t, r̂_2t) = **0.9999873 / 0.9999938 / 0.9999985** at the
+  1e3→2e3, 1e4→2e4 and 1e5→2e5 decades, while ‖r̂_2t‖/‖r̂_t‖ = **1.2321 / 1.1580 / 1.1081** ⇒
+  direction converges to the max-margin separator, norm grows logarithmically (Soudry et al.).
+  Nothing errors; accuracy reads 100%. **Plot ‖r̂‖ against steps, not the loss**
 - **the DPO shape.** Perfect matching (each completion appears once): **not strongly
   connected**; ‖r̂‖ **8.78 → 12.04 → 15.30**, **min r̂_i = −3.10 → −4.26 → −5.41**, min margin
   **6.21 → 8.52 → 10.82**. *Flipping every label does not create a cycle* — in a matching,
@@ -102,10 +103,15 @@ Format: `quantity = value (condition)`.
   β=0.5**, only the reward's scale changing ×0.5/1/2/4 ⇒ KL = **1.0156 / 1.8047 / 2.6198 / 2.8802**
 - **Plackett–Luce at K=2 == Bradley-Terry to 0.000e+00**
 - **the accuracy ceiling.** Bayes ceiling **0.7675** (n=11200, SE **0.0040**); the *gold* reward
-  itself scores **0.7743** and the fitted RM scores **0.7743** — it reaches Bayes and not a hair
+  itself scores **0.7747** and the fitted RM scores **0.7747** — it reaches Bayes and not a hair
   more. ⇒ the ceiling is set by the ANNOTATOR. Accuracy depends only on the SIGN of the margin,
   so it is scale-invariant and cannot detect a diverging fit
 - (D3, algebra) cDPO optimal implicit margin = `logit(1−ε)/β` — **29.4444 / 21.9722 / 10.9861**
   at β=0.1, ε = .05/.10/.25
 - **useful conversions**: `logit(0.68) = 0.7538`, `logit(0.91) = 2.3137` ⇒ moving inter-annotator
   agreement 68% → 91% is a **3.07×** larger achievable margin at fixed β
+- **the asymmetric probe for a sign flip** (W5 D1): 80/20 wins ⇒ MLE margin `logit(0.8)` =
+  **1.3863**; a gradient-ASCENT bug returns **−317.66**. On separable data both signs give
+  ‖r‖ → ∞ and are indistinguishable — use data whose MLE is finite and known
+- **the scrambled fixture's own baseline**: raw column 0 of `all_pairs` has gold accuracy
+  **0.571** ⇒ "return column 0" is measurably wrong, so the `noisy_labels` check is non-vacuous
