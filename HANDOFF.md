@@ -21,10 +21,13 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
   capstone loop + adaptive β as dual ascent (`ppo_rlhf.py`, **90/90**, 26 s full suite).
   `week-summary.md` + `retrospective.md` written.
 
-- **Week 05 — IN PROGRESS (1/5).** Preference optimization: DPO & variants. Day 1 re-scoped
+- **Week 05 — IN PROGRESS (2/5).** Preference optimization: DPO & variants. Day 1 re-scoped
   away from re-deriving Bradley-Terry (W4 D1 did that) toward **what preference data can and
   cannot identify**; `preference_models.py`, **74 checks**. Thesis: *the scale of a BT reward
-  is not a property of quality, it is a measurement of annotator disagreement.*
+  is not a property of quality, it is a measurement of annotator disagreement.* Day 2 derived
+  DPO cold (**3.55/4**) and spent the day past the cancellation; `dpo.py`, **42 checks**, all
+  four TODOs his. Thesis: *DPO is a reward model whose parameterisation happens to be a policy.*
+  Headline: **DPO ≡ tilt of the BT MLE, elementwise to 7.772e-16, non-vacuous by 2.10e+14.**
 
 ## SESSION-FORMAT PREFERENCE (he stated this explicitly on W4 D1 — obey it)
 
@@ -34,54 +37,114 @@ because of the clock. He works through sessions across a whole day (work, then h
 plenty of time; wall-clock elapsed is NOT a reason to trim. On D1 an over-eager compression of
 Block 3 had to be re-delivered in full.
 
+**RENDERING (new, W5 D2): he reads raw text, LaTeX does NOT render.** Write all maths in plain
+Unicode / fenced code blocks — `β`, `π_θ`, `σ(−M)`, `Σ_y`, `∇`, `‖r̂‖`. He asked for this
+explicitly during Block 0. Do not emit `\(...\)` or `$$...$$`.
+
 ## Next session
 
-Start with the prompt: **"Start Week 5 Day 2"**. Read
-`week-05-dpo-preference-optimization/day-02-derive-dpo/session.md` and teach it. All five W5
-session plans are already fleshed out (commit `9ece817`).
+Start with the prompt: **"Start Week 5 Day 3"**. Read
+`week-05-dpo-preference-optimization/day-03-dpo-implementation-details/session.md` and teach it.
+All five W5 session plans are already fleshed out (commit `9ece817`).
 
-**The D2 derivation is HIS ALREADY and the plan says so.** W3 D5 gave the tilt and the
-`Z depends on the prompt only` observation unprompted; W4 D1 gave Bradley-Terry. **Do not walk
-him through it — put ten minutes on the clock and grade it cold.** The day's real content is
-the four things AFTER the cancellation: the gradient's `σ(−βΔ̂)` weight (structurally identical
-to BT's, so *DPO is a reward model whose parameterisation happens to be a policy*); the
-verified equivalence DPO ≡ tilt-of-the-BT-MLE; the three assumptions; and the asymmetry that
-PPO's KL is estimated under π_θ while **DPO's constraint is evaluated only at the dataset's
-completions**.
+**D3 inherits four things from D2 that are already measured**, so use them rather than
+re-deriving:
+- **`log σ` stability** — D2's divergence run drives the margin past **−25.95**, i.e. straight
+  into the region where `np.log(sigmoid(·))` returns exactly 0.0. The fixture already exists.
+- **Label smoothing / cDPO IS D1's ε-cap put back by hand**, and D2 measured why it is needed:
+  the gradient weight on a mislabelled pair goes to **1** — the maximum in the batch
+  (best-ranked decile **0.049334** vs worst **0.951741**, **19.3×**).
+- **The reference model's logistics** — D2 measured that π_ref changes the gradient's SCALE but
+  not its DIRECTION (**2.776e-17**), so "cache π_ref's logprobs once" is not an approximation.
+- **The length prior** — W4 D4's sum-vs-mean result, now applicable to the sequence log-ratio.
 
-**Carry-forward, and it is urgent:** on W5 D1's cold recall he answered *"Z depends on current
-state"* for the clause that matters. **Re-anchor `Z = Z(x)`, a function of the PROMPT alone,
-before the derivation block starts** — the whole cancellation rests on it and it has regressed.
+**Two claims in the W5 session plans are FALSE and were corrected in D2's harness. Do not
+re-teach them:**
+1. *"The KL grows without bound"* — false in a finite space; it is capped by the point-mass
+   bound `max_y −log π_ref(y)` (**4.6894** measured, KL reached **1.4660**). In a real LM the
+   bound is astronomically large, so "unbounded" is the practical statement only.
+2. *"Under μ ≠ π_ref the chosen logprob falls, and with μ = π_ref it rises"* — it falls both
+   ways, and the sign is a **transient**. The stable, correct signal is the **KL tax: 5.11×**
+   for the same margin on the same eight sequences. Check D3/D4/D5 plans for recurrences.
 
-### W5 D1 grading, and the state of the process gaps
+### W5 D2 grading, and the state of the process gaps
 
-Block 0 cold recall **4.55/8-equivalent → 4.55/7 (65%)**, up from D5's 62.5% and D4's 56%.
-Block 1 (the three W4 D5 drills, cold, previously unattempted) **1.45/3 (48%)**. Coding
-**74/74**, all eight TODOs his own.
+Block 0 cold recall **3.95/6 (66%)**, up from D1's 65%. Block 1 (the derivation, cold, graded
+on four axes) **3.55/4 (89%) — the best graded block of Week 5.** Coding **42/42**, all four
+TODOs his own.
 
-- **THE FINDING OF THE DAY, and it is actionable.** Three things were missing from drill 1 and
-  drill 3: the instrument panel **as pairs**, **checkpoint selection**, and **the ablation
-  numbers**. Those are *exactly* the three things `train_rlhf` logging, `select_checkpoint` and
-  `ablate` — **the three TODOs that were written FOR him on W4 D5 at his request.** Three for
-  three. **The code he writes comes back cold; the code written for him does not.** Rule to
-  apply from now on: when the clock is the argument for handing something over, **hand over the
-  harness, never the TODO.**
-- **NUMBERS GAP — SEVENTH SESSION, and the diagnosis has finally sharpened.** "Write the number
-  before the prose" was tried for the first time and **failed** — Q5 produced three correct
-  clipping mechanisms and *not one number*. But Q7 shows he can DERIVE at full quality under
-  pressure (the `k3 ≥ 0` minimisation and `E[k3] = KL` were both clean and complete), and Q5
-  shows the *mechanisms* are now automatic. **What is missing is specifically STORED SCALARS,
-  and retrieval is the wrong verb.** ⇒ created **`shared/numbers-card.md`**: one line per
-  measured result, W1–W5. **New standing instruction: he READS IT ALOUD at the start of every
-  recall block.** Recognition, not retrieval. Appended to at the end of every session.
-- **Second clause — fourth week, unchanged.** The cleaned-data drill explicitly asked for three
-  parts (the chain, three fixes with costs, the closing clause); he delivered one link of one
-  part. Scored **0.25**. Keep enforcing "count the parts in the question before you start".
-- **He reaches for the known result when the question is about a new one.** Asked whether the
-  BT MLE exists under a perfect annotator, he answered with the *location* invariance — true,
-  and yesterday's theorem, but the wrong pathology. Same shape on "first thing you check at 96%
-  accuracy": right object (the comparison graph), inverted conclusion. **Worth one probe per
-  session: "is that the obstruction, or just an obstruction you already know?"**
+- **THE FINDING OF THE DAY — a STRUCTURE gap, distinct from the second-clause gap.** He produced
+  the assumption audit **unprompted, as a margin annotation, while deriving** in Block 1. Forty
+  minutes later, asked to enumerate the three conditions for DPO≡RLHF, he scored **0.25**. The
+  material is present; the retrieval *structure* is not. **He can emit it while the algebra is
+  flowing and not on demand as a list.** Fix given, keep enforcing it: **the three conditions ARE
+  the three steps of the proof** — recover them by replaying the proof and asking "what did I use
+  at this step?" Ask this again on D3 and D5.
+- **RETIRED: the Z(x) cancellation stated as a REASON.** Block 1 scored 0.7 (used it, did not
+  state it); on the re-derivation later the same session he wrote *"Z(x) cancels as it depends on
+  prompt only"* on the page unprompted. Closed within the session. The D1 carry-forward
+  (`Z = Z(x)`, prompt only) is also closed — answered correctly, cold, in Block 0.
+- **NUMBERS GAP — first real movement in eight sessions.** He read the numbers card and Q4 came
+  back with **both** numbers before the prose (45 vs 4.5; actuals 45.66 / 4.6967). Recognition is
+  working where retrieval did not. **Keep the read-aloud instruction; it is the intervention that
+  moved.** But Q3 (the `tilt(cr,cβ)` identity) was a **REGRESSION to 0.0** — it was D1's stage
+  `scale`, one day old. The card had it; he did not use it for that item.
+- **Known-result reflex — THIRD sighting, and the standing probe fired correctly.** Asked what
+  the DPO gradient does *not* control, he answered "shift invariance" — yesterday's location
+  gauge, a result he already owns — instead of the marginal likelihood. Same shape as D1's "does
+  the MLE exist?" → location invariance. **Keep asking: "is that the obstruction, or just an
+  obstruction you already know?"** It works: it produced the best teaching moment of the day
+  (the simplex-fixes-the-gauge result came directly out of correcting this).
+- **Second-clause gap — FIFTH week, unchanged.** Block 2 asked for the gradient **plus (a) plus
+  (b)**; he delivered the gradient. Block 4's Q1 asked for three clauses; he gave two. Keep
+  enforcing "count the parts in the question, write the count in the margin, then answer."
+- **He asked for Block 3's answers rather than deriving them.** Given, with the trade named. The
+  retention was moved to the interview drill and to the coding checks, which verify Parts 1 and 3
+  numerically. Watch whether Block 3's content comes back cold on D4 — if it does not, the W5 D1
+  rule ("the code he writes comes back cold; the code written for him does not") generalises
+  from code to derivations and should be enforced for both.
+
+### Perennials — status after W5 D2
+
+- **Sources of REINFORCE variance: still the SAME three missing** on the fifth ask — the
+  policy's own **entropy**, **environment stochasticity** (name it *because it is exactly zero
+  for LLMs*: deterministic append ⇒ all LLM-PG variance is policy-side), and
+  **off-policy-ness itself**. He offered "model variance itself" only.
+- **`tilt(cr, cβ) == tilt(r, β)` REGRESSED to 0.0 one day after measuring it to 3.9e-16.** Ask it
+  every session this week. The consequence clause is what matters: only `r/β` is identified, so
+  **β is a property of the annotation process** and "just use 0.1" is a confession.
+- **k1/k2/k3 engineering half: not asked on W5 D2.** Still first-clause-only as of D1.
+- **`dE[r]/dKL = β`: not asked on W5 D2.** Sign retired, shape (concave in **KL**) was the D1 gap.
+- **Ψ ladder: not asked.** Occasional check only.
+
+### Bug families from W5 D2 (four of five are repeats)
+
+1. **Missing `−` on an NLL — SECOND SIGHTING IN TWO DAYS.** `L = logsigmoid(M).mean()` is a
+   log-*likelihood*. Diagnostic signature: `analytic == −FD` to **1.161e-10** ⇒ the loss and
+   gradient are inconsistent by exactly a constant, so **exactly one of them is wrong**; a random
+   disagreement would mean the gradient. Resolved by the **asymmetric probe**: at θ=θ_ref every
+   margin is 0 so the NLL is `+log 2 = +0.693147`; the bug read **−0.693147**. Yesterday's
+   version of this was *undetectable* because separable data sends ‖r‖→∞ under both signs. **The
+   fixture with a known finite answer is what makes a sign bug cheap.**
+2. **`pi_final = softmax_np(theta)` — states ≠ sequences, SECOND SIGHTING.** Shape (7,3) summing
+   to **7.0** instead of (15,) summing to **1.0**. The trap that lets it survive: **the gradient
+   of a sequence quantity has TOKEN shape** (`grad_sequence_logprob` correctly returns (7,3)), so
+   shape tells you the level of the *parameters*, not of the *value*. Same family as W3 D5's
+   per-state KL 1.053 vs sequence KL 5.056 and W4 D3's "the RM scores completed text, not a
+   state". **The one-line test given to him: does it sum to 1, or to n_states?** Also given: only
+   `Σ_t` crosses the token→sequence boundary; `softmax` never does.
+3. **`history = []` then `history[t].append(...)`** → IndexError. It is a dict keyed by step and
+   you assign. **LATENT**: no stage passes `record`, so the suite would have gone 42/42 with the
+   bug in it. Untested branch — same reason W3 D5 passed 94/94 on a wrong number.
+4. **Returned `pi` where the contract said `(pi_star, r_bt)`** — the only thing between 35/35 and
+   42/42. **Read the RETURN annotation as a checklist**, the same way W4 D4 taught for the
+   parameter list.
+5. **Re-implemented a provided helper** (`implicit_reward` hand-rolled what
+   `all_sequence_logprobs` already is). Standing rule restated: *if you finish a file without
+   calling a provided helper, that is a bug report about your own code.*
+6. *(harness-side, mine)* `‖g_pair‖ ∝ σ(−M)` is FALSE — it is `β·σ(−M)·‖score_w − score_l‖`, and
+   the score norm varies **1.81×** across pairs. A proportionality check must divide out
+   *everything* that varies.
 
 ### Retired on W5 D1
 

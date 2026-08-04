@@ -2,9 +2,62 @@
 
 ## Current Status
 
-- Current week: **Week 05 — Preference Optimization: DPO & Variants — IN PROGRESS (1/5)**.
+- Current week: **Week 05 — Preference Optimization: DPO & Variants — IN PROGRESS (2/5)**.
   Week 04 COMPLETE (5/5).
-- Current day: **Week 5 Day 01 DONE** — *what preference data can and cannot identify*.
+- Current day: **Week 5 Day 02 DONE** — *deriving DPO, and then past where the paper stops*.
+  `code/dpo.py`, **42 staged checks**, eight stages, 24 s full / 12 s `--fast`, under
+  `-W error::RuntimeWarning`. He implemented all four TODOs. Imports D1's `fit_bt` / `tilt`.
+  The derivation itself was produced **cold and graded 3.55/4** in the first block; the day's
+  content is the four things AFTER the cancellation. One thesis:
+  **DPO is a reward model whose parameterisation happens to be a policy** — the gradient weight
+  `σ(−M)` is the same function of the same object as W4 D1's Bradley-Terry weight, so everything
+  true of RM fitting is true of DPO training, including D1's existence theorem.
+  **Headline 1 — the equivalence, VERIFIED.** `train_dpo` vs `bt_then_tilt` (fit BT over
+  sequences, then tilt π_ref exactly) — two algorithms sharing no code path — agree
+  **elementwise to 7.772e-16** over all 15 sequences. Wrong-β tilts differ by
+  **6.15e-02 / 8.25e-02 / 1.63e-01** at β = 0.25/1.0/2.0 ⇒ **non-vacuous by 2.10e+14**.
+  "DPO is equivalent to RLHF" is now a number, not a citation. **The three conditions are
+  literally the three steps of the proof**: (1) the policy class represents the tilt exactly,
+  (2) the BT MLE exists (Ford, D1), (3) π_ref is the distribution the pairs came from — plus the
+  silent fourth, that the PPO side is run to convergence. Condition 1 bites hardest, and not as
+  "approximation error": once the class misses the tilt, DPO's optimum is **not even the
+  projection** of it in any divergence, because `L_BT` is a finite sum over *dataset pairs*
+  weighted by `σ(−M)` ⇒ **DPO allocates approximation error by the DATA distribution, PPO by the
+  POLICY's occupancy.**
+  **Headline 2 — the gauge is fixed by the simplex** (came out of *his* objection that
+  `Σ_y π_ref e^{r̂/β} = 1` is a tautology — it is, and that is the point).
+  `r̂ = β log(π/π_ref) = r − β log Z(x)` to **4.441e-16**, offset `β log Z = +1.425614`, and
+  `Σ π_ref e^{r̂/β} = 1.000000000000000`. So the parameterisation returns the UNIQUE member of
+  the BT equivalence class whose normaliser is 1 — you do not get to choose the gauge, and
+  therefore **you cannot lower `r̂(y_l)` without raising `r̂` somewhere else.** Confirmed
+  independently: implicit reward == BT MLE **after centring (1.332e-15)** and **not before
+  (0.7454 = exactly the offset)**.
+  **Headline 3 — the divergence, and a plan claim falsified.** On a 7-pair perfect matching:
+  accuracy hits **1.0 at step 2** (KL **0.1129**), step 20 KL **0.8486**, step 20 000 KL
+  **1.4660** with `log π(y_l) = −25.9537` (monotone at all 20 000 steps), loss **4.834e-05**,
+  losers' mass **0.343396 → 1.649e-09**. **But "the KL grows without bound" is FALSE in a finite
+  space** — it is capped by the point-mass bound `max_y −log π_ref(y) = 4.6894`. The harness
+  asserts the true version; "unbounded" is the practical statement, not the mathematical one.
+  **Headline 4 — both logprobs fall AT THE CONVERGED OPTIMUM**, not on the divergent fixture:
+  strongly-connected data, margin **0 → +0.6155** while mean log π(y_w) goes **−3.1249 →
+  −4.0003** and log π(y_l) **−3.3174 → −5.4238**. Nothing in the gradient mentions the marginal
+  likelihood, so this is what convergence looks like.
+  **Headline 5 — the μ ≠ π_ref tax is paid in KL and the loss never reports it.** Same eight
+  sequences, columns swapped (one line of the fixture): winners in π_ref's **bulk** reach KL
+  **0.6640**, winners in its **tail** KL **3.3932** = **5.11×**, at margins 9.1364 vs 8.3982 and
+  comparable loss. Second plan claim falsified: the chosen logprob does **not** rise when
+  μ = π_ref — it falls both ways, and on `tail` the sign is a *transient* (positive until ~step
+  5000). The stable statement is |Δw|/|Δl| = **0.0941 / 0.0056**. Mechanism for "SFT on the
+  chosen completions first": at θ = π_ref the log-ratio is **exactly 0** and every pair starts at
+  σ(0)=0.5, so it is not that the ratio *starts* large — the ratio the LABELS require is large,
+  and phase one of training is spent moving mass onto the data manifold.
+  **Headline 6 — not in the paper: shared prefixes cancel EXACTLY (0.000e+00).** The score-
+  function terms on a shared prefix are identical and subtract to zero, so in a TABULAR policy
+  the shared prefix of a pair contributes nothing to the DPO gradient ⇒ "pushing y_l down drags
+  y_w down" needs shared **parameters**, not shared tokens. Also: **π_ref changes the gradient's
+  SCALE but not its DIRECTION** (2.776e-17) ⇒ at gradient level π_ref is a per-pair learning-rate
+  multiplier and nothing else.
+- Previous day: **Week 5 Day 01 DONE** — *what preference data can and cannot identify*.
   `code/preference_models.py`, **74 staged checks**, nine stages, 38 s full / 8 s `--fast`,
   under `-W error::RuntimeWarning`. He implemented all eight TODOs.
   Day 1 was re-scoped away from re-deriving Bradley-Terry (W4 D1 already did that) toward the
@@ -385,7 +438,25 @@ Topics to revisit:
   p_ref(y)]` applied before the advantages ⇒ no estimator knows it exists (consistent with "the KL
   term is not a Psi — it modifies r"). Uses only rollout-time quantities ⇒ `pi_ref` can be dropped
   after rollout. Stale after step 1, exactly like the ratio
-- [ ] DPO derivation (W5 D2) — `r = β log(π*/π_ref) + β log Z`; `Z(x)` intractable because the action is a whole COMPLETION (`|V|^T`), not because logits are unavailable; it depends on the PROMPT only ⇒ cancels pairwise (W3 D5 Part 4, seen unprompted)
+- [x] **DPO derivation (W5 D2)** — `r = β log(π*/π_ref) + β log Z`; `Z(x)` intractable because the action is a whole COMPLETION (`|V|^T`), not because logits are unavailable; it depends on the PROMPT only ⇒ cancels pairwise. **Produced cold and graded 3.55/4**, and the cancellation was stated *as a reason* on the re-derivation
+- [ ] **DPO ≡ tilt of the BT MLE, and the three conditions** (W5 D2) — verified **elementwise to
+  7.772e-16**, non-vacuous by **2.10e+14** against a wrong-β control. The three conditions ARE
+  the three steps of the proof: policy class represents the tilt / BT MLE exists / π_ref is the
+  pair distribution (+ the silent fourth: the PPO side run to convergence). **Could not
+  enumerate them on demand (0.25) forty minutes after writing the audit unprompted** — a
+  STRUCTURE gap, recover by replaying the proof and asking "what did I use here?"
+- [ ] **Where did the KL go — all THREE clauses** (W5 D2, scored 0.6 on two): (i) consumed in the
+  algebra, surviving only as π_ref in the ratio and in the gradient only as a scalar weight;
+  (ii) off the dataset **nothing** enforces it; (iii) **the MEASURE** — PPO's is reverse KL under
+  π_θ on generated samples, DPO's is evaluated under the DATA distribution at fixed completions.
+  *The KL in the derivation is not the KL that gets enforced.*
+- [ ] **The gauge is fixed by the simplex** (W5 D2) — `r̂ = r − β log Z(x)`, the unique class
+  member with normaliser 1; `Σ π_ref e^{r̂/β} = 1` identically ⇒ **cannot lower `r̂(y_l)` without
+  raising `r̂` elsewhere.** In reward space `r → r+c` is free; in policy space it is not
+- [ ] **Both logprobs fall at the CONVERGED optimum** (W5 D2) — margin **+0.6155** while chosen
+  logprob falls **0.8754**; no gradient term mentions the marginal likelihood
+- [ ] **The μ≠π_ref tax is paid in KL** (W5 D2) — **5.11×** for the same margin, same eight
+  sequences, columns swapped. Hence SFT-on-chosen-first, with a mechanism
 - [ ] GRPO group baseline
 - [x] KV-cache memory math (`2·L·n_kv·d_head·T·B·bytes`; 512 KiB/tok, 2 GiB@4k, 64 GiB@8k×16; done W2 D4)
 - [ ] Arithmetic intensity / roofline: decode ≈1 op/byte → memory-bound; batch to amortize weights (add BW-tied levers: quant, spec-decode)

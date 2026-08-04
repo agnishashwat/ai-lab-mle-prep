@@ -115,3 +115,34 @@ Format: `quantity = value (condition)`.
   ‖r‖ → ∞ and are indistinguishable — use data whose MLE is finite and known
 - **the scrambled fixture's own baseline**: raw column 0 of `all_pairs` has gold accuracy
   **0.571** ⇒ "return column 0" is measurably wrong, so the `noisy_labels` check is non-vacuous
+
+### D2 — deriving DPO (`code/dpo.py`, **42 checks**, 24 s; 15 sequences, 7 states, β=0.5)
+
+- **THE EQUIVALENCE.** `train_dpo` == `bt_then_tilt` **elementwise to 7.772e-16** over all 15
+  sequences — two algorithms sharing no code path. Wrong-β tilts differ by
+  **6.15e-02 / 8.25e-02 / 1.63e-01** at β = 0.25/1.0/2.0 ⇒ **non-vacuous by 2.10e+14**
+- **the gauge.** `Σ_y π_ref e^{r̂/β} = 1.000000000000000` identically; `r̂ = r − β log Z(x)` to
+  **4.441e-16** with offset `β log Z = +1.425614`. Implicit reward == BT MLE **after** centering
+  (**1.332e-15**) and **not** before (**0.7454**, = the offset). ⇒ the simplex FIXES the gauge,
+  so you cannot lower `r̂(y_l)` without raising `r̂` elsewhere
+- **the gradient.** FD **1.161e-10**; loss at θ=θ_ref is **exactly +log 2 = 0.693147**;
+  `‖g‖ = β·σ(−M)·‖score_w − score_l‖` to **3.331e-16**; best-ranked decile weight **0.049334**
+  vs worst **0.951741** = **19.3×** ⇒ mislabels get weight → 1, the MAXIMUM in the batch
+- **π_ref changes the gradient's SCALE, not its DIRECTION**: two references with weights
+  **0.448705 vs 0.673414** give gradients equal after dividing by their weights to **2.776e-17**
+- **divergence on a matching** (7 pairs): accuracy hits **1.0 at step 2** with KL **0.1129**;
+  step 20 KL **0.8486**; step 20 000 KL **1.4660**, `log π(y_l) = −25.9537`, loss **4.834e-05**,
+  losers' mass **0.343396 → 1.649e-09**. **KL is BOUNDED by max_y −log π_ref(y) = 4.6894** (the
+  point-mass bound) — "grows without bound" is FALSE in a finite space
+- **both logprobs fall AT THE CONVERGED OPTIMUM** (strongly-connected fixture): margin
+  **0 → +0.6155**, mean log π(y_w) **−3.1249 → −4.0003 (−0.8754)**, log π(y_l) **−3.3174 →
+  −5.4238**. Not a divergence artifact
+- **the μ ≠ π_ref tax is paid in KL**: same 8 sequences, columns swapped ⇒ winners in π_ref's
+  bulk KL **0.6640** vs tail KL **3.3932** = **5.11×**, at margins **9.1364 vs 8.3982** and
+  comparable loss. The SIGN of Δlog π(y_w) is a transient (positive on `tail` until ~step 5000)
+  — |Δw|/|Δl| = **0.0941 / 0.0056** is the stable statement
+- **shared prefixes cancel EXACTLY** (0.000e+00 at the root state): in a TABLE the shared prefix
+  of a pair contributes nothing to the DPO gradient ⇒ "y_l's pushdown drags y_w down" needs
+  shared PARAMETERS, not shared tokens
+- at θ = π_ref the implicit reward is **exactly 0.0** everywhere ⇒ every pair starts at weight
+  **σ(0) = 0.5**. The ratio does NOT start large; the ratio the LABELS require is what is large
