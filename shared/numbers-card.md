@@ -146,3 +146,25 @@ Format: `quantity = value (condition)`.
   shared PARAMETERS, not shared tokens
 - at θ = π_ref the implicit reward is **exactly 0.0** everywhere ⇒ every pair starts at weight
   **σ(0) = 0.5**. The ratio does NOT start large; the ratio the LABELS require is what is large
+
+### D3 — implementation details (`code/dpo_trainer.py`, **51 checks**, TinyGPT)
+
+- **cDPO finite optimum at β=0.3:** `Δ̂*=logit(1−ε)/β` =
+  **9.814797 / 7.324082 / 4.620981 / 2.063464** at ε = .05/.10/.20/.35; gradient at each
+  analytic optimum below **3e-17**, curvature positive
+- **length prior:** constant per-token drift +0.2 ⇒ sum margin-vs-length slope
+  **+0.200000**, mean slope **0.000000**. Sum asks `d_new>0`; mean asks `d_new>d̄`
+- **reference cache:** chosen + rejected = **2 fp32 scalars/pair = 8 bytes/pair**; exactly
+  **2 preprocessing forwards**; cached vs fresh **bitwise exact**; trainer reference calls **0**
+- **precision:** at T=256, `|fp32−bf16 sum| = 1.026245` vs representative
+  `β·margin = 0.050000` ⇒ numerical error **20.525× the signal**
+- **SFT initialization:** token NLL **2.071305→0.396558**; chosen mean logprob/token
+  **−2.081233→−0.474107**; clone warmed checkpoint into BOTH roles ⇒ initial log-ratios
+  **exactly 0** and DPO NLL **+log 2 = 0.693147**
+- **TinyGPT full run:** loss **0.693147→0.549205**; margin **0→4.3369**; `|r̂|`
+  **0→0.7751**; exact subset KL **0→0.92182**; expected length **2.1227→2.3867**
+- **chosen-logprob sign is not a diagnostic:** fast fixture Δchosen **−0.59155**,
+  Δrejected **−2.06221**; full fixture Δchosen **+2.21402**, Δrejected **−2.12287**.
+  Use Day 2's **5.11× KL tax at matched margin/loss** for μ≠π_ref
+- **correct boundaries:** gradient no-op is **β→0**; ε=.5 means **zero-margin target**, not
+  constant loss; fp32 naive form saturates at **z=+40** and underflows at **z=−100**

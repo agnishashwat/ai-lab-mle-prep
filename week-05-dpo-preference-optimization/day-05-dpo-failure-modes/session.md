@@ -25,8 +25,9 @@ The four failure modes, each with a mechanism already derived this week:
 
 1. **Divergence / rejected-logprob collapse** — Ford (D1), measured (D2). Silent: accuracy
    1.0, loss → 0.
-2. **Both logprobs falling** — the unconstrained marginal (D2) plus \(\mu\ne\pi_{\text{ref}}\)
-   (D3).
+2. **Both logprobs falling** — the unconstrained marginal (D2-D3). A
+   \(\mu\ne\pi_{\text{ref}}\) mismatch is a separate invisible KL tax; it does not have a
+   stable chosen-logprob sign.
 3. **Length exploitation** — the extensive implicit reward with **no resistance term** (D3);
    worse than PPO's case, where the resistance existed but was bounded (W4 D4).
 4. **Off-distribution drift the loss cannot see** — the constraint is evaluated at dataset
@@ -53,8 +54,8 @@ You are going to rewrite its DPO paragraph with this week's numbers.
 Numbers on the page before prose, every time.
 
 1. Ford's condition; the noiseless corollary; what it predicts about a DPO dataset.
-2. The \(\varepsilon\)-cap and cDPO's optimal margin — the same number from two sides. Values
-   at \(\varepsilon=0.1\).
+2. The \(\varepsilon\)-cap and cDPO's optimal margin — the same number from two sides. At
+   \(\varepsilon=0.1\): \(M^*=2.197225\), and \(\hat\Delta^*=7.324082\) at D3's \(\beta=0.3\).
 3. `tilt(cr, cβ)` and the annotator-agreement consequence.
 4. Where the KL went, and on which distribution DPO's implied constraint is evaluated.
 5. The 2-axis variant grid, from memory.
@@ -64,7 +65,8 @@ Numbers on the page before prose, every time.
 
 1. The three conditions for DPO ≡ RLHF; your measured agreement; which condition a real setup
    violates first and what its signature is in the logs.
-2. Both logprobs fall: two causes, distinguishing experiment, your measured numbers.
+2. Both logprobs can fall: the missing marginal term, why the chosen-logprob sign cannot
+   diagnose reference mismatch, the distinguishing KL experiment, and your measured numbers.
 3. Why DPO is more exposed to length than PPO — and why PPO's protection was insufficient
    anyway (cite W4 D4's bounded-resistance result and \(\kappa\)).
 4. IPO's motivation in the language of Ford's theorem; its cost; the fixture where the cost

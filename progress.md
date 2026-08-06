@@ -2,9 +2,42 @@
 
 ## Current Status
 
-- Current week: **Week 05 — Preference Optimization: DPO & Variants — IN PROGRESS (2/5)**.
+- Current week: **Week 05 — Preference Optimization: DPO & Variants — IN PROGRESS (3/5)**.
   Week 04 COMPLETE (5/5).
-- Current day: **Week 5 Day 02 DONE** — *deriving DPO, and then past where the paper stops*.
+- Current day: **Week 5 Day 03 DONE** — *DPO implementation details: length, reference caching,
+  cDPO, SFT initialization, and numerics*. `code/dpo_trainer.py`, **51 staged checks**, seven
+  stages, built on Week 2's `TinyGPT`, under `-W error::RuntimeWarning`.
+  **Headline 1 — cDPO is Day 1's ε-cap put back from the loss side.**
+  `dL/dΔ̂ = β[σ(βΔ̂)−(1−ε)]`, so
+  `Δ̂*=log((1−ε)/ε)/β`, finite for every ε>0 and divergent at ε=0. At β=0.3, the analytic
+  optima **9.814797 / 7.324082 / 4.620981 / 2.063464** for ε=.05/.10/.20/.35 had gradients
+  below 3e-17 and positive curvature. Past the optimum, cDPO reverses the margin rather than
+  merely slowing it. Corrected boundary: ε=.5 is a zero-margin target, not constant loss;
+  β→0, not uniformly β→∞, is the no-op boundary.
+  **Headline 2 — sum vs mean is a measured length prior.** On constant per-token drift +0.2,
+  sum-reduced implicit reward had slope **+0.200000** against length while mean-reduced reward
+  had slope **0.000000**. Sum asks the marginal token to beat zero; mean asks it to beat the
+  running average. DPO has no explicit on-policy `−β KL_t` resistance term.
+  **Headline 3 — the reference is a preprocessing artifact on fixed data.** Cached chosen and
+  rejected reference logprobs were **bitwise exact**, required exactly **2 forwards**, and cost
+  **2 fp32 scalars = 8 bytes/pair**. The trainer has no `model_ref` argument, so reference calls
+  after preprocessing are impossible by construction.
+  **Headline 4 — fp32 accumulation is part of the algorithm.** At T=256, the bf16 path differed
+  from fp32 by **1.026245**, versus representative `β·margin=0.050000`: numerical error was
+  **20.525× the signal**. Stable probes: fp32 `z=+40` makes naive `log(sigmoid(z))` exactly 0;
+  `z=−100` makes naive NLL infinite while `−logsigmoid(z)=100`.
+  **Headline 5 — SFT must seed BOTH roles.** Chosen-token NLL **2.071305→0.396558** and chosen
+  mean logprob/token **−2.081233→−0.474107**. Cloning that checkpoint into policy and reference
+  restored exactly zero initial log-ratios and DPO NLL **+log 2=0.693147**.
+  **Headline 6 — the TinyGPT trainer exposes what loss/accuracy hide.** Full run loss
+  **0.693147→0.549205**, margin **0→4.3369**, exact subset KL **0→0.92182**, expected length
+  **2.1227→2.3867**. On the fast fixture chosen logprob fell **−0.59155** while rejected fell
+  **−2.06221**; on the full fixture chosen rose **+2.21402** while rejected fell **−2.12287**.
+  The chosen-logprob sign is fixture/phase-sensitive and is not a μ≠π_ref diagnostic.
+  Cold recall **3.9/6 (65%)**, D1-D2 recall **8/14 (57%)**, cDPO derivation **3/4**,
+  interview drills **4/9** before resets, coding **51/51**. He wrote the core tensor/math
+  bodies with hints; final train snapshot bookkeeping was refactored for him at his request.
+- Previous day: **Week 5 Day 02 DONE** — *deriving DPO, and then past where the paper stops*.
   `code/dpo.py`, **42 staged checks**, eight stages, 24 s full / 12 s `--fast`, under
   `-W error::RuntimeWarning`. He implemented all four TODOs. Imports D1's `fit_bt` / `tilt`.
   The derivation itself was produced **cold and graded 3.55/4** in the first block; the day's

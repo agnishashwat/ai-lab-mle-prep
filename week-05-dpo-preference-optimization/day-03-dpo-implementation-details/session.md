@@ -99,12 +99,13 @@ dominated by kernel noise.
   epoch staleness, no \(\theta_{\text{old}}\), no clipping, and therefore **none of PPO's
   freeze-line hazards.** Say what that buys and what it costs — this is the clean half of
   DPO and it deserves to be stated as clearly as the failure modes.
-- **Numerics.** `log σ(z)` = `-softplus(-z)`; the naive form underflows for \(z\lesssim-30\)
-  and *that region is exactly where a diverging run lives*, so the naive form silently
-  reports 0 loss on the pairs that are hurting you. The margin is a difference of two
-  \(O(T)\) sums; in bf16 with \(T=512\) the summation error is comparable to \(\beta\times\)
-  the margin you are trying to measure ⇒ accumulate logprobs in fp32, and compute reference
-  logprobs with the identical attention kernel.
+- **Numerics.** `log σ(z)` = `-softplus(-z)`. In fp32, a sufficiently large *positive*
+  \(z\) makes `sigmoid(z)` round to exactly 1, so the naive log becomes exactly 0 and
+  erases a small but nonzero loss; a sufficiently negative \(z\) can underflow sigmoid
+  and turn a finite NLL into infinity. The threshold depends on dtype. The margin is a
+  difference of two \(O(T)\) sums; in bf16 with \(T=512\) the summation error can be
+  comparable to \(\beta\times\) the margin you are trying to measure ⇒ accumulate
+  logprobs in fp32, and compute reference logprobs with the identical attention kernel.
 
 ### 0:40-1:00 — Derivation: conservative DPO, and the optimum that exists
 
@@ -154,27 +155,30 @@ noise rate** — the two knobs the day is about.
 5. `sft_warmup(...)` — the fix, so it can be ablated rather than assumed.
 
 **Checks with teeth:**
-- **`logsigmoid` vs naive**: assert the naive form returns exactly 0.0 at \(z=-40\) while
-  `logsigmoid` returns \(\approx-40\); then assert a full training step's loss differs
-  between the two implementations by a reported factor once any pair passes \(z<-30\).
-- **The length prior, both directions.** With the confound on, assert `sum` mode grows mean
-  generated length monotonically and `mean` mode does not; report both slopes. With the
-  confound off, assert neither does — so the check is measuring the confound and not the
-  reduction.
+- **`logsigmoid` vs naive, with dtype stated**: in fp32, assert the naive form returns
+  exactly 0.0 at \(z=+40\) while stable `logsigmoid` preserves the small negative value;
+  at \(z=-100\), assert the naive NLL is infinite while stable `-logsigmoid` is 100.
+- **The length prior without a brittle training-curve assertion.** On a controlled
+  per-token-drift fixture, assert `sum` mode has the predicted positive length slope and
+  `mean` mode has zero slope. Log generated length during TinyGPT training, but do not
+  require it to be monotone under every seed.
 - **cDPO's finite optimum.** Sweep \(\varepsilon\); assert the converged implicit margin
   matches \(\frac1\beta\log\frac{1-\varepsilon}{\varepsilon}\) within tolerance at each, and
   that \(\varepsilon=0\) does not converge. **Same sweep shape as D1's, from the other side —
   print them in one table.**
-- **Both logprobs fall, and the fix.** Assert chosen logp *decreases* when pairs come from
-  \(\mu\ne\pi_{\text{ref}}\); assert `sft_warmup` flips its sign; report both curves.
+- **Both logprobs are instrumented; mismatch uses the stable diagnostic.** Log chosen and
+  rejected logprobs separately, but do not assert either sign: Day 2 showed both can fall
+  even when \(\mu=\pi_{\text{ref}}\), and the sign can be transient. Reuse the measured
+  \(5.11\times\) KL mismatch tax; assert instead that `sft_warmup` raises chosen-data
+  likelihood and that cloning the warmed checkpoint into both policy and reference
+  restores exactly zero initial log-ratios.
 - **Reference caching is exact**: cached logprobs equal freshly-computed ones to \(0.0\), and
   fp32 accumulation vs bf16 differs by a reported amount at \(T=256\) — with the second
   number compared against \(\beta\times\) the typical margin, so the reader can see whether
   it matters.
-- **No-op regression**: at \(\beta\to\infty\) DPO's gradient \(\to 0\); at
-  `label_smoothing=0.5` the loss is constant in \(\hat\Delta\) (exactly \(\log 2\)'s
-  derivative structure) — an asymmetric probe, per W4 D4's lesson that \(\sigma(0)\) cannot
-  detect a sign flip.
+- **Boundary regressions, corrected.** At \(\beta\to0\), DPO's gradient with respect to
+  the log-ratio margin goes to 0. At `label_smoothing=0.5`, the target is a tie: the loss
+  is minimized at zero margin and increases away from it; it is not constant.
 
 ### 1:50-2:00 — Deliverable & Next Session
 

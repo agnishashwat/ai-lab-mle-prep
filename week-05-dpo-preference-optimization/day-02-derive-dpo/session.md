@@ -188,12 +188,14 @@ is exact. A private reference implementation is run first.
   after centering — and *not* before centering. Both halves asserted.
 - **Divergence on a matching.** On the perfect-matching fixture: assert
   \(\log\pi_\theta(y_l)\) decreases monotonically without bound, the loss \(\to0\), and the
-  exact KL grows without bound while the *training* metrics (accuracy, margin) look perfect.
-  Report KL at the step where accuracy first hits 1.0 and at 10× that many steps.
-- **Both logprobs fall.** On a fixture where pairs are drawn from \(\mu\ne\pi_{\text{ref}}\),
-  assert \(\log\pi_\theta(y_w)\) also decreases even though \(y_w\) is being "preferred", and
-  report the decomposition: margin up, both terms down. Then assert that with
-  \(\mu=\pi_{\text{ref}}\) the chosen logprob rises. **One line of the fixture changes.**
+  exact KL rises toward the finite point-mass bound
+  \(\max_y-\log\pi_{\text{ref}}(y)\) while the *training* metrics (accuracy, margin) look
+  perfect. Report the bound, KL where accuracy first hits 1.0, and KL at 10× that many steps.
+- **Both logprobs can fall.** On the strongly-connected fixture, assert
+  \(\log\pi_\theta(y_w)\) also decreases at the finite optimum even though \(y_w\) is being
+  "preferred", and report the decomposition: margin up, both terms down. Separately compare
+  winners in \(\pi_{\text{ref}}\)'s bulk versus tail at matched margin/loss and measure the
+  extra KL cost. Do **not** assert either sign for chosen logprob; it is transient.
 - **Gradient weight is \(\sigma(-\beta\hat\Delta)\)**: assert the per-pair gradient norm is
   proportional to it, to \(10^{-12}\), and report the ratio of contributions between the
   best-ranked and worst-ranked decile.

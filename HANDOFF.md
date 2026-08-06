@@ -21,13 +21,19 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
   capstone loop + adaptive β as dual ascent (`ppo_rlhf.py`, **90/90**, 26 s full suite).
   `week-summary.md` + `retrospective.md` written.
 
-- **Week 05 — IN PROGRESS (2/5).** Preference optimization: DPO & variants. Day 1 re-scoped
+- **Week 05 — IN PROGRESS (3/5).** Preference optimization: DPO & variants. Day 1 re-scoped
   away from re-deriving Bradley-Terry (W4 D1 did that) toward **what preference data can and
   cannot identify**; `preference_models.py`, **74 checks**. Thesis: *the scale of a BT reward
   is not a property of quality, it is a measurement of annotator disagreement.* Day 2 derived
   DPO cold (**3.55/4**) and spent the day past the cancellation; `dpo.py`, **42 checks**, all
   four TODOs his. Thesis: *DPO is a reward model whose parameterisation happens to be a policy.*
   Headline: **DPO ≡ tilt of the BT MLE, elementwise to 7.772e-16, non-vacuous by 2.10e+14.**
+  Day 3 implemented the training contracts on Week 2's TinyGPT; `dpo_trainer.py`, **51 checks**.
+  Headlines: cDPO's optimum is exactly D1's ε-cap divided by β; sum-vs-mean slopes
+  **0.200000 vs 0.000000**; the exact reference cache costs **8 bytes/pair**; bf16 accumulation
+  error at T=256 was **20.525×** a representative `β·margin`; SFT seeded both policy and
+  reference; and the chosen-logprob sign changed across fixtures, confirming it is not a
+  reference-mismatch diagnostic.
 
 ## SESSION-FORMAT PREFERENCE (he stated this explicitly on W4 D1 — obey it)
 
@@ -43,29 +49,76 @@ explicitly during Block 0. Do not emit `\(...\)` or `$$...$$`.
 
 ## Next session
 
-Start with the prompt: **"Start Week 5 Day 3"**. Read
-`week-05-dpo-preference-optimization/day-03-dpo-implementation-details/session.md` and teach it.
+Start with the prompt: **"Start Week 5 Day 4"**. Read
+`week-05-dpo-preference-optimization/day-04-dpo-variants/session.md` and teach it.
 All five W5 session plans are already fleshed out (commit `9ece817`).
 
-**D3 inherits four things from D2 that are already measured**, so use them rather than
-re-deriving:
-- **`log σ` stability** — D2's divergence run drives the margin past **−25.95**, i.e. straight
-  into the region where `np.log(sigmoid(·))` returns exactly 0.0. The fixture already exists.
-- **Label smoothing / cDPO IS D1's ε-cap put back by hand**, and D2 measured why it is needed:
-  the gradient weight on a mislabelled pair goes to **1** — the maximum in the batch
-  (best-ranked decile **0.049334** vs worst **0.951741**, **19.3×**).
-- **The reference model's logistics** — D2 measured that π_ref changes the gradient's SCALE but
-  not its DIRECTION (**2.776e-17**), so "cache π_ref's logprobs once" is not an approximation.
-- **The length prior** — W4 D4's sum-vs-mean result, now applicable to the sequence log-ratio.
+**D4 is organized around the three problems D1-D3 already measured. Do not teach a paper zoo;
+make him invent each fix first:**
 
-**Two claims in the W5 session plans are FALSE and were corrected in D2's harness. Do not
-re-teach them:**
-1. *"The KL grows without bound"* — false in a finite space; it is capped by the point-mass
-   bound `max_y −log π_ref(y)` (**4.6894** measured, KL reached **1.4660**). In a real LM the
-   bound is astronomically large, so "unbounded" is the practical statement only.
-2. *"Under μ ≠ π_ref the chosen logprob falls, and with μ = π_ref it rises"* — it falls both
-   ways, and the sign is a **transient**. The stable, correct signal is the **KL tax: 5.11×**
-   for the same margin on the same eight sequences. Check D3/D4/D5 plans for recurrences.
+1. **The finite optimum problem.** D1: separable BT MLE at infinity. D2: rejected probability
+   driven toward zero. D3: cDPO injects a target-noise cap:
+   `Δ̂*=log((1−ε)/ε)/β`. At β=0.3 the measured values were
+   **9.814797 / 7.324082 / 4.620981 / 2.063464** for ε=.05/.10/.20/.35. Ask him to invent IPO's
+   squared target margin before naming IPO.
+2. **The length problem.** D3's controlled drift fixture measured sum slope **+0.200000** and
+   mean slope **0.000000**. Ask him to invent division by `|y|`, then attach SimPO's cost: it is
+   no longer the original DPO/RLHF reparameterisation.
+3. **The pair/reference problem.** D3 cached the frozen reference exactly with two forwards and
+   **8 bytes/pair**; the trainer never touches `model_ref`. Ask separately how to remove pairs
+   (KTO) and how to remove the reference (ORPO/SimPO), and require the cost of each.
+
+**Corrections that D4 must inherit:**
+- At `π_θ=π_ref`, the initial log-ratio is exactly zero. The ratio required by labels can be large.
+- Chosen-logprob sign is not a μ≠π_ref diagnostic. D3 fast/full fixtures gave opposite signs;
+  Day 2's stable diagnostic is the **5.11× KL tax at matched margin/loss**.
+- `β→0`, not uniformly `β→∞`, is the no-op boundary for the log-ratio-margin gradient.
+- At ε=.5 the target is zero margin; the cDPO loss is not constant.
+- In a finite completion space reverse KL is capped by `max_y −log π_ref(y)`; "unbounded" is only
+  the practical LM statement.
+
+### W5 D3 grading, process gaps, and coding ownership
+
+Cold recall **3.9/6 (65%)**; D1-D2 recall quiz **8/14 (57%)**; cDPO derivation **3/4**;
+interview drills **4/9** before both retrieval resets; coding **51/51**.
+
+- **Second-clause gap persists.** On sum-vs-mean he gave the sum condition and omitted the mean
+  condition. The four-clause SFT question came back as two clauses. Counting the requested parts
+  still helps, but does not yet transfer without prompting.
+- **Numbers retrieval regressed.** D2 agreement came back only as "within 1e-12"; KL at first
+  perfect accuracy was absent. Card reinstalled as **7.772e-16 / 0.1129**. Keep numbers first on
+  D4: cDPO cap and length slopes.
+- **Three DPO≡RLHF conditions improved but remain imprecise.** He produced all three slots, but
+  called representability "full state space reachable" and omitted the silent fourth (RL side
+  optimized to convergence). Re-ask by replaying the three proof steps.
+- **`tilt(c r,cβ)` recovered**, but the annotation-process consequence required prompting:
+  **1.5/2**. This is movement from D2's zero.
+- **REINFORCE variance perennial unchanged.** Environment stochasticity was named; policy entropy
+  and off-policy importance-weight variance were not. Score **1/3**.
+- **Good conceptual objection:** he noticed "91% annotator agreement" is ambiguous. Preserve the
+  distinction: adjudicated correctness gives ε=.09 directly; raw pairwise agreement does not,
+  absent a restrictive independent-equal-noise model.
+- **Coding ownership:** he wrote the sequence-logprob, loss, cache, and SFT cores with hints and
+  review. He attempted the full train loop. At his request, the final optimization/snapshot
+  separation and nine-field logging bookkeeping were refactored for him. Re-ask that separation
+  cold later; code written for him has historically not returned.
+
+### Bug families from W5 D3
+
+1. **Missing `−` on an NLL — THIRD CONSECUTIVE DAY.** The first cDPO expression was a
+   log-likelihood. Standing asymmetric fixture: `M=0 ⇒ NLL=+log 2`.
+2. **Correct token values, missing sequence reduction.** The first logprob body returned
+   `(B,T−1)`, not `(B,)`. The explicit `Σ_t` is what crosses token→sequence.
+3. **`finally: return None` overrides the real return and suppresses exceptions.** `finally` is
+   restoration only (`model.train(was_training)`); return after it.
+4. **Discarded `.reduced(...)` return.** Functional helpers do not mutate a frozen dataclass.
+5. **NumPy/PyTorch dtype mismatch in mental model.** `torch.where(cond,1,0)` is int64 and
+   `.mean()` refuses it; use `cond.float().mean()`.
+6. **Logging state and operator precedence.** `step+1 % k` parsed as `step+(1%k)`; worse, stale
+   pre-update records were relabelled as final. Separate differentiable optimization from fresh
+   no-grad snapshots.
+7. **Absolute policy logprob ≠ implicit reward.** The metric is
+   `β·|log π_θ−log π_ref|`, not `β·|log π_θ|`.
 
 ### W5 D2 grading, and the state of the process gaps
 

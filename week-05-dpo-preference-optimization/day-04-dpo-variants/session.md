@@ -44,7 +44,9 @@ and one claimed problem** in each:
 ### 0:00-0:08 — Cold recall
 
 1. The three problems above, named without looking, with the D1/D3 result attached to each.
-2. cDPO's optimal margin, closed form and value at \(\varepsilon=0.1\). **Number first.**
+2. cDPO's optimal margin, closed form, and both values at \(\varepsilon=0.1\):
+   preference logit \(M^*=2.197225\), and D3's \(\hat\Delta^*=7.324082\) at \(\beta=0.3\).
+   **Numbers first.**
 3. Your D3 length slopes, sum vs mean. Numbers first.
 4. Ford's condition and the noiseless corollary.
 5. Perennial: the REINFORCE variance sources still unnamed.
@@ -52,7 +54,9 @@ and one claimed problem** in each:
 ### 0:08-0:18 — Recall quiz (graded, D1-D3)
 
 1. Where did the KL go in DPO, and on which distribution is the implied constraint evaluated?
-2. Both logprobs fall: two independent causes, and the distinguishing experiment.
+2. Both logprobs can fall: name the missing marginal-likelihood term; then explain why the
+   chosen-logprob sign cannot diagnose \(\mu\ne\pi_{\text{ref}}\), and give the KL experiment
+   that does.
 3. Why is DPO *more* exposed to length exploitation than PPO? Name the term PPO has that DPO
    does not, and say why it would not be enough anyway (W4 D4's bounded-resistance result).
 4. `tilt(cr, cβ)`: the identity and the annotator-agreement consequence.
@@ -162,10 +166,11 @@ SimPO-style), on the enumerable environment so every claim is exact.
   and many small ones; assert IPO's converged margin on the huge pair is **capped** at the
   same value as on the small ones, while DPO's is not. This is "the fix has a cost" as a
   number rather than a caveat — the W4 D5 honest-caveat habit, applied.
-- **ORPO does not exhibit both-logprobs-fall.** On D3's \(\mu\ne\pi_{\text{ref}}\) fixture,
-  assert chosen logp *rises* under ORPO and *falls* under DPO, same data, same steps. Then
-  assert DPO **with an added NLL term** also rises — isolating the SFT term as the mechanism
-  rather than the odds ratio.
+- **ORPO directly controls chosen likelihood.** On the same data and steps, assert chosen
+  NLL improves under ORPO and under DPO **with an added chosen-NLL term**. Report vanilla
+  DPO's chosen-logprob sign but do not assert it; D2-D3 showed that sign is fixture- and
+  phase-sensitive. The paired controls isolate the SFT term as the mechanism rather than
+  the odds ratio.
 - **SimPO's length behaviour and its price.** Assert mean length is flat under length
   normalization where DPO's grows (reusing D3's slopes as the control), **and** assert the
   reference-free reward's optimum has lower entropy / shorter outputs on a fixture with no
