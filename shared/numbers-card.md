@@ -168,3 +168,61 @@ Format: `quantity = value (condition)`.
   Use Day 2's **5.11× KL tax at matched margin/loss** for μ≠π_ref
 - **correct boundaries:** gradient no-op is **β→0**; ε=.5 means **zero-margin target**, not
   constant loss; fp32 naive form saturates at **z=+40** and underflows at **z=−100**
+
+### D4 — DPO variants (`code/variants.py`, **126 checks**, 48.8 s; 5×5 grid, β=0.5)
+
+- **the grid:** `L = mean_k ℓ( f(y_w), f(y_l) ) [+ λ_SFT·mean_k −log π(y_w)/|y_w| ]`.
+  5 rewards × 5 links = **25 cells**, 4 named. Grid == 5 direct implementations elementwise at
+  **max dev 0.000e+00**. The **LINK** decides if the margin is finite; the **REWARD** decides
+  where the length goes
+- **separable (D1's matching, 8000 steps, lr 0.5, point-mass bound 6.3216):**
+  DPO margin **5.9758**, KL **0.9511**; cDPO **2.1972 = ln 9** exact, KL **0.4704**;
+  IPO **2.0000 = (2f−1)τ** exact, KL **0.2332**. **acc = 1.000 for all three** — the metric
+  that reports nothing (saturates at step ~20, then 7 980 uninformative steps)
+- **DPO's divergence signature is a CONSTANT increment per DOUBLING**, not % growth:
+  **+0.7163** then **+0.7078** ⇒ `margin ~ log t`, the separable-logistic rate (a theorem about
+  **GD** — Adam erases it while still printing a table)
+- **four link optima:** `logit(f)` / `logit((f−ε)/(1−2ε))` / `(2f−1)τ` / **no closed form**.
+  Only **2 of 5** are finite at f=1. Margin-DPO still diverges (**21.2233** at f=1−1e−9);
+  naive `logit(f)+γ = 0.905465` vs **TRUTH 0.533227** (γ breaks BT's antisymmetry)
+- **IPO's price is COMPRESSION, not a uniform cap:** strong/weak ratio **11.3330 → 4.9000**
+  (**2.31×** squeeze), margins **4.5951/0.4055 → 1.9600/0.4000** at f=.99 vs .60
+- **SimPO's 1/|y| AMPLIFIES length bias** at matched margin — MEAN moves E[|y|] further than
+  SUM in **all four** cells: **+1.834→+2.210, +2.520→+2.672, −0.876→−1.135, −1.091→−1.196**.
+  `d(r)/d(logπ) = β/|y|` is largest at |y|=1 ⇒ short seqs are the cheapest lever.
+  **Run to convergence and both saturate at t_max, hiding it completely**
+- **reference-freeness is a SEPARATE trade** (matched margin 3.0, equal-length pairs):
+  noref KL **2.0042** vs ref **1.2091**; H **1.3131** vs **1.4627** (H(π_ref)=2.0657)
+- **ORPO 2×2** (strongly-connected, 3000 steps): chosen NLL/tok **1.302213** baseline →
+  DPO **1.209615**, DPO+SFT **1.042314**, ORPO **1.029723**, ORPO−noSFT **1.078406**.
+  Decomposition: **odds −0.131210**, then SFT **−0.048683**. P2 measured directly as
+  `Δlogp_l = −0.1161` under plain DPO
+- **the odds answer to P2 FLIPS SIGN with β** (**−1.899, −0.457, +0.184, +0.385** at
+  β=.25/.5/1/2) while **SFT holds at every β** (**+0.566, +0.528, +0.522, +0.557**)
+  ⇒ run every ablation at more than one hyperparameter before naming a mechanism
+- **common-shift invariance (c=+0.37):** ref_sum **5.55e-17**, noref_sum **0.00e+00**,
+  ref_mean **1.2333e-01** `= β·c·(1/|y_w| − 1/|y_l|)` exactly, odds **2.1883e-01**.
+  4 of 5 links are functions of `d` alone (**2.220e-16**) — that invariance **IS** P2, and it
+  is why they all require pairs. Only `prospect` sees the marginals (**5.800e-01**)
+- **KTO's bounded loss does NOT fix P1.** `prospect ∈ [0, λ_D+λ_U] = [0, 2.5]` at |r|=1e6 vs
+  logsigmoid's **2e+06** — but **inf σ(−u) = 0 only at u=+∞**, so KTO climbs **+0.9294** per
+  doubling next to DPO's **+0.7207** — *faster*. **A bounded loss is not a finite minimiser**
+- **what boundedness buys is bounded INFLUENCE:** at d=−20, `|grad| −log σ` = **0.9999999979**
+  (saturates at 1, never lets go) vs `|grad| prospect` = **2.061e-09** (abandoned).
+  4/40 labels flipped ⇒ DPO clean margin falls **1.2411** vs KTO **0.6684**; pull toward the
+  wrong labels **+2.8343** vs **+1.5870**. **KTO answers D3's NOISE problem, not P1**
+- **dropping pairs is EXACT:** `KTO(unpaired) == 0.5 × mean(prospect link)` =
+  **0.475211814705432** both sides. The 2 is 2n examples vs n pairs; prospect was already a sum
+  of two independent per-example terms
+- **z_ref's roll is a NO-OP without prompt conditioning:** on TabEnv a roll is a **permutation**
+  and the mean is permutation-invariant (**−0.61677074380460184** vs **−0.61677074380460173**).
+  On `PromptEnv` the gap is **0.020983** and the multisets differ. Load-bearing only when the
+  reward depends on the **PAIRING**
+- **the empty cell** (`ref_mean × squared_target`, no paper): both squared cells stop dead at
+  the **identical margin 1.619048** (a free matched-margin comparison) while both logsigmoid
+  cells climb (**+1.1744**, **+0.9671**); at that matched margin mean E[|y|] **4.8287** vs sum
+  **3.8282**. Inherits τ's cap from IPO and the length amplification from SimPO ⇒ **the grid is
+  a mechanism, not a taxonomy**
+- **uniform π_ref is not a trust region:** under SUM it is reference-free **plus β·log V per
+  token** = **0.549306** at V=3, **5.4125** at V=50257; under MEAN the constant cancels and it
+  is bitwise reference-free (**1.110e-16**)

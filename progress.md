@@ -2,9 +2,50 @@
 
 ## Current Status
 
-- Current week: **Week 05 — Preference Optimization: DPO & Variants — IN PROGRESS (3/5)**.
+- Current week: **Week 05 — Preference Optimization: DPO & Variants — IN PROGRESS (4/5)**.
   Week 04 COMPLETE (5/5).
-- Current day: **Week 5 Day 03 DONE** — *DPO implementation details: length, reference caching,
+- Current day: **Week 5 Day 04 DONE** — *DPO variants as a 5×5 grid, not a paper zoo*.
+  `code/variants.py`, **126 staged checks**, ten stages, 48.8 s full / 12.1 s `--fast`, under
+  `-W error::RuntimeWarning`. He wrote all four TODOs; his output is **byte-identical to the
+  private reference implementation** (`diff` clean across all ten stages).
+  **Headline 1 — every named method is one cell of one grid.**
+  `L = mean_k ℓ(f(y_w), f(y_l)) [+ λ_SFT·mean_k −log π(y_w)/|y_w|]`, with 5 implicit rewards ×
+  5 links = **25 cells**, 4 of them named by papers. The grid reproduces five independently
+  hand-written implementations **elementwise at max dev 0.000e+00**. The **link** decides
+  whether the margin is finite; the **reward** decides where the length goes. Proved by
+  occupying the empty cell `ref_mean × squared_target`, which inherits τ's cap from IPO and the
+  mean reduction's length amplification from SimPO exactly as predicted.
+  **Headline 2 — DPO's divergence signature is a constant increment per DOUBLING.**
+  On D1's non-strongly-connected matching: DPO margin **5.9758** with increments **+0.7163**
+  then **+0.7078** ⇒ `margin ~ log t`. cDPO stopped at **2.1972 = ln 9 = logit(1−ε)** and IPO
+  at exactly **2.0000 = (2f−1)τ**, both hitting their closed forms. KL **0.9511 → 0.4704 →
+  0.2332** against a point-mass bound of 6.3216. **Accuracy read 1.000 for all three** —
+  it saturates at step ~20 and reports nothing for the remaining 7 980 steps.
+  **Headline 3 — three received claims were overturned by measurement.**
+  (a) IPO does not cap uniformly; it **compresses**, squeezing the strong/weak margin ratio
+  **11.3330 → 4.9000** (2.31×) — that is its price. (b) SimPO's `1/|y|` **amplifies** length
+  bias rather than braking it: at matched margin, MEAN moved `E[|y|]` further than SUM in all
+  four cells, because `d(r)/d(logπ) = β/|y|` is largest at `|y|=1`, making short sequences the
+  cheapest lever. (c) ORPO's odds term **flips sign with β** (−1.899 → +0.385) while the SFT
+  term holds at every β (+0.566 → +0.557) — run every ablation at more than one hyperparameter
+  before naming a mechanism.
+  **Headline 4 — a bounded loss is not a loss with a finite minimiser.** Built `stage_kto` +
+  `PromptEnv` to test the claim that KTO gets P1 immunity free. It does not: `inf σ(−u) = 0`
+  only at `u = ∞`, and KTO's margin climbed **+0.9294** per doubling next to DPO's **+0.7207**
+  — *faster*. What boundedness buys is bounded **influence**: at `d = −20`, `−log σ`'s gradient
+  is **0.9999999979** while prospect's is **2.061e-09**. With 4/40 labels flipped DPO's clean
+  margin fell **1.2411** vs KTO's **0.6684**. KTO answers D3's noise problem, not D1's P1.
+  **Headline 5 — dropping pairs is exact, not approximate.** The prospect link is a sum of two
+  independent per-example terms, so `KTO(unpaired) == 0.5 × mean(prospect link)` =
+  **0.475211814705432** on both sides. Learner-initiated finding: `z_ref`'s mismatch roll is a
+  **no-op on unconditional data** (a roll is a permutation, the mean is permutation-invariant,
+  agreement to 1e-16); it only becomes load-bearing under prompt conditioning, where the gap is
+  **0.020983**. This is why `PromptEnv` had to exist.
+  Cold recall **3.6/6 (60%)**, D1–D3 recall **9.0/14 (64%)**, invent-the-variants **4.2/10
+  (42%)**, interview drills **2.0/9 (22%)** → **3.7/4 (93%)** after a retrieval reset,
+  coding **126/126**. **Pedagogical headline: "count the parts" FAILED and "type the numbered
+  skeleton FIRST, then fill it" WORKED** — same question 15 minutes apart, 1.0/4 → 3.7/4.
+- Previous day: **Week 5 Day 03 DONE** — *DPO implementation details: length, reference caching,
   cDPO, SFT initialization, and numerics*. `code/dpo_trainer.py`, **51 staged checks**, seven
   stages, built on Week 2's `TinyGPT`, under `-W error::RuntimeWarning`.
   **Headline 1 — cDPO is Day 1's ε-cap put back from the loss side.**

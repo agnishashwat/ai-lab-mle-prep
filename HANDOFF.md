@@ -21,7 +21,7 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
   capstone loop + adaptive β as dual ascent (`ppo_rlhf.py`, **90/90**, 26 s full suite).
   `week-summary.md` + `retrospective.md` written.
 
-- **Week 05 — IN PROGRESS (3/5).** Preference optimization: DPO & variants. Day 1 re-scoped
+- **Week 05 — IN PROGRESS (4/5).** Preference optimization: DPO & variants. Day 1 re-scoped
   away from re-deriving Bradley-Terry (W4 D1 did that) toward **what preference data can and
   cannot identify**; `preference_models.py`, **74 checks**. Thesis: *the scale of a BT reward
   is not a property of quality, it is a measurement of annotator disagreement.* Day 2 derived
@@ -34,6 +34,14 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
   error at T=256 was **20.525×** a representative `β·margin`; SFT seeded both policy and
   reference; and the chosen-logprob sign changed across fixtures, confirming it is not a
   reference-mismatch diagnostic.
+  Day 4 built the variants as **one 5×5 grid** (`variants.py`, **126 checks**, ten stages,
+  48.8 s / 12.1 s fast); all four TODOs his, and his output is **byte-identical to the private
+  reference implementation**. Thesis: *the link decides whether the margin is finite; the reward
+  decides where the length goes.* Headline: **three received claims overturned by measurement**
+  — IPO compresses (11.3330 → 4.9000) rather than capping uniformly; SimPO's `1/|y|` AMPLIFIES
+  length bias at matched margin; ORPO's odds term flips sign with β while its SFT term does not.
+  Plus a fourth found mid-session: **a bounded loss is not a loss with a finite minimiser**, so
+  KTO does *not* fix P1 — it climbed `+0.9294` per doubling vs DPO's `+0.7207`.
 
 ## SESSION-FORMAT PREFERENCE (he stated this explicitly on W4 D1 — obey it)
 
@@ -49,33 +57,127 @@ explicitly during Block 0. Do not emit `\(...\)` or `$$...$$`.
 
 ## Next session
 
-Start with the prompt: **"Start Week 5 Day 4"**. Read
-`week-05-dpo-preference-optimization/day-04-dpo-variants/session.md` and teach it.
-All five W5 session plans are already fleshed out (commit `9ece817`).
+Start with the prompt: **"Start Week 5 Day 5"**. Read
+`week-05-dpo-preference-optimization/day-05-dpo-failure-modes/session.md` and teach it.
+All five W5 session plans are already fleshed out (commit `9ece817`). **D5 closes Week 5**, so
+it also owes `week-summary.md` and `retrospective.md` (the W3/W4 pattern).
 
-**D4 is organized around the three problems D1-D3 already measured. Do not teach a paper zoo;
-make him invent each fix first:**
+**What D5 inherits from D4 — use these, they are measured and in the numbers card:**
 
-1. **The finite optimum problem.** D1: separable BT MLE at infinity. D2: rejected probability
-   driven toward zero. D3: cDPO injects a target-noise cap:
-   `Δ̂*=log((1−ε)/ε)/β`. At β=0.3 the measured values were
-   **9.814797 / 7.324082 / 4.620981 / 2.063464** for ε=.05/.10/.20/.35. Ask him to invent IPO's
-   squared target margin before naming IPO.
-2. **The length problem.** D3's controlled drift fixture measured sum slope **+0.200000** and
-   mean slope **0.000000**. Ask him to invent division by `|y|`, then attach SimPO's cost: it is
-   no longer the original DPO/RLHF reparameterisation.
-3. **The pair/reference problem.** D3 cached the frozen reference exactly with two forwards and
-   **8 bytes/pair**; the trainer never touches `model_ref`. Ask separately how to remove pairs
-   (KTO) and how to remove the reference (ORPO/SimPO), and require the cost of each.
+- **The grid is the organising object.** `L = mean_k ℓ(f(y_w), f(y_l)) [+ λ_SFT·NLL]`. Five
+  rewards × five links. D5's failure modes should be located *in the grid*: which axis causes
+  each failure, and which cell would remove it.
+- **P1 (runaway) is a LINK property; P2 (both logprobs fall) is an INVARIANCE property; P3
+  (length/reference) is a REWARD property.** Four of five links are functions of `d` alone to
+  `2.220e-16` — that invariance *is* P2, and it is why they all require pairs.
+- **`acc = 1.000` is the metric that reports nothing.** It saturates in ~20 steps while the
+  reward runs for 8000 more. D5 should lean on this hard.
+- **Matched-margin comparison is the only honest cross-objective KL claim.** `train_variant`
+  already takes `stop_margin`. Reuse it.
+- **`variants.py` is importable.** `named_specs()` gives DPO/cDPO/IPO/SimPO/ORPO/KTO as `Spec`
+  objects and `variant_loss(spec, ...)` is the whole grid in one call.
 
-**Corrections that D4 must inherit:**
-- At `π_θ=π_ref`, the initial log-ratio is exactly zero. The ratio required by labels can be large.
-- Chosen-logprob sign is not a μ≠π_ref diagnostic. D3 fast/full fixtures gave opposite signs;
-  Day 2's stable diagnostic is the **5.11× KL tax at matched margin/loss**.
-- `β→0`, not uniformly `β→∞`, is the no-op boundary for the log-ratio-margin gradient.
-- At ε=.5 the target is zero margin; the cDPO loss is not constant.
-- In a finite completion space reverse KL is capped by `max_y −log π_ref(y)`; "unbounded" is only
-  the practical LM statement.
+**Corrections D5 must inherit (D4 overturned three received claims and found a fourth):**
+- **IPO does not cap uniformly — it COMPRESSES.** `(2f−1)τ` still depends on `f`; the
+  strong/weak ratio squeezes **11.3330 → 4.9000** (2.31×). That is IPO's price.
+- **SimPO's `1/|y|` AMPLIFIES length bias**, it does not brake it. At matched margin MEAN moved
+  `E[|y|]` further than SUM in all four cells. `d(r)/d(logπ) = β/|y|` is largest at `|y| = 1`,
+  so short sequences are the cheapest lever. **Never run a length experiment to convergence** —
+  both arms saturate at `t_max` and the effect vanishes.
+- **ORPO's odds term flips sign with β** (−1.899, −0.457, +0.184, +0.385) while its SFT term
+  holds at every β (+0.566, +0.528, +0.522, +0.557). Run every ablation at more than one
+  hyperparameter before naming a mechanism.
+- **A BOUNDED LOSS IS NOT A LOSS WITH A FINITE MINIMISER.** KTO's `prospect` is bounded in
+  `[0, 2.5]` at `|r| = 1e6`, and its margin *still* diverges — `+0.9294` per doubling vs DPO's
+  `+0.7207`, i.e. FASTER. `inf σ(−u) = 0` only at `u = ∞`. What boundedness buys is bounded
+  **influence** (gradient `2.061e-09` at `d = −20` vs logsigmoid's `0.9999999979`), which is a
+  **noise-robustness** property, not a P1 fix. If D5's plan says otherwise, D5's plan is wrong.
+- **DPO's divergence signature is a constant increment per DOUBLING** (`+0.7163`, `+0.7078`),
+  not % growth, which decays even for a divergent run. This is a theorem about **plain GD** —
+  an adaptive optimiser erases it while still printing a plausible table.
+
+### W5 D4 grading, process gaps, and coding ownership
+
+Cold recall **3.6/6 (60%)**; D1–D3 recall quiz **9.0/14 (64%)**; invent-the-variants **4.2/10
+(42%)**; interview drills **2.0/9 (22%)**, then **3.7/4 (93%)** on a retrieval reset; coding
+**126/126**, all four TODOs his, output byte-identical to the reference.
+
+- **THE FINDING OF THE DAY — the intervention that finally moved retrieval.** Drill 1 scored
+  **1.0/4** with the standing "count the parts" instruction. Fifteen minutes later, the
+  *identical question* with a different instruction — **"type the numbered skeleton FIRST, with
+  blank slots, THEN fill each slot"** — scored **3.7/4**. Same material, same session, 3.7×.
+  **"Count the parts" FAILED; "write the empty structure first" WORKED.** This supersedes the
+  counting instruction from D3. Use skeleton-first on every multi-part question from now on,
+  and check on D5 whether it transfers without being told.
+- **Two genuine unprompted catches — a new positive signal.** (1) He invented **IPO's exact
+  symmetric squared cost unaided** in Block 2, before being told the name. (2) He challenged the
+  `z_ref` roll — *"if we're just taking a mean, why roll at all?"* — and he was **right**: a roll
+  is a permutation, the mean is permutation-invariant, so on unconditional `TabEnv` the mismatch
+  is a no-op to 1e-16. That catch is what forced `PromptEnv` and `stage_kto` into existence.
+  Both catches came from asking *"does this actually do anything?"* — the exact opposite of the
+  known-result reflex. **Reinforce this move by name.**
+- **Known-result reflex — FIFTH sighting.** Still the most reliable failure. Keep the probe:
+  *"is that the obstruction, or one you already know?"*
+- **MINUS-SIGN STREAK BROKEN, then it migrated.** Four consecutive days of a missing `−` on a
+  loss; on D4 the loss functions were **clean** (`implicit_reward`, `link`, `variant_loss` all
+  correct first time, including the SFT sign, which is algebraically the subtle one). But the
+  sign reappeared in a **metric** (`ent` computed as `+Σ p log p`). New standing probe, and it
+  is cheaper than any test: **every metric has a RANGE — check it.** A length ∈ `[1, t_max]`, an
+  entropy ≥ 0, an NLL > 0. All three of his wrong metrics were *outside the range of the
+  quantity they claimed to be*, catchable without running a single step.
+- **Wrong LEVEL (loss vs reward) did NOT recur.** `implicit_reward` was correct first time.
+  This was Block 2's error on D4 morning and it did not survive into the code.
+- **Second-clause gap — unchanged, five weeks.** Still the oldest open item.
+- **REINFORCE variance perennial — partial movement.** He named environment stochasticity for
+  the first time; policy entropy and off-policy importance-weight variance still missing.
+- **Coding ownership: the strongest of Week 5.** He wrote `implicit_reward`, `link`,
+  `variant_loss`, and the `train_variant` optimiser loop and the nine-metric `update_record`
+  himself. Only the loop *plumbing* (step-0 snapshot, `stop_margin` bookkeeping, return dict)
+  was written for him, at his explicit request — the same bookkeeping that was refactored for
+  him on D3. **That is the second time; re-ask it cold on D5.**
+
+### Bug families from W5 D4
+
+1. **Python builtins doing object/sequence semantics on things meant as arithmetic — TWICE.**
+   `max(tensor, 0)` returned the Python `int` `0` (no `.detach()`), and `lr * grad` where
+   `grad` was `autograd.grad`'s **tuple**. The first is the nastiest bug of the day: at
+   `π = π_ref` the mean is exactly `0.0`, the comparison ties, `max` returns the Tensor, so it
+   **passes step 0 and dies at step 1**. The second is worse if `lr` is an `int` — `2 * (g,)`
+   silently *replicates the list*. Use `.clamp(min=0.0)` and `g, = ...`.
+2. **Indexing one tensor by `pairs` and not the other.** `lengths` (15 seqs) against
+   `seq_logp[pairs[:,0]]` (20 pairs). Per-sequence and per-pair are different objects.
+3. **An optimiser chosen inside a comparison function.** `torch.optim.Adam(theta, spec.lr)` —
+   two violations at once: an adaptive optimiser (which erases the `margin ~ log t` result while
+   still printing a table) and a **per-arm learning rate** in a function whose job is comparing
+   arms at a matched one. **The only bug of the day that produces plausible numbers instead of a
+   traceback, and therefore the expensive one.**
+4. **Metrics outside the range of their own quantity.** `E[|y|] = −10.93`, `H = −0.107`,
+   `nll_w < 0`. See the range probe above.
+5. **Re-implementing helpers the file already provides.** `exact_kl`, `entropy`, and
+   `expected_length` were all present; he hand-rolled all three and got two wrong.
+   **Grep before you write.**
+6. **`.double()` applied one line above the line that needed it.** `(r_w - r_l)` was already
+   floating point; `(r_w > r_l)` was the Bool. Fix the line the traceback names.
+7. **Appending tensors instead of `float(...)`.** Converting at the boundary turns the
+   conversion into an assertion — `float()` on a 20-element tensor raises, which is exactly the
+   `nll_w` missing-`.mean()` bug, caught for free.
+
+### Harness bugs *I* found by running a private reference before handover (the rule keeps paying)
+
+Fifth day running, and it caught five more. **Always write and run a reference implementation
+of every TODO before handing the file over.**
+
+1. `prospect` asserted bounded on the **open** interval — false in float (`σ(−50)` underflows to
+   exactly `0`). Closed interval at `|r| = 1e6`.
+2. `closed_form_optimum` mixed **units** — link-input `M` vs D3's log-ratio `Δ̂ = M/β`.
+   `M* = 2.197225` but `Δ̂* = 7.324082`. Added `logratio_optimum()`.
+3. **`logsigmoid_margin` has no closed form.** γ is subtracted whichever way the label points,
+   destroying BT's antisymmetry. Solved by bisection; the natural guess `logit(f)+γ = 0.905465`
+   against the truth `0.533227`.
+4. **`ref_mean`/`noref_mean` are not shift-invariant** — a common shift moves `d` by exactly
+   `β·c·(1/|y_w| − 1/|y_l|)`, zero only on equal-length pairs.
+5. **IPO at `lr = 2.0` → NaN** while DPO is fine at the same lr. An optimiser must never be the
+   confound in a comparison stage; `stage_separable` uses `lr = 0.5` for all arms.
 
 ### W5 D3 grading, process gaps, and coding ownership
 
@@ -1762,3 +1864,34 @@ coding → deliverable.**
 - A staged harness's `_fail_fast` must touch ONLY the TODOs its own stage needs. Touching all of
   them makes a finished function report "[TODO] not implemented" — a guard that emits a FALSE
   failure is worse than no guard. (Fixed mid-session on W4 D3.)
+- **A BOUNDED LOSS IS NOT A LOSS WITH A FINITE MINIMISER.** `inf σ(−u) = 0` is attained only at
+  `u = +∞`, so KTO's bounded prospect loss still diverges on separable data — measured at
+  `+0.9294` per doubling against DPO's `+0.7207`, i.e. FASTER. cDPO and IPO stop because their
+  losses have an **interior** minimum. Check `inf ℓ` *and where it is attained*. (W5 D4 — this
+  overturned a claim I had taught earlier the same day.)
+- **Every metric has a RANGE; check it before you check anything else.** A length ∈ `[1, t_max]`,
+  an entropy ≥ 0, an NLL > 0, a probability ∈ `[0,1]`, a KL ≥ 0. On W5 D4 three hand-rolled
+  metrics were all outside their own range (`E[|y|]=−10.93`, `H=−0.107`, `nll_w<0`) — catchable
+  without running a single training step. This is the successor probe to the minus-sign fixture,
+  because the sign error migrated from the loss to the metrics.
+- **Convert at the boundary so the conversion becomes an assertion.** `float(x)` on a
+  20-element tensor raises; appending the raw tensor does not. W5 D4's missing `.mean()` would
+  have been caught for free.
+- **`torch.autograd.grad` returns a TUPLE.** Unpack with `g, = ...`. `float * tuple` throws, but
+  `int * tuple` silently *replicates the list* — `lr=2` builds a 2-element tuple. Same family:
+  `max(tensor, 0)` returns the Python `int` when the tensor is negative, and *ties return the
+  first argument*, so at `π = π_ref` it passes step 0 and dies at step 1. Use `.clamp(min=0.0)`.
+- **Never let the optimiser be a free variable in a comparison stage.** Plain GD, one shared lr,
+  passed in as a parameter. `margin ~ log t` is a theorem about **gradient descent**; Adam erases
+  it while still printing a plausible table. And IPO NaNs at `lr=2.0` where DPO is fine, so a
+  per-arm lr would silently confound every arm. (W5 D4.)
+- **Run every ablation at more than one hyperparameter before naming a mechanism.** ORPO's odds
+  term answers P2 at β=1 (`+0.184`) and is its own opposite at β=0.25 (`−1.899`); its SFT term
+  holds at every β. One β would have produced a confident, wrong story. (W5 D4.)
+- **Never run a length experiment to convergence** — both arms saturate at `t_max` and the effect
+  disappears entirely. Use `stop_margin` and compare at a **matched margin**; that is also the
+  only honest way to compare KL across two different objectives. (W5 D4.)
+- **A permutation cannot change a mean.** If a shuffle/roll/mismatch step feeds only into a mean,
+  it is a **no-op** — verify it does something before believing the mechanism it claims to
+  implement. On W5 D4 KTO's `z_ref` roll agreed to `1e-16` on unconditional data; it only becomes
+  load-bearing when the reward depends on the PAIRING. (Learner-initiated catch.)
