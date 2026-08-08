@@ -133,6 +133,15 @@ Two arms behaved differently from the plan, and both are honest findings:
   read operationally: with the penalty doing the work, removing the clip costs nothing here.
 - **`no_critic` slightly BEAT `full`** (5.1786 vs 5.1501) with **lower** seed spread
   (±0.036 vs ±0.109). **The critic's value is a function of horizon**, and this horizon is 5.
+
+  > **CORRECTION (W6 D1).** "BEAT" is not supported and neither is "lower seed spread." The
+  > effect is **0.0285** against `full`'s own spread of **±0.109** — **3.8× the effect** — and
+  > `no_critic`'s interval `[5.1426, 5.2146]` is *contained* in `full`'s `[5.0411, 5.2591]`.
+  > That fails this repo's own rule (*claim a result only if the intervals do not overlap*).
+  > The spread comparison is worse: it is a **3-seed** spread comparison, and W5 D5 showed the
+  > same runs give a **6.09×** spread ratio at 3 seeds and **1.04×** at 5. **The supported
+  > claim is a NULL: deleting the critic cost nothing measurable at T=5 on a terminal-only
+  > reward.** That is the stronger form anyway — a null is exactly what justifies a deletion.
   With a terminal-only reward and T=5 there is almost nothing for bootstrapping to buy, and a
   batch-mean baseline captures most of it. *Do not generalize "PPO needs a critic" from a
   short-horizon task.*

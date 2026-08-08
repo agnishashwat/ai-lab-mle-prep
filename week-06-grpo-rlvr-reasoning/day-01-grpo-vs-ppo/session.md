@@ -4,7 +4,8 @@
 
 **Read this first, out loud.** Week 4 built PPO and measured, in your own ablation, that
 deleting the critic did **not** hurt: `no_critic 5.1786 ± 0.036` vs `full 5.1501 ± 0.109`
-at horizon 5. Week 5 measured that a preference dataset is a **matching**, so the loss is
+at horizon 5 — an effect of **0.0285** against `full`'s own spread of **±0.109**, i.e. a
+**null**, which is the strongest form the argument can take. Week 5 measured that a preference dataset is a **matching**, so the loss is
 exactly constant off the comparison set — and that on-policy regeneration is the only
 structural fix. Week 6 is those two results built into one algorithm. GRPO is
 **DPO's off-data fix plus Week 4's PPO machinery minus the critic**, and today you find out
@@ -75,8 +76,8 @@ Build `code/grpo.py` to make all five assertions rather than claims.
   fit identically. Today you use the constructive half of it.
 - **W4 D2/D3** — the PPO surrogate, the ratio `ρ`, clipping at three levels, the critic and
   GAE, and the memory bill of four networks.
-- **W4 D5 / W5 D5** — `no_critic` beating `full` at horizon 5; ≥5 seeds for anything
-  tail-sensitive.
+- **W4 D5 / W5 D5** — `no_critic` costing nothing measurable at horizon 5 (a **null**, effect
+  0.0285 vs spread ±0.109); ≥5 seeds for anything tail-sensitive.
 - **W5 D1** — location invariance `r + c(x)`, which is the *licence* for a group baseline.
 - W4/W5's staged-harness convention.
 
@@ -199,7 +200,7 @@ Everything follows from the difference between *amortised-and-learned* and
   `V(s_t)` is literally *"the probability this partial chain of thought ends in a correct
   answer"* — a quantity as hard to estimate as the task itself, over horizons of thousands
   of tokens, from a scalar at the end. The critic is not merely expensive on reasoning
-  tasks, it is **badly posed**. Your W4 D5 measurement (`no_critic` ≥ `full` at horizon 5)
+  tasks, it is **badly posed**. Your W4 D5 measurement (`no_critic` = `full` at horizon 5, a null)
   is the *easy* end of the same statement; this is the hard end.
 
 The bill, so the claim is arithmetic and not vibes (7B, bf16 + Adam, W1's 16 B/param
@@ -355,6 +356,6 @@ a real answer:
   to "what would you monitor?" — the *fraction of groups with non-zero advantage*, which
   almost nobody logs.
 
-Have a number ready for each. Your own `no_critic ≥ full` ablation, with its horizon-5
-scope condition stated unprompted, is the kind of thing that turns a recitation into a
+Have a number ready for each. Your own `no_critic = full` **null**, with its horizon-5
+scope condition and its 3-seed caveat stated unprompted, is the kind of thing that turns a recitation into a
 project story.

@@ -250,8 +250,9 @@
   full **5.1501 ±0.109** (proxy 0.6153, KL 0.361); **no_kl gold 4.9098 ±0.407 with proxy
   0.8728** ⇒ **the inversion: proxy UP, gold DOWN**. reinforce 4.7112; top-p 0.9 **4.8559**.
   Two honest surprises: **no_clip ≈ full** (5.1508) — under a tight KL budget the PENALTY is
-  the binding constraint, not the clip — and **no_critic BEAT full** (5.1786, spread ±0.036 vs
-  ±0.109) ⇒ **the critic's value is a function of HORIZON, and this horizon is 5**.
+  the binding constraint, not the clip — and **no_critic cost NOTHING MEASURABLE** (5.1786 vs
+  5.1501, effect **0.0285** against full's own spread **±0.109** ⇒ **a NULL**; corrected
+  W6 D1) ⇒ **the critic's value is a function of HORIZON, and this horizon is 5**.
   **Headline 5 — early stopping is the ESTIMATOR.** No-KL run: gold peaks **5.1894 at iter 8
   (KL 0.503)**, ends **3.9372 at KL 3.605** — **below π_ref's 4.4191**. Shipping the final
   checkpoint costs **1.2522**. `select_checkpoint` returns #8 of 40. (This is the case D4 said
@@ -417,7 +418,8 @@ Topics to revisit:
   **1.2522** to ship the final checkpoint.
 - [ ] **The ablation grid's two honest surprises** (W4 D5): **no_clip ≈ full** (5.1508 vs
   5.1501) because under a tight KL budget the **penalty**, not the clip, is binding; and
-  **no_critic BEAT full** (5.1786 vs 5.1501, spread ±0.036 vs ±0.109) because **the critic's
+  **no_critic cost NOTHING MEASURABLE** (5.1786 vs 5.1501 — effect **0.0285** vs full's spread
+  **±0.109**, intervals nested ⇒ **a NULL**, corrected W6 D1) because **the critic's
   value is a function of HORIZON** and this horizon is 5. Do not generalize "PPO needs a critic"
   from a short-horizon terminal-reward task.
 - [ ] **A test is only as sensitive as its input — THIRD SIGHTING** (W4 D5): the check named

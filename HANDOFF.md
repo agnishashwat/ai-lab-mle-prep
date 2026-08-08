@@ -1062,8 +1062,10 @@ coding → deliverable.**
   **THE GRID (7 arms × 3 seeds, fixed budget):** π_ref gold **4.4191**; full **5.1501 ±0.109**
   (proxy 0.6153); **no_kl 4.9098 ±0.407 with proxy 0.8728** ⇒ **proxy UP, gold DOWN — the week
   in one assertion**; reinforce 4.7112; top-p 0.9 4.8559. Two honest surprises: **no_clip ≈
-  full** (the PENALTY is binding under a tight budget, not the clip) and **no_critic BEAT full**
-  (5.1786, spread ±0.036 vs ±0.109) ⇒ **the critic's value is a function of HORIZON**.
+  full** (the PENALTY is binding under a tight budget, not the clip) and **no_critic cost NOTHING
+  MEASURABLE** (5.1786 vs 5.1501 — effect **0.0285** vs full's own spread **±0.109**, and
+  no_critic's interval is *contained* in full's ⇒ **a NULL, not a win**; corrected W6 D1)
+  ⇒ **the critic's value is a function of HORIZON**.
   **CHECKPOINTING:** gold peaks **5.1894 at iter 8 (KL 0.503)** and ends **3.9372 at KL 3.605**
   — **below π_ref** — so shipping the final policy costs **1.2522**. Required starving the RM to
   **30 comparisons at 15% noise**; D4's 400-pair RM was too accurate to show it.

@@ -54,8 +54,12 @@ Format: `quantity = value (condition)`.
 - ablation grid (7 arms × 3 seeds): π_ref gold **4.4191**; full **5.1501 ±0.109**;
   **no_kl gold 4.9098 with proxy 0.8728** (proxy UP, gold DOWN); reinforce **4.7112**;
   top-p **4.8559**; **no_clip ≈ full (5.1508)** — the PENALTY was binding, not the clip;
-  **no_critic BEAT full: 5.1786 ±0.036 vs 5.1501 ±0.109** ⇒ the critic's value is a function
-  of HORIZON, and this horizon is 5
+  **no\_critic COST NOTHING MEASURABLE: 5.1786 ±0.036 vs 5.1501 ±0.109** — effect **0.0285**
+  vs `full`'s OWN spread **0.109** (**3.8×** the effect), and no\_critic's interval is
+  *contained* in full's ⇒ **a NULL, not a win** (corrected W6 D1: "BEAT" violated this card's
+  own non-overlapping-intervals rule, and the spread comparison is a 3-seed one — see the W5 D5
+  6.09×-vs-1.04× artifact). The critic's value is a function of HORIZON, and this horizon is 5.
+  **The NULL is the stronger argument for GRPO** — you do not delete a component that is earning
 - early stopping: gold peaks **5.1894 @ iter 8 (KL 0.503)**, ends **3.9372 @ KL 3.605** —
   below π_ref's **4.4191**. Shipping the last checkpoint costs **1.2522**
 - Goodhart is a VARIANCE result: seed spread amplifies **89× / 259× / 667×**; at 30 comparisons
