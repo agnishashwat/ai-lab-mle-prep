@@ -355,6 +355,21 @@ get back to a **pathwise** estimator: closed-form over fixed pairs, low variance
 loop. **Paid for with static off-policy data** — you never see your current policy's mistakes.
 Use when data is fixed and plentiful and compute is tight.
 
+> **UPDATED W5 D5, with measurements.** "Static off-policy data" understates it, and the
+> precise version is a better answer. The DPO loss is a function *only* of the sequences that
+> appear in a comparison and is **exactly constant** everywhere else — so the price is not
+> staleness, it is that **an arbitrary fraction of the model is unconstrained by the
+> objective** (measured: **19.4%** of the trained policy's mass, on data covering 6 of 15
+> sequences), and **no field of the training panel reports it**. Three further corrections:
+> (a) DPO's KL does **not** diverge — it is *bounded* by `max_y −log π_ref(y)` (6.3216 in that
+> environment); what diverges is the **margin**, at rate `log t`, because the Bradley–Terry
+> MLE is finite only if the wins digraph is strongly connected and a DPO dataset is a
+> **matching**, where it never is at any noise level. (b) DPO's KL is not enforced the way
+> PPO's is: it survives only as `π_ref` inside a ratio evaluated *at the dataset's
+> completions*. (c) β is not a free hyperparameter — the policy is identified only by `r/β`,
+> and **cleaning your annotations and scaling your reward are the same edit**. Halving β also
+> costs **4× the compute, not 2×** (measured 4.04× / 4.03× / 4.02×).
+
 **GRPO:** no critic — the baseline is the group mean over K samples of the same prompt, which is
 unbiased *and* removes exactly the per-prompt constant `c(x)` that Bradley-Terry cannot identify
 anyway. **Paid for with K× rollouts and sequence-level credit.** Use with a verifier (RLVR),

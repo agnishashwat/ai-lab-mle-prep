@@ -226,3 +226,67 @@ Format: `quantity = value (condition)`.
 - **uniform π_ref is not a trust region:** under SUM it is reference-free **plus β·log V per
   token** = **0.549306** at V=3, **5.4125** at V=50257; under MEAN the constant cancels and it
   is bitwise reference-free (**1.110e-16**)
+
+### D5 — DPO failure modes (`code/dpo_lab.py`, **92 checks**, 65.6 s / 34 s fast; `TabEnv(3,3)` = 15 seqs, β=0.5, lr=0.5)
+
+- **THE THESIS:** the four modes are consequences of the **data format**, not of the algorithm.
+  The loss is **exactly constant** along every direction the data do not constrain
+- **Ford, measured over 12 seeds — P(wins digraph strongly connected):**
+  `matching` (deg 1) **0.00 / 0.00 / 0.00 / 0.00** at ε = 0 / .10 / .25 / .35;
+  `cycle` (deg 2) **0.00** at every ε;
+  `all_pairs` (deg 14) **0.00 → 0.58 → 0.83 → 1.00**.
+  ⇒ **clean data are NEVER strongly connected at any degree** (a transitive tournament is a
+  DAG), and **noise needs DENSITY to act on**. In a matching, **2 of 7 labels flipped and it
+  was still a DAG** — annotator noise has nowhere to act. **A real DPO dataset is the top row**
+- **more comparisons ⇒ SMALLER final margin** (ε=.10, 6/6 seeds):
+  **2 pairs 6.0470 > 7 pairs 4.1916 > 105 pairs 1.6687** (seed 0). Density creates the cycles
+  that pin the MLE down. *Step-by-step monotonicity holds in only 3/6 seeds — assert the
+  ENDPOINT ordering, not the fragile version*
+- **the β/ε COLLAPSE, confirmed.** Two structurally independent sweeps matched only through
+  `Δ̂* = logit(1−ε)/β`: |KL diff| **9.59e-05 / 6.56e-05 / 2.78e-16 / 2.47e-04** at
+  Δ̂* = 1.0986 / 2.1972 / 4.3944 / 8.7889. Non-trivial: KL itself varies **0.0711 → 0.6805**
+- **NEW LAW — steps-to-target ∝ 1/β².** Steps to 0.995·M*: **76 / 307 / 1237 / 4978** at
+  β = 2 / 1 / .5 / .25, ratios **4.04, 4.03, 4.02**. *Halving β costs 4× the compute, not 2×*
+  (gradient scale ∝ β, distance ∝ 1/β ⇒ time ∝ 1/β²). Δ̂* only went up 8× while steps went 65×
+- **acc = 1.000 at step 1 of 6000** while the margin runs **0.0245 → 5.8439**
+- **M2 measured:** `log π(y_w)` **−3.1862 → −3.3715 (−0.1852)** AND `log π(y_l)`
+  **−3.8037 → −4.2863 (−0.4826)** while **the margin rose +0.5947 and told you neither**.
+  The SFT term fixes it: **logp_w −0.1852 (DPO) → +0.0213 (DPO+SFT)**
+- **M4's blind spot:** with 6 of 15 sequences covered, π_θ puts **19.4%** of its mass where the
+  loss is **exactly constant** (**49.83%** at init). **Off-data mass FALLS during training**
+  (0.4983 → 0.1943) because pushing losers down moves mass onto covered winners ⇒ **a delta
+  rule NEVER fires. Support is a LEVEL**
+- **the proxy/gold inversion, with a CONTROL** (6001 steps):
+  `uncovered (M4)` gold peaks **@0**, gives back **0.4313**;
+  `length confound (M3)` peaks **@2**, gives back **1.2103**;
+  `separable (M1)` peaks **@77**, gives back **0.1036**;
+  **CONTROL healthy** peaks **@1270**, gives back **0.0000**. All broken arms at **acc 1.000**
+- **THE SHARPEST LINE OF THE WEEK: M3 gold +0.7514 → −0.4532.** DPO training made the model
+  **worse than the reference it started from**, at 100% train accuracy, loss falling monotonically
+- **early stopping as an ESTIMATOR** (never sees gold): stops at **step 105**, where
+  **margin 2.2050 vs cap 2.1972**. gold **selected 0.4963 | last 0.3300 | oracle 0.6737** ⇒
+  recovers **0.1663 of the 0.3437** that shipping the last checkpoint costs.
+  On clean data ε=0 ⇒ **cap = +inf ⇒ no natural stopping rule** — that IS M1
+- **a healthy DPO+SFT run moves E[|y|] by +8.9%** ⇒ a length move ALONE is not a failure.
+  M3's gate (elen rise > 0.25) has **2.8× air below (healthy 0.089)** and **4.4× above
+  (fixture 1.110)**
+- **step-0 anchors, exact:** loss = **log 2 = 0.693147**, KL = **0**, r̂ = **0** everywhere
+  (π and π_ref seeded from the same checkpoint). Uniform-policy logprob anchor
+  **log(1/15) = −2.7081**. Point-mass KL bound **6.3216**
+- **`logp_w`/`logp_l` are PLAIN logprobs.** Logged as ratios, `logp_w − logp_l` equals
+  `margin/β` to **1.39e-16** — the pair would be perfectly redundant with the margin it exists
+  to check. Plain carries π_ref's own bias: **+0.617490** of extra signal
+- **CORRECTION to W4 D4 — "seed spread grows with pressure" is a 3-SEED ARTIFACT.**
+  Same runs: gold spread **6.09× at 3 seeds** vs **1.04× at 5 seeds**. On those same runs
+  `margin` spread **contracts to exactly 0.000000** and `kl` spread grows **71×** (KL is
+  measured against each seed's OWN π_ref). **≥3 seeds is a FLOOR**
+- **pairing the seeds** (DataCfg.seed AND RunCfg.seed together) shrinks the worst KL spread
+  **2.07×** (0.7511 → 0.3621) — *a change to the DESIGN, not to the code*
+- **the metric decides whether an ablation has power.** Same runs, same seeds:
+  KL effect **0.4038** vs worst spread **0.3621** ⇒ **intervals OVERLAP, "β lowers KL" is NOT
+  supported**. margin effect **0.1201** vs spread **0.0282** ⇒ **4.3×, resolved**
+- **the units decide the CONCLUSION.** Over β = 0.25 → 2.0: margin **0.4746 → 0.5947 (UP)**
+  while **Δ̂ = margin/β 1.8984 → 0.2974 (DOWN)**. *Report the wrong one and you report the
+  opposite result*
+- **DPO ≡ tilt(BT MLE)** re-verified here: max |dev| **1.164e-13** over all 15 sequences,
+  non-vacuous by **4.40e+13×**

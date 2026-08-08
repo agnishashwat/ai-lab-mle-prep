@@ -2,9 +2,61 @@
 
 ## Current Status
 
-- Current week: **Week 05 — Preference Optimization: DPO & Variants — IN PROGRESS (4/5)**.
-  Week 04 COMPLETE (5/5).
-- Current day: **Week 5 Day 04 DONE** — *DPO variants as a 5×5 grid, not a paper zoo*.
+- Current week: **Week 05 — Preference Optimization: DPO & Variants — COMPLETE (5/5)**.
+  Week 04 COMPLETE (5/5). **385 property-based checks across Week 5**
+  (`preference_models.py` 74, `dpo.py` 42, `dpo_trainer.py` 51, `variants.py` 126,
+  `dpo_lab.py` 92). `week-summary.md` + `retrospective.md` written.
+- Current day: **Week 5 Day 05 DONE — WEEK 5 COMPLETE** — *DPO failure modes: what the data
+  format can and cannot identify*. `code/dpo_lab.py`, **92 staged checks**, nine stages,
+  65.6 s full / 34 s `--fast`, 0 failures. His output is **byte-identical to the private
+  reference implementation** in `--fast` mode (`diff` clean across all 89 shared lines).
+  **Thesis — the four failure modes are consequences of the DATA FORMAT, not of the
+  algorithm.** The training loss is *exactly constant* along every direction the data do not
+  constrain, so the loss going down is not evidence of anything. Every mode is a **fixture**:
+  one dataset function, four knobs (`shape` / `eps` / `length_confound` / `n_pairs`), one knob
+  per mode.
+  **Headline 1 — Ford's condition, measured over 12 seeds.** P(wins digraph strongly
+  connected): `matching` (deg 1) **0.00 at every ε ∈ {0, .10, .25, .35}**; `cycle` (deg 2)
+  **0.00** likewise; `all_pairs` (deg 14) **0.00 → 0.58 → 0.83 → 1.00**. So **clean data are
+  never strongly connected at any degree** (orienting any graph by a total order gives a DAG),
+  and **noise needs density to act on** — in a matching, **2 of 7 labels flipped and it was
+  still a DAG**. A real DPO dataset is the top row, so the finite-margin regime is
+  structurally unavailable. Corollary, 6/6 seeds: **more comparisons ⇒ SMALLER final margin**
+  (2 pairs **6.0470** > 7 pairs **4.1916** > 105 pairs **1.6687**).
+  **Headline 2 — the β/ε collapse, predicted on D1 and confirmed on D5.** Because the policy
+  is identified only by `r/β`, a β-sweep and an ε-sweep matched on `Δ̂* = logit(1−ε)/β` must
+  produce the same KL. Two structurally independent sweeps agreed to **9.59e-05 / 6.56e-05 /
+  2.78e-16 / 2.47e-04** at Δ̂* = 1.0986 / 2.1972 / 4.3944 / 8.7889, and the collapse is
+  non-trivial (KL itself varies **0.0711 → 0.6805**).
+  **Headline 3 — a NEW law, unplanted: steps-to-target ∝ 1/β².** Steps to 0.995·M*:
+  **76 / 307 / 1237 / 4978** at β = 2 / 1 / .5 / .25 — ratios **4.04, 4.03, 4.02**.
+  *Halving β costs four times the compute, not two* (gradient scale ∝ β, distance ∝ 1/β).
+  **Headline 4 — the proxy/gold inversion, with a healthy CONTROL.** Broken fixtures reach
+  **acc 1.000** while gold peaks at steps **0 / 2 / 77 of 6001** and gives back **0.4313 /
+  1.2103 / 0.1036**; the healthy control peaks at step **1270** and gives back **exactly
+  0.0000**. Sharpest single line of the week: **M3's gold goes +0.7514 → −0.4532** — DPO
+  training made the model *worse than the reference it started from*, at 100% train accuracy,
+  with the loss falling monotonically the whole way.
+  **Headline 5 — early stopping is an ESTIMATOR, and it needs no held-out set.**
+  `select_checkpoint` never sees gold; it stops at the first step whose margin reaches
+  `logit(1−ε)` — step **105**, margin **2.2050** vs cap **2.1972** — recovering **0.1663 of
+  the 0.3437** that shipping the last checkpoint costs. Rejected: epochs (accuracy hits 1.000
+  at **step 1 of 6000**) and KL (bounded at **6.3216**, so it saturates while the reward
+  diverges, and M4 is invisible in it). On clean data ε = 0 ⇒ cap = **+inf** ⇒ no natural
+  stopping rule — *that is not a limitation of the code, it is M1*.
+  **Headline 6 — a correction to W4 D4: "seed spread grows with optimisation pressure" is a
+  3-SEED ARTIFACT.** Same runs: gold spread amplifies **6.09× at 3 seeds** and **1.04× at 5**.
+  On those same runs `margin` spread *contracts to exactly 0.000000* while `kl` spread grows
+  **71×**. **≥3 seeds is a FLOOR.** Also measured: pairing the data and run seeds shrinks the
+  worst KL spread **2.07×**; and the *metric* decides whether an ablation has power (KL effect
+  **0.4038** vs spread **0.3621** ⇒ intervals overlap, unsupported; margin effect **0.1201**
+  vs spread **0.0282** ⇒ **4.3×**, resolved).
+  Cold recall **3.85/6 (64%)**, D1–D4 recall **9.0/20 (45%)**, derivation/design **5.0/12
+  (42%)**, interview drills **not attempted** (model answers given at his request), coding
+  **92/92** with three of six TODOs his. **Pedagogical headline: skeleton-first did NOT
+  transfer unprompted** — D4's 3.7× intervention was not reused and the recall quiz hit the
+  week's low. W6 D1 should test prompted-vs-withheld directly.
+- Previous day: **Week 5 Day 04 DONE** — *DPO variants as a 5×5 grid, not a paper zoo*.
   `code/variants.py`, **126 staged checks**, ten stages, 48.8 s full / 12.1 s `--fast`, under
   `-W error::RuntimeWarning`. He wrote all four TODOs; his output is **byte-identical to the
   private reference implementation** (`diff` clean across all ten stages).

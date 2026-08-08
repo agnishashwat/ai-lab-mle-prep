@@ -150,6 +150,20 @@ Gao's mechanism is inexpressible. π_ref's own gold = **0.9104**; best possible 
 > shows you that. This is stronger than the hump, because it is what you would actually
 > hit in production.
 
+> **CORRECTION (added W5 D5).** These amplification factors were computed at **3 seeds**, and
+> W5 D5 showed that a 3-seed estimate of *gold* spread is not stable enough to support a
+> claim of this shape. On a DPO run, the same measurement gave **6.09× amplification at 3
+> seeds and 1.04× at 5 seeds — on identical runs.** Two extra seeds flipped "optimisation
+> amplifies seed noise 6×" to "it does not move it at all". On those same runs, `margin`
+> spread *contracted to exactly 0.000000* and `kl` spread grew **71×**, both stable across
+> seed counts — so the instability is specific to **gold**, which is a tail-sensitive
+> expectation over a whole distribution.
+>
+> D5 did **not** re-run this β-sweep, so the numbers above are not disproven — they are
+> **unverified at the seed count used**. The direction (pressure amplifies outcome variance)
+> is corroborated by the qualitative result that KL spread grows with distance travelled.
+> The specific factors should not be quoted without a ≥5-seed re-run.
+
 At low pressure more data buys **reproducibility**: ±0.0179 → ±0.0020.
 
 ### The mechanism, printable
@@ -395,3 +409,7 @@ untouched**.
    that targets a KL setpoint cannot fix a length confound, because the resistance it
    commands is bounded regardless of the β it chooses.
 4. **≥3 seeds is now mandatory, not advisory** — 89× to 667× spread amplification.
+   *(Amended W5 D5: **≥3 seeds is a FLOOR, not a sufficiency condition.** For a
+   tail-sensitive metric like gold, 3 seeds gave 6.09× and 5 seeds gave 1.04× on identical
+   runs. Use ≥5 for any expectation over a distribution; 3 is adequate only for metrics whose
+   spread is itself stable, like the margin.)*

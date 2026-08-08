@@ -21,7 +21,8 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
   capstone loop + adaptive β as dual ascent (`ppo_rlhf.py`, **90/90**, 26 s full suite).
   `week-summary.md` + `retrospective.md` written.
 
-- **Week 05 — IN PROGRESS (4/5).** Preference optimization: DPO & variants. Day 1 re-scoped
+- **Week 05 — COMPLETE (Days 01-05 done). Preference optimization: DPO & variants. 385 checks
+  across the week.** Day 1 re-scoped
   away from re-deriving Bradley-Terry (W4 D1 did that) toward **what preference data can and
   cannot identify**; `preference_models.py`, **74 checks**. Thesis: *the scale of a BT reward
   is not a property of quality, it is a measurement of annotator disagreement.* Day 2 derived
@@ -42,6 +43,14 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
   length bias at matched margin; ORPO's odds term flips sign with β while its SFT term does not.
   Plus a fourth found mid-session: **a bounded loss is not a loss with a finite minimiser**, so
   KTO does *not* fix P1 — it climbed `+0.9294` per doubling vs DPO's `+0.7207`.
+  Day 5 assembled the failure-mode lab (`dpo_lab.py`, **92 checks**, nine stages, 65.6 s /
+  34 s fast). Thesis: *DPO's failure modes are consequences of what the data format can
+  identify; the loss is exactly constant along every direction the data do not constrain.*
+  Headline: **the β/ε collapse confirmed** — a β-sweep and an ε-sweep matched on
+  `Δ̂* = logit(1−ε)/β` land on the same KL to **2.8e-16** — plus an unplanted law,
+  **steps-to-target ∝ 1/β² (4.04× / 4.03× / 4.02×)**, and a run whose gold goes
+  **+0.7514 → −0.4532** (worse than its own reference) at 100% train accuracy with the loss
+  falling monotonically. `week-summary.md` + `retrospective.md` written.
 
 ## SESSION-FORMAT PREFERENCE (he stated this explicitly on W4 D1 — obey it)
 
@@ -57,44 +66,120 @@ explicitly during Block 0. Do not emit `\(...\)` or `$$...$$`.
 
 ## Next session
 
-Start with the prompt: **"Start Week 5 Day 5"**. Read
-`week-05-dpo-preference-optimization/day-05-dpo-failure-modes/session.md` and teach it.
-All five W5 session plans are already fleshed out (commit `9ece817`). **D5 closes Week 5**, so
-it also owes `week-summary.md` and `retrospective.md` (the W3/W4 pattern).
+Start with the prompt: **"Start Week 6 Day 1"**. Read
+`week-06-*/day-01-grpo-vs-ppo/session.md` and teach it. **Week 5 is CLOSED** —
+`week-summary.md` and `retrospective.md` are written, `progress.md` and the numbers card
+are updated.
 
-**What D5 inherits from D4 — use these, they are measured and in the numbers card:**
+**What W6 inherits from W5 — these are measured and in the numbers card:**
 
-- **The grid is the organising object.** `L = mean_k ℓ(f(y_w), f(y_l)) [+ λ_SFT·NLL]`. Five
-  rewards × five links. D5's failure modes should be located *in the grid*: which axis causes
-  each failure, and which cell would remove it.
-- **P1 (runaway) is a LINK property; P2 (both logprobs fall) is an INVARIANCE property; P3
-  (length/reference) is a REWARD property.** Four of five links are functions of `d` alone to
-  `2.220e-16` — that invariance *is* P2, and it is why they all require pairs.
-- **`acc = 1.000` is the metric that reports nothing.** It saturates in ~20 steps while the
-  reward runs for 8000 more. D5 should lean on this hard.
-- **Matched-margin comparison is the only honest cross-objective KL claim.** `train_variant`
-  already takes `stop_margin`. Reuse it.
-- **`variants.py` is importable.** `named_specs()` gives DPO/cDPO/IPO/SimPO/ORPO/KTO as `Spec`
-  objects and `variant_loss(spec, ...)` is the whole grid in one call.
+- **GRPO is the natural next step from two W5 results.** D1's location invariance
+  (`r + c(x)` is exactly equivalent) is *why* a group-mean baseline is free; and D5's M4
+  (the loss is exactly constant off the comparison set) is *why* on-policy regeneration is
+  the structural fix. Frame GRPO as "DPO's M4 fix, plus W4's PPO machinery minus the critic".
+- **`Δ̂ = M/β` is the invariant, `M` is not.** Across the same β sweep D5 measured margin
+  going **up** (0.4746 → 0.5947) while `Δ̂` goes **down** (1.8984 → 0.2974). Any W6 claim
+  with a β in it must be checked in both units before it is reported.
+- **The cap `logit(1−ε)` needs no held-out set.** RLVR has a *verifiable* reward, so the
+  analogous question is what the verifier's own error rate implies. Worth an explicit ask.
+- **`acc = 1.000` is the metric that reports nothing** (saturated at step 1 of 6000). RLVR's
+  pass@1 will do the same thing. Insist on a level next to every rate.
+- **≥3 seeds is a FLOOR.** W5 D5 proved W4 D4's seed claim was a 3-seed artifact (gold
+  amplification 6.09× at 3 seeds vs 1.04× at 5, same runs). W6 ablations use ≥5 seeds for
+  any tail-sensitive metric, and pair the data seed with the run seed.
+- **`dpo_lab.py` is importable and its patterns are reusable**: `train_*` returning a
+  full instrument panel with `stop_margin` for matched-margin comparisons; a `diagnose_*`
+  that is asserted **silent on a healthy run**; `select_checkpoint` from the training panel
+  alone; and `ablate` dispatching on `__dataclass_fields__`.
 
-**Corrections D5 must inherit (D4 overturned three received claims and found a fourth):**
-- **IPO does not cap uniformly — it COMPRESSES.** `(2f−1)τ` still depends on `f`; the
-  strong/weak ratio squeezes **11.3330 → 4.9000** (2.31×). That is IPO's price.
-- **SimPO's `1/|y|` AMPLIFIES length bias**, it does not brake it. At matched margin MEAN moved
-  `E[|y|]` further than SUM in all four cells. `d(r)/d(logπ) = β/|y|` is largest at `|y| = 1`,
-  so short sequences are the cheapest lever. **Never run a length experiment to convergence** —
-  both arms saturate at `t_max` and the effect vanishes.
-- **ORPO's odds term flips sign with β** (−1.899, −0.457, +0.184, +0.385) while its SFT term
-  holds at every β (+0.566, +0.528, +0.522, +0.557). Run every ablation at more than one
-  hyperparameter before naming a mechanism.
-- **A BOUNDED LOSS IS NOT A LOSS WITH A FINITE MINIMISER.** KTO's `prospect` is bounded in
-  `[0, 2.5]` at `|r| = 1e6`, and its margin *still* diverges — `+0.9294` per doubling vs DPO's
-  `+0.7207`, i.e. FASTER. `inf σ(−u) = 0` only at `u = ∞`. What boundedness buys is bounded
-  **influence** (gradient `2.061e-09` at `d = −20` vs logsigmoid's `0.9999999979`), which is a
-  **noise-robustness** property, not a P1 fix. If D5's plan says otherwise, D5's plan is wrong.
-- **DPO's divergence signature is a constant increment per DOUBLING** (`+0.7163`, `+0.7078`),
-  not % growth, which decays even for a divergent run. This is a theorem about **plain GD** —
-  an adaptive optimiser erases it while still printing a plausible table.
+### W5 D5 grading, process gaps, and coding ownership
+
+Cold recall **3.85/6 (64%)**; D1–D4 recall quiz **9.0/20 (45%)**; derivation/design
+**5.0/12 (42%)**; interview drills **not attempted — model answers given at his request**;
+coding **92/92**, three of six TODOs his (`rel`, `make_dataset`, and the `train_dpo`
+optimiser loop), three written for him at his request (`train_dpo`'s panel, `diagnose_dpo`,
+`select_checkpoint`, `ablate`).
+
+- **SKELETON-FIRST DID NOT TRANSFER — and this is now the finding to act on.** D4's headline
+  intervention (3.7× on the identical question) was **not used unprompted on D5**, and the
+  recall quiz fell to **45%**, the lowest of the week. Two possible readings and they have
+  different fixes: (a) it is a *prompted* technique that needs re-issuing every session, or
+  (b) it only works under retrieval-reset conditions. **W6 D1: issue it explicitly in Block 0,
+  then withhold it in Block 1 and compare.** That is a cheap, decisive experiment.
+- **Recall across days is the binding constraint, not comprehension.** He built a 92-check lab
+  correctly while scoring 45% on recalling what D1–D4 measured. The gap is retrieval of
+  *numbers and named results*, not of mechanism. Consider opening W6 sessions with a 5-minute
+  numbers-card drill rather than a cold-recall quiz.
+- **Coding ownership DROPPED, third consecutive request.** D3 and D4 he asked for the loop
+  plumbing; D5 he asked for `diagnose_dpo`, `select_checkpoint` and `ablate` outright. The
+  three he wrote he wrote *well* — `make_dataset` went 20/20 and reproduced every calibrated
+  number bit-for-bit. **The pattern is that he writes the mathematical core and delegates the
+  scaffolding.** That is a defensible split, but it means the *design* skills (thresholds with
+  air on both sides, negative controls, dispatch tables) are being taught rather than practised.
+  W6 should hand him one **diagnostic** TODO specifically.
+- **Two genuine unprompted catches, matching D4's positive signal.** (1) He asked
+  *"`logp_w`, `logp_l` — is this logprob ratio or plain logprob?"* — exactly the right
+  question, and the answer is load-bearing (ratios make the pair redundant with the margin to
+  1.39e-16). (2) He challenged `len(xs)` on an ndarray. Both are the *"does this actually do
+  anything?"* move. **Keep reinforcing it by name.**
+- **He fixed `rel()` completely and correctly**, including the guard-ordering subtlety
+  (`len(xs) < 2` is total; `denom == 0` requires evaluation; they cannot be combined with `or`).
+  6/6 on the port stage.
+- **Second-clause gap — unchanged, six weeks.** Oldest open item. Still worth a standing probe.
+
+### Bug families from W5 D5
+
+1. **WRONG LEVEL — now at SEVEN sightings and it is the signature failure.** D5 added two:
+   `np.where(cond, reward_a, reward_b)` selecting **reward values** where **sequence indices**
+   were required; and `rng.random(cfg.n_pairs)` asking the **config** for a count when
+   `cfg.n_pairs` is the knob (default 0) and `len(edges)` is the realisation.
+   **The unifying shape of the last two: asking the CONFIG for something only the DATA knows.**
+   Standing probes: *"any number with a β in it — divide by β and check whether the story
+   flips"*; *"when you write `np.where(cond, A, B)`, ask what TYPE the output must be"*;
+   *"never ask the config for a count — measure the array you are holding."*
+2. **`cfg.eps` vs `data.cfg.eps`.** Two independent ε in the same file (cDPO smoothing vs
+   annotator flip rate). Reading the wrong one makes the cap move with the training config, so
+   a β-sweep silently sweeps its own target. Same family as (1).
+3. **A copy-paste index that produces a HEALTHY-LOOKING panel.** `delta` indexed `pairs[:,0]`
+   twice, so `margin ≡ 0` and `acc ≡ 0` **forever** — not a crash, a panel that reports every
+   broken fixture as healthy. Defence: **write the two lines as a pair on adjacent lines**
+   (`r_w, r_l = r[pairs[:,0]], r[pairs[:,1]]`) so the asymmetry is visible.
+4. **A count where a rate was required.** `(delta > 0).sum()` for `acc`, range `[0, 105]`
+   instead of `[0, 1]`. His own docstring listed the range. **This is D4's range probe, and it
+   still needs to be run.**
+5. **`ndarray` treated as an accumulator.** `history.step.append(...)` — `ndarray` has no
+   `.append`, and `np.append` reallocates the whole array every call. The record/builder
+   distinction: accumulate in lists, `np.asarray` once at the end.
+6. **numpy/torch mixing at no fixed boundary.** Recurred from earlier days. Taught the
+   **single conversion boundary** discipline: convert once, at the edge, and let `float()` on
+   a multi-element tensor act as a free assertion.
+7. **`requires_grad` is an ATTRIBUTE; `requires_grad_` (trailing underscore = in-place) is the
+   method.** Generalises: in torch, a trailing underscore means in-place.
+8. **Missing `unsqueeze(1)` on a `(K,)` mask against a `(K,2)` tensor.** At K=2 it **silently
+   succeeds with a wrong answer** — a pair comparing a sequence with itself. Flipping *rows*
+   instead of selecting *values* is closed on the type (long → long), which makes the
+   reward/index confusion of family (1) unrepresentable.
+
+### Harness bugs *I* found by running a private reference before handover (sixth day, still paying)
+
+**Always write and run a reference implementation of every TODO before handing the file over.**
+On D5 this caught two **wrong fixtures** — failures that would have been blamed on his code:
+
+1. **M4's fixture did not exhibit M4 under a delta rule.** Off-data mass *falls* during
+   training (0.4983 → 0.1943), because pushing losers down moves mass onto covered winners.
+   The rule had to key on the **LEVEL**, not the change. Re-seeded to `matching, n_pairs=4,
+   seed=3` so gold falls monotonically from step 0.
+2. **M3's fixture had gold RISING on the original seed.** Searched the ladder seeds and chose
+   **seed 11** (corr(gold, |y|) = −0.572, gold drops 0.6311).
+3. **`stage_inversion` had vacuous asserts** — rewritten with real assertions *and a healthy
+   control*. The control is what turns "gold peaks early" from a statement about training
+   length into a statement about the data (healthy gives back **exactly 0.0000**).
+4. **W4 D4's `rel()` was ported with two calibration bugs** and fixed as a diff, deliberately,
+   so the fix is code and not a memory. The zero-denominator case is **not hypothetical**: at
+   θ = θ_ref the implicit reward is exactly 0.0, so `margin[0]` is exactly 0.0 in *every* DPO
+   run and the old form returned `1e9 · x[-1]`.
+5. **W4 D4's "seed spread grows with pressure" turned out to be a 3-SEED ARTIFACT** (6.09× at
+   3 seeds vs 1.04× at 5, same runs). Found by running the reference at two seed counts.
 
 ### W5 D4 grading, process gaps, and coding ownership
 
@@ -1895,3 +1980,71 @@ coding → deliverable.**
   it is a **no-op** — verify it does something before believing the mechanism it claims to
   implement. On W5 D4 KTO's `z_ref` roll agreed to `1e-16` on unconditional data; it only becomes
   load-bearing when the reward depends on the PAIRING. (Learner-initiated catch.)
+- **A DIAGNOSTIC NEEDS ITS NEGATIVE HALF.** Assert it is **silent on a healthy run**, and that
+  each rule does *not* fire on fixtures it does not own. A rule that fires on everything is not
+  a rule. W4 D4's −20% entropy threshold sat *inside* the range a healthy run occupies; W5 D5's
+  M3 gate was calibrated to have **2.8× air below (healthy 0.089) and 4.4× above (fixture
+  1.110)**. **A threshold needs air on BOTH sides, and you only know that by measuring healthy.**
+- **Build rules from MECHANISMS, not thresholds.** W5 D5's M1 fires on a *conjunction* — accuracy
+  saturated AND margin still rising AND `logp_l` still falling, all over the run's second half —
+  not on "the margin is large", because on clean data the cap is `+inf` and a large margin is the
+  correct answer to a badly-posed question.
+- **Ask whether the signature is a LEVEL or a CHANGE.** W5 D5's M4 looked absent under every
+  delta rule because off-data mass *falls* during training (0.4983 → 0.1943) — pushing losers
+  down moves mass onto covered winners. Support is a **level**. Getting this wrong makes a real
+  failure mode look like it does not exist.
+- **A panel needs at least one LEVEL next to every DIFFERENCE.** Log `logp_w`/`logp_l` as plain
+  logprobs, never as ratios: as ratios their difference equals `margin/β` to **1.39e-16**, so
+  the pair becomes perfectly redundant with the instrument it exists to check. The difference is
+  exactly what hides the level. (W5 D5, learner-initiated question.)
+- **≥3 seeds is a FLOOR, not a sufficiency condition.** W5 D5 measured gold-spread amplification
+  at **6.09× on 3 seeds and 1.04× on 5 — identical runs**, flipping the conclusion completely,
+  and it retroactively downgraded a W4 D4 headline. `margin` and `kl` spreads were stable at both
+  counts, so the instability is specific to **tail-sensitive expectations over a distribution**.
+  Use ≥5 seeds for anything of that shape. Also: **pair the seeds** — vary the data seed and the
+  run seed *together*, or you are re-running one fixture (worth **2.07×** tighter spreads).
+- **Report the effect against the seed noise, or do not report it.** Same runs, same seeds:
+  KL effect **0.4038** vs worst spread **0.3621** ⇒ intervals overlap ⇒ *the honest report is
+  "underpowered", not a number*. Margin effect **0.1201** vs spread **0.0282** ⇒ **4.3×**,
+  resolved. **The metric decides whether an ablation has power**, not the experiment. (W5 D5.)
+- **ANY NUMBER WITH A β IN IT — divide by β and check whether the story flips.** Over the same
+  sweep W5 D5 measured margin going **UP** (0.4746 → 0.5947) while `Δ̂ = margin/β` goes **DOWN**
+  (1.8984 → 0.2974). This is the **WRONG-LEVEL family, now at SEVEN sightings**, and it is the
+  single most reliable failure in this repo.
+- **Never ask the CONFIG for something only the DATA knows.** `cfg.n_pairs` is a knob (default 0)
+  while `len(edges)` is the realisation; `RunCfg.eps` is cDPO smoothing while `DataCfg.eps` is the
+  annotator flip rate that sets the cap. Both W5 D5 bugs have this exact shape. **The config is a
+  request; the data are the realisation, and they disagree.**
+- **`np.where(cond, A, B)` — ask what TYPE the output must be.** Selecting reward *values* where
+  sequence *indices* were required is unrepresentable if you instead flip rows (`long → long`).
+  **Prefer the operation that is closed on the type.** (W5 D5.)
+- **Write index-pair lines ADJACENTLY** — `r_w, r_l = r[pairs[:,0]], r[pairs[:,1]]`. W5 D5's
+  copy-paste that indexed column 0 twice made `margin ≡ 0` and `acc ≡ 0` *forever*: not a crash,
+  a panel that reported every broken fixture as healthy. Two lines differing only by an index
+  must sit next to each other so the asymmetry is visible.
+- **A RECORD IS NOT AN ACCUMULATOR.** `ndarray` has no `.append`, and `np.append` reallocates the
+  whole array every call. Accumulate in Python lists inside a `@torch.no_grad()` **closure** over
+  the training scope (not an N-argument function — that is a closure written the hard way), then
+  `np.asarray` once at the end. Without `no_grad` every logged tensor retains a live autograd
+  subgraph. (W5 D5.)
+- **`np.nonzero(cond)[0]` for "first index where", never `np.argmax(cond)`** — `argmax` on an
+  all-False array returns **0**, silently claiming the *first* element satisfied the condition.
+  Test `hit.size` to distinguish never-reached from reached-immediately. (W5 D5.)
+- **In torch a TRAILING UNDERSCORE means in-place.** `requires_grad` is an attribute;
+  `requires_grad_()` is the method. And `.mean()` on a bool tensor **raises** in torch where numpy
+  allows it — use `.double().mean()`. (W5 D5.)
+- **A `(K,)` mask against a `(K,2)` tensor needs `unsqueeze(1)`** — a bare `(K,)` broadcasts to
+  the **last** axis. At K=2 it *silently succeeds with a wrong answer*. Check broadcasting on a
+  shape where the dimensions differ. (W5 D5.)
+- **The fix for a zero denominator is the RIGHT denominator, not an epsilon on the wrong one.**
+  W4 D4's `rel()` divided by `max(|x[0]|, 1e-9)`, and at θ = θ_ref the implicit reward is
+  *exactly* 0.0 — so `margin[0]` is exactly 0.0 in **every** DPO run and it returned `1e9·x[-1]`,
+  making every downstream threshold meaningless. Divide by `max_t |x_t|` (bounded in `[−2, 2]`)
+  or pass the problem's own scale. **Also guard `scale = inf`**, which returns 0.0 silently.
+- **Verify a fixture EXHIBITS the phenomenon before building a rule on it.** W5 D5's private
+  reference run caught **two wrong fixtures** — M4's off-data mass *fell* rather than rose, and
+  M3's gold *rose* on the original seed. Both would have surfaced as "the learner's code is
+  broken". Sixth consecutive day the reference-implementation rule paid.
+- **A CONTROL converts an observation into evidence.** "Gold peaks early" is a statement about
+  training length until a healthy run peaks at step 1270 and gives back **exactly 0.0000**; then
+  it is a statement about the **data**. One extra run. (W5 D5.)
