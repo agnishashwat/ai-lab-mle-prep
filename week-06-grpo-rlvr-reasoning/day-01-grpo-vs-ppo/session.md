@@ -101,7 +101,7 @@ Build `code/grpo.py` to make all five assertions rather than claims.
 
 > **Rendering.** All maths in this file is plain Unicode. No LaTeX anywhere.
 
-### 0:00-0:05 — Numbers-card drill (RECOGNITION, not retrieval)
+### Block 0 · 0:00-0:05 — Numbers-card drill (RECOGNITION, not retrieval)
 
 New this week, on the W5 retrospective's recommendation. Five weeks of evidence say
 recognition works where retrieval does not (D5: 45% recall while building a 92-check lab
@@ -118,15 +118,15 @@ Three questions immediately after, closed-book:
 3. W5 D5's β-sweep: margin went **up**, `Δ̂ = M/β` went **down**. Give both pairs of
    numbers, then say which one is the invariant.
 
-### 0:05-0:20 — Cold recall, and THE EXPERIMENT OF THE DAY
+### Block 1 · 0:05-0:20 — Cold recall, and THE EXPERIMENT OF THE DAY (skeleton-first ISSUED)
 
 **Explicit instruction, issued once, on the record: for every multi-part answer below,
 type the numbered skeleton FIRST with blank slots, THEN fill each slot.** That is D4's
 intervention — it produced 3.7× on an identical question — and D5 showed it is not used
-unprompted. So today it is *prompted here in Block 0* and then **deliberately withheld in
-Block 1**. If Block 1 scores like Block 0, it has transferred and I stop issuing it. If
-Block 1 collapses, it is a prompted technique and it gets issued every single session
-forever. Either answer is worth having. **Do not use skeleton-first in Block 1 unless you
+unprompted. So today it is *prompted here in Block 1* and then **deliberately withheld in
+Block 2**. If Block 2 scores like Block 1, it has transferred and I stop issuing it. If
+Block 2 collapses, it is a prompted technique and it gets issued every single session
+forever. Either answer is worth having. **Do not use skeleton-first in Block 2 unless you
 would have done so anyway** — that is the whole experiment.
 
 1. **PPO's objective, written out**, then the four networks and which one can WRITE.
@@ -147,9 +147,10 @@ would have done so anyway** — that is the whole experiment.
 7. **W5's one-line thesis on what a DPO dataset is, graph-theoretically**, and what that
    implies about where the loss is constant.
 
-### 0:20-0:35 — Graded re-ask: the two drills that are load-bearing today
+### Block 2 · 0:20-0:35 — Graded re-ask: the two drills that are load-bearing today
 
-Skeleton-first is **withheld** here. Answer however you naturally would.
+Skeleton-first is **withheld** here (this is the control arm). Answer however you
+naturally would.
 
 1. **"When would you not use PPO?"** — re-asked from W5 D1, because today is its answer.
    PPO's bill; what DPO deletes and what it pays; what GRPO deletes and what it pays;
@@ -164,7 +165,7 @@ Skeleton-first is **withheld** here. Answer however you naturally would.
 > *first clause* and *everything after*. First clause only caps the item at 0.5. Sixth week
 > running that clause two is where the points are.
 
-### 0:35-1:00 — Concept: the group IS the critic
+### Block 3 · 0:35-1:00 — Concept: the group IS the critic
 
 **Framing.** The standard telling is "GRPO removes the critic to save memory." That is
 true and it is the least interesting thing about it. The useful framing is that PPO and
@@ -219,7 +220,7 @@ Also worth stating precisely, because it is where people get sloppy: **GRPO's gr
 a "group of prompts". It is `G` completions of the SAME prompt.** The baseline is only
 valid because everything in the group shares `x`. That is exactly W4 D1's `c(x)`.
 
-### 1:00-1:25 — Derivation
+### Block 4 · 1:00-1:25 — Derivation
 
 Do these in order; each is short and each has a measurable consequence.
 
@@ -261,7 +262,7 @@ rate without a level.
 each. Five lines. This is DeepSeekMath §5.2.2, and it is the single best whiteboard answer
 to "compare the post-training algorithms."
 
-### 1:25-1:40 — Interview drills
+### Block 5 · 1:25-1:40 — Interview drills
 
 **Skeleton-first is REQUIRED here** (Block 1 was the withheld condition; this is not).
 Type the numbered skeleton with blank slots, then fill.
@@ -279,7 +280,7 @@ Type the numbered skeleton with blank slots, then fill.
    rollout cost, and wall-clock. Give the formula, then a number for a realistic pass rate,
    then say what you would measure to tune it rather than guess.
 
-### 1:40-2:30 — Coding: `week-06-grpo-rlvr-reasoning/code/grpo.py`
+### Block 6 · 1:40-2:30 — Coding: `week-06-grpo-rlvr-reasoning/code/grpo.py`
 
 Staged harness, W4/W5 convention. Built on `TokenEnv(vocab=3, t_max=3)` — **15 enumerable
 sequences, 7 states** — reused from `week-05-.../code/dpo.py`, so every claim about an
@@ -315,7 +316,7 @@ and its **negative control** (μ=4 ⇒ clip fraction strictly positive); the dea
 against a simulation at ≥5 seeds; and the `1/std` bias with a **matched-margin** control so
 the effect is not confounded with scale.
 
-### 2:30-2:40 — Deliverable & next session
+### Block 7 · 2:30-2:40 — Deliverable & next session
 
 Fill in `deliverable.md`, add every measured number to `shared/numbers-card.md`, update
 `progress.md` and `HANDOFF.md`. Day 2 is **RL with verifiable rewards**, which deletes the
