@@ -781,3 +781,22 @@ Topics to revisit:
 ## Interview Bank Additions
 
 Add polished answers every week (see `interview-bank/`).
+
+**STATUS AFTER SIX WEEKS: the bank is EMPTY.** All four files are scaffolded Q&A with every
+`**Short answer:**` / `**Deeper:**` / `**Watch out for:**` slot blank. The drill block was
+scheduled last (1:45-1:55) and was therefore the block the clock ate, on almost every day it
+appeared.
+
+**Fixed on W6 D1, structurally:** the drill now runs at **1:00-1:15, before the coding block**,
+in `shared/templates/session-template.md` and in all 25 remaining session plans (W6 D2-D5, W7,
+W8, W9, W10). Rules:
+
+- The drill is **mandatory**. If time runs short, coding depth gets cut, not the drill.
+- Questions are asked **cold** - no notes, no scrollback - and answered **out loud**.
+- **He** writes the bank entry; model answers come after his, as a diff, never instead.
+- **An empty entry means the block did not happen.**
+
+**First back-fill owed (W6 D2):** the three questions already stubbed in
+`rl-post-training-qa.md` - "GRPO vs PPO: what changes and why", "Why KL to a reference policy",
+and "KL spikes, reward improves, human evals degrade - diagnose it." W6 D1 measured the answer
+to all three and the block that owned them was skipped.

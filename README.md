@@ -66,6 +66,11 @@ python shared/utils/new_day.py week-04-rlhf-ppo day-06-extra-mock "Extra Mock In
 | 0:00-0:10 | Recall quiz from prior material |
 | 0:10-0:35 | First-principles concept explanation |
 | 0:35-1:00 | Math derivation / paper deconstruction |
-| 1:00-1:45 | Coding / implementation / experiment |
-| 1:45-1:55 | Interview-style explanation drill |
+| 1:00-1:15 | **Interview-style explanation drill (mandatory)** |
+| 1:15-1:55 | Coding / implementation / experiment |
 | 1:55-2:00 | Notes, deliverable, next-session setup |
+
+The drill runs **before** the coding block, not after. It sat at 1:45-1:55 for the first five
+weeks and was cut on nearly every day it was scheduled, because coding always overruns. If a
+session has to lose something to the clock, it loses coding depth. Each drill's answer goes
+into the matching `interview-bank/*.md` file - an empty entry means the block did not happen.

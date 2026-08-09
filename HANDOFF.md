@@ -79,16 +79,46 @@ Block 3 had to be re-delivered in full.
 Unicode / fenced code blocks — `β`, `π_θ`, `σ(−M)`, `Σ_y`, `∇`, `‖r̂‖`. He asked for this
 explicitly during Block 0. Do not emit `\(...\)` or `$$...$$`.
 
+**INTERVIEW DRILLS ARE MANDATORY (he stated this explicitly on W6 D1 — obey it).** They were
+skipped on W5 D5 and again on W6 D1 and he called it out. **Every day gets its drill block, and
+it is never the block that gets dropped for time.**
+
+- **The fix is STRUCTURAL, and it is already applied.** The drill sat at **1:45–1:55** in
+  `shared/templates/session-template.md`, i.e. last before wrap-up, so it was always what the
+  clock ate. It has been moved to **1:00–1:15, BEFORE the coding block**, in the template and in
+  every remaining day (W6 D2–D5, W7, W8, W9, W10 — 25 files). **When you flesh out a session
+  plan, keep that order.** If something must be cut for time, cut coding depth, not the drill.
+- **`interview-bank/*.md` is the drill's deliverable, and it is currently EMPTY.** All four
+  files (`rl-post-training-qa.md`, `evals-qa.md`, `systems-qa.md`, `project-stories.md`) are
+  scaffolded Q&A with every `**Short answer:**` / `**Deeper:**` / `**Watch out for:**` slot
+  blank, after six weeks. **An empty entry means the block did not happen.** At the end of each
+  drill, write his answer into the matching file.
+- **Do NOT write the answers for him.** On W5 D5 he asked for model answers and got them, and
+  the block scored nothing. Ask cold, make him answer out loud with no notes and no scrollback,
+  then grade, then have him write the entry. Give the model answer *after* his, as a diff.
+- **`rl-post-training-qa.md` already has the right questions stubbed for W6** — "GRPO vs PPO:
+  what changes and why (group baseline, no critic)?", "Why KL to a reference policy? What breaks
+  without it?", and "KL spikes, reward improves, human evals degrade — diagnose it." W6 D1
+  measured the answer to all three. **W6 D2's drill should open by back-filling them**, since the
+  material is fresh and the day it belonged to skipped the block.
+
 ## Next session
 
 Start with the prompt: **"Start Week 6 Day 2"**. Read `week-06-*/day-02-*/session.md` and
 teach it. **W6 D1 is CLOSED** — `deliverable.md` written, `progress.md` and the numbers card
 updated, `grpo.py` at 96/96 with all four TODOs his.
 
-**MANDATORY OPENING (this is now a standing rule — see the skeleton-first finding below):**
-**pre-print the answer skeleton with EMPTY slots and make him fill them.** Telling him to use
-skeleton-first produces zero compliance; emitting the slots produces 100%. Do not ask him to
-structure his own answer.
+**TWO MANDATORY RULES FOR D2 (both standing, both from D1):**
+
+1. **Pre-print the answer skeleton with EMPTY slots and make him fill them.** Telling him to use
+   skeleton-first produces zero compliance; emitting the slots produces 100%. Do not ask him to
+   structure his own answer.
+2. **RUN THE INTERVIEW DRILL, and run it at 1:00–1:15 — before the coding block, not after.**
+   It has been skipped two weeks running and he has now asked for it explicitly. Open the drill
+   by back-filling the three GRPO/KL questions already stubbed in
+   `interview-bank/rl-post-training-qa.md`; D1 measured the answer to all three and the block
+   that owned them was cut. Ask cold, no notes, no scrollback; he answers out loud; **he** writes
+   the bank entry. Model answers come after his, as a diff — never instead.
 
 **What W6 D2 (RLVR) inherits from D1 — measured, in the numbers card:**
 
@@ -143,9 +173,12 @@ declining coding ownership.
   *he* measured, plus a scope condition and a caveat, was skipped again. He now has three strong
   candidates from today alone (the `no_critic` null, the 23× dead_frac separation, the G=8→32
   fixture repair). **W6 D2: pre-print this slot too, and do not accept a general claim in it.**
-- **Block 5 (interview drills) was deferred by agreement**, not delivered. This is the second
-  consecutive week the drills block has gone unattempted. Either fold the drills into the
-  earlier blocks or schedule them first, before fatigue.
+- **Block 5 (interview drills) was SKIPPED, and he called it out afterwards.** Second
+  consecutive week the drills block went unattempted, and the `interview-bank/` files are still
+  empty after six weeks. **He has since made drills mandatory — see SESSION-FORMAT PREFERENCE
+  above.** The structural fix is applied: the drill now runs at **1:00–1:15, before coding**,
+  in the template and in all 25 remaining session plans. The root cause was scheduling, not
+  intent — a block placed after the coding block is a block that will be cut.
 
 ### Bug families from W6 D1
 

@@ -30,13 +30,20 @@
 
 <derive the key result; move long derivations to `derivation.md`>
 
-### 1:00-1:45 - Coding / Experiment Task
+### 1:00-1:15 - Interview Drill (MANDATORY - runs BEFORE the coding block)
+
+**Do not move this after the coding block and do not skip it.** It sat at 1:45-1:55 for the
+first five weeks and was cut on almost every day it was scheduled, because coding always
+overruns. It is scheduled here so that the thing the clock eats is coding depth, not the
+drill.
+
+<2-3 questions, asked cold and answered OUT LOUD, interview-style. Answer with no notes and
+no scrollback. Then write the answer into the matching `interview-bank/*.md` file - that file
+is the deliverable for this block, and an empty entry means the block did not happen.>
+
+### 1:15-1:55 - Coding / Experiment Task
 
 <concrete implementation or experiment; commit code under the week's `code/`>
-
-### 1:45-1:55 - Interview Drill
-
-<explain the concept out loud, interview-style>
 
 ### 1:55-2:00 - Deliverable & Next Session
 

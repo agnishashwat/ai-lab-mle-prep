@@ -29,8 +29,9 @@ Every generated 2-hour session should have this structure:
 1. 10 min — Recall quiz from prior material.
 2. 25 min — First-principles concept explanation.
 3. 25 min — Math derivation or paper deconstruction.
-4. 45 min — Coding / implementation / experiment task.
-5. 10 min — Interview-style explanation drill.
+4. 15 min — Interview-style explanation drill. **Mandatory, and it runs BEFORE the coding
+   block.** Answers are written into `interview-bank/`.
+5. 40 min — Coding / implementation / experiment task.
 6. 5 min — Notes, deliverable, and next-session setup.
 
 Each session should include:
