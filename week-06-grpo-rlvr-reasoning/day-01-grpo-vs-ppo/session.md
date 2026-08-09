@@ -329,16 +329,23 @@ TODOs (yours):
    scaffolding, so the *design* skills — thresholds with air on both sides, negative
    controls, a rule that is silent on a healthy run — are being taught rather than
    practised. Contract: return a list of `(name, detail)`; assert **silent on a healthy
-   run**; fire on `dead_groups`, `advantage_collapse`, `length_drift`, and
-   `entropy_collapse`. Every threshold must key on a **level**, not a change — W5 D5's M4
-   fixture was wrong for exactly that reason.
+   run**; fire on `dead_groups`, `kl_runaway`, and `entropy_collapse`. Every threshold must
+   key on a **level**, not a change — W5 D5's M4 fixture was wrong for exactly that reason.
+
+   > A fourth rule, `length_drift`, was in the design and was **cut during calibration**:
+   > with `t_max = 3`, `E[|y|]` can only travel 1.985 → 3.0, and every run that learns
+   > lengthens, so healthy (ratio 1.14) and broken (1.35) have no gap worth a threshold.
+   > Cutting a rule the instrument cannot support is the correct move — and the harness
+   > now asserts the *asymmetry* instead: a run can leave `π_ref` while staying stochastic,
+   > but it cannot collapse to a point without leaving `π_ref`.
 
 Provided (not yours): the env port, exact enumeration, the finite-difference checker, the
 fixtures, and `train_grpo`'s optimiser plumbing.
 
 Stages assert, at minimum: the `(G−1)/G` factor to ≥3 significant figures against exact
 enumeration; annihilation to `< 1e-15`; the `μ=1 ⇒ clip inert` claim as an exact equality
-and its **negative control** (μ=4 ⇒ clip fraction strictly positive); the dead-group law
+and its **negative control** (μ=8 at the *same* lr ⇒ clip fraction strictly positive); the
+dead-group law
 against a simulation at ≥5 seeds; and the `1/std` bias with a **matched-margin** control so
 the effect is not confounded with scale.
 
