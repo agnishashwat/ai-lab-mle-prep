@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import math
 import sys
+import warnings
 import traceback
 from dataclasses import dataclass, field
 from functools import cached_property
@@ -359,8 +360,23 @@ def group_advantage(rewards: np.ndarray, mode: str = "centered") -> np.ndarray:
 
     Returns an array with the same shape as `rewards`, float64.
     """
-    # TODO
-    raise NotImplementedError
+    
+    G = rewards.shape[-1]
+    rewards_mean = rewards.mean(axis=-1, keepdims=True)
+    if mode == 'centered':
+        if G == 1: return np.zeros_like(rewards, dtype=np.float64)
+        return rewards - rewards_mean
+    elif mode == 'normalized':
+        if G == 1: return np.zeros_like(rewards, dtype=np.float64)
+        std = rewards.std(axis=-1, keepdims=True)
+        return np.divide(rewards-rewards_mean, std, out=np.zeros_like(rewards, dtype=np.float64), where=std > 0)
+    elif mode == 'loo':
+        if G == 1: return np.zeros_like(rewards, dtype=np.float64)
+        return (rewards - rewards_mean) * (G / (G - 1))
+    else:
+        raise ValueError(mode)
+    
+
 
 
 def grpo_surrogate(logp: torch.Tensor, logp_old: torch.Tensor, adv: torch.Tensor,
@@ -393,9 +409,18 @@ def grpo_surrogate(logp: torch.Tensor, logp_old: torch.Tensor, adv: torch.Tensor
     Masked positions must contribute exactly nothing under both. Never divide by
     `numel()`; the denominator is a masked count (W1's running fact).
     """
-    # TODO
-    raise NotImplementedError
-
+    rho = torch.exp(logp-logp_old)
+    G = adv.shape[-1]
+    per_token = torch.minimum(rho * adv[:, None], torch.clamp(rho, 1-eps, 1+eps) * adv[:, None])
+    per_token_masked = torch.where(mask, per_token, 0.0)
+    G = logp.shape[0]
+    if length_norm == 'token':
+        return 1/G * (per_token_masked.sum(dim=-1)/mask.sum(dim=-1)).sum()
+    elif length_norm == 'batch':
+        return per_token_masked.sum()/mask.sum()
+    else:
+        raise ValueError(length_norm)
+        
 
 def kl_penalty(logp: torch.Tensor, logp_ref: torch.Tensor,
                kind: str = "k3") -> torch.Tensor:
@@ -420,8 +445,13 @@ def kl_penalty(logp: torch.Tensor, logp_ref: torch.Tensor,
     Returns (G, T), same shape as the inputs, unmasked (the caller masks).
     Build k3 from `l`; do not exponentiate a raw log-prob difference twice.
     """
-    # TODO
-    raise NotImplementedError
+    l = logp_ref - logp
+    if kind == 'k1':
+        return -l
+    elif kind == 'k3':
+        return torch.exp(l) - 1 - l
+    else:
+        raise ValueError(kind)
 
 
 def diagnose_grpo(h: History) -> list[tuple[str, str]]:
@@ -468,8 +498,20 @@ def diagnose_grpo(h: History) -> list[tuple[str, str]]:
     `detail` is a short string with the NUMBER that fired the rule in it -- an
     alert without its measurement is not actionable.
     """
-    # TODO
-    raise NotImplementedError
+    report = []
+    dead_frac = _tail(h.dead_frac).mean()
+    kl = _tail(h.kl).mean()
+    entropy = _tail(h.entropy).mean()
+
+    if dead_frac > 0.5:
+        report.append(("dead_groups", f"too much of the batch carries no signal, {dead_frac} dead averaged over tail"))
+    if kl > 1.0:
+        report.append(("kl_runaway", f"the policy has left the region pi_ref vouches for; kl divergence is {kl} aaveraged over tail"))
+
+    if entropy < 0.5:
+        report.append(("entropy_collapse", f"the policy has gone (near) deterministic, entropy is {entropy} averaged over tail"))
+    
+    return report
 
 
 # ---------------------------------------------------------------------------
@@ -675,7 +717,12 @@ class Ctx:
     @cached_property
     def h_nokl(self) -> History:
         print("  ... training the NO-KL fixture (kl runaway)")
-        return self.run(seed=0, flavour="sharp", beta=0.0, lr=1.5)
+        # G=32, not the default 8, and for a reason you can derive: this fixture must
+        # isolate KL runaway, but "sharp" drives the pass rate away from 0.5, and the
+        # dead-group law then contaminates it with dead_groups. P(dead) = p^G+(1-p)^G
+        # collapses in G, so raising the group size buys back the isolation. The day's
+        # own law is the tool that fixes the day's own fixture.
+        return self.run(seed=0, flavour="sharp", beta=0.0, lr=1.5, group=32)
 
     @cached_property
     def h_greedy(self) -> History:
@@ -683,14 +730,18 @@ class Ctx:
         return self.run(seed=0, flavour="sharp", beta=0.0, lr=8.0)
 
 
-def _fail_fast(ctx: Ctx) -> None:
-    """Touch every TODO a heavy stage needs, on a 1-element input, so a missing
-    implementation surfaces BEFORE the expensive fixture is built."""
-    group_advantage(np.zeros((1, 2)), "centered")
+def _fail_fast(ctx: Ctx, *needs: str) -> None:
+    """Touch ONLY the TODOs this stage actually uses, on a 1-element input, so a
+    missing implementation surfaces before an expensive fixture is built -- and so
+    a stage is never blocked by a TODO it does not need."""
     z = torch.zeros((1, 1), dtype=torch.float64)
-    grpo_surrogate(z, z, torch.zeros(1, dtype=torch.float64),
-                   torch.ones((1, 1), dtype=torch.bool))
-    kl_penalty(z, z, "k3")
+    if "advantage" in needs:
+        group_advantage(np.zeros((1, 2)), "centered")
+    if "surrogate" in needs:
+        grpo_surrogate(z, z, torch.zeros(1, dtype=torch.float64),
+                       torch.ones((1, 1), dtype=torch.bool))
+    if "kl" in needs:
+        kl_penalty(z, z, "k3")
 
 
 # ---- stages ---------------------------------------------------------------
@@ -731,6 +782,19 @@ def stage_advantage(ctx: Ctx) -> None:
            and np.isfinite(group_advantage(batch, "normalized")).all(), "")
 
     one = group_advantage(np.array([[3.7]]), "centered")
+    # The dead group is the COMMON case, not an exotic one -- at p = 0.95 two thirds
+    # of real groups are dead. Its VALUE cannot be tested reliably: 0/0 discarded by
+    # np.where, and np.divide(..., where=) without out=, both usually LOOK like zeros
+    # (fresh pages arrive zeroed). So test the contract violation numpy itself
+    # reports. A guard that only SELECTS is not a guard that COMPUTES.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        big = group_advantage(np.ones((20_000, 8)), "normalized")
+    _check("a dead group is computed CLEANLY -- no invalid-value or uninitialised-memory "
+           "warning, and the result is exactly 0 and finite",
+           not caught and bool(np.all(big == 0.0)) and bool(np.isfinite(big).all()),
+           f"warnings {[str(w.message)[:52] for w in caught]}, max|A| {np.abs(big).max():.3e}")
+
     _check("G=1 centered is exactly 0 -- THE defining property",
            one.shape == (1, 1) and float(one[0, 0]) == 0.0, f"{one}")
     _check("G=1 loo is 0 and finite (not nan)",
@@ -740,7 +804,7 @@ def stage_advantage(ctx: Ctx) -> None:
 
 def stage_shrinkage(ctx: Ctx) -> None:
     """the EXACT (G-1)/G factor, Monte-Carlo vs enumeration"""
-    _fail_fast(ctx)
+    _fail_fast(ctx, "advantage")
     exact = exact_policy_gradient(ctx.env, ctx.theta1, ctx.tab, ctx.rewards1)
     nrm_exact = float(np.linalg.norm(exact))
     _check("the exact gradient is non-trivial", nrm_exact > 0.05, f"||grad J|| = {nrm_exact:.4f}")
@@ -871,7 +935,7 @@ def stage_deadgroup(ctx: Ctx) -> None:
 
 def stage_surrogate(ctx: Ctx) -> None:
     """grpo_surrogate -- levels, masking, and whether the clip does ANYTHING at mu=1"""
-    _fail_fast(ctx)
+    _fail_fast(ctx, "surrogate")
     torch.manual_seed(0)
     G, T = 6, 3
     mask = torch.tensor([[1, 1, 1], [1, 1, 0], [1, 0, 0],
@@ -941,7 +1005,7 @@ def stage_surrogate(ctx: Ctx) -> None:
 
 def stage_kl(ctx: Ctx) -> None:
     """kl_penalty -- k1 unbiased but signed, k3 unbiased AND non-negative"""
-    _fail_fast(ctx)
+    _fail_fast(ctx, "kl")
     tab = ctx.tab
     th = ctx.theta1
     th_ref = th + 0.35 * np.random.default_rng(21).standard_normal(th.shape)
@@ -977,7 +1041,7 @@ def stage_kl(ctx: Ctx) -> None:
 
 def stage_clipinert(ctx: Ctx) -> None:
     """is the clip doing ANYTHING? mu=1 says no; mu=8 at the same lr is the control"""
-    _fail_fast(ctx)
+    _fail_fast(ctx, "advantage", "surrogate", "kl")
     h1 = ctx.run(seed=0, flavour="mixed", mu=1, lr=4.0, beta=0.02)
     _check("mu=1: the clip binds on EXACTLY 0 tokens, at every step",
            float(h1.clip_frac.max()) == 0.0, f"max {h1.clip_frac.max():.3e}")
@@ -993,7 +1057,7 @@ def stage_clipinert(ctx: Ctx) -> None:
 
 def stage_train(ctx: Ctx) -> None:
     """the loop learns, and the panel records LEVELS"""
-    _fail_fast(ctx)
+    _fail_fast(ctx, "advantage", "surrogate", "kl")
     h = ctx.h_healthy
     _check("pass rate rises", h.pass_rate[-1] > h.pass_rate[0] + 0.05,
            f"{h.pass_rate[0]:.4f} -> {h.pass_rate[-1]:.4f}")
@@ -1021,7 +1085,7 @@ def stage_train(ctx: Ctx) -> None:
 
 def stage_diagnose(ctx: Ctx) -> None:
     """diagnose_grpo -- SILENT on healthy, and each fixture fires its own rule"""
-    _fail_fast(ctx)
+    _fail_fast(ctx, "advantage", "surrogate", "kl")
     fired = diagnose_grpo(ctx.h_healthy)
     _check("SILENT on the healthy run", fired == [], f"fired {[f[0] for f in fired]}")
     _check("returns a list of (name, detail) pairs", isinstance(fired, list), "")
