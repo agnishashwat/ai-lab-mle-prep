@@ -52,6 +52,21 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
   **+0.7514 → −0.4532** (worse than its own reference) at 100% train accuracy with the loss
   falling monotonically. `week-summary.md` + `retrospective.md` written.
 
+- **Week 06 — IN PROGRESS (Day 01 done). GRPO & RL with verifiable rewards.** Day 1
+  `grpo.py`, **96 checks**, ten stages, 5.9 s full / 3.2 s `--fast`, **all four TODOs his**.
+  Thesis: *GRPO does not delete the value function; it replaces a LEARNED estimate of E[r|x]
+  with a MONTE-CARLO one, and unlike a critic that estimate vanishes exactly where the policy
+  succeeds.* Headline: **the dead-group law, P(zero signal) = p^G + (1−p)^G** — 43.05% dead at
+  p=.90 and **66.34% at p=.95** for G=8, so improving the model *degrades its own training
+  signal*; confirmed live at **23×** separation (dead 0.0354 @ pass 0.4963 vs 0.8042 @ pass
+  0.9742), and the fix needs **G=45** for 90% alive at p=.95. Supporting: shrinkage exactly
+  **(G−1)/G** with direction untouched (cos ≥ 0.999992) and **identically 0 at G=1**;
+  annihilation exact at finite G (**2e-16**) so a KL in the reward is an **open-loop
+  controller** (19.15× deleted, uniform drift invisible); **k1 negative on 50.0% of the
+  probability mass** vs k3's 0.0% ⇒ the k3 preference is *feasibility, not variance*; ÷std
+  swaps **2G·p(1−p)** for **2G·√(p(1−p))** and **compresses without inverting**; and the clip
+  is inert at μ=1 (**0.000e+00** vs 0.2222 at μ=8, same lr).
+
 ## SESSION-FORMAT PREFERENCE (he stated this explicitly on W4 D1 — obey it)
 
 **Give FULL blocks every day, regardless of how long the session is taking**, unless he
@@ -66,31 +81,129 @@ explicitly during Block 0. Do not emit `\(...\)` or `$$...$$`.
 
 ## Next session
 
-Start with the prompt: **"Start Week 6 Day 1"**. Read
-`week-06-*/day-01-grpo-vs-ppo/session.md` and teach it. **Week 5 is CLOSED** —
-`week-summary.md` and `retrospective.md` are written, `progress.md` and the numbers card
-are updated.
+Start with the prompt: **"Start Week 6 Day 2"**. Read `week-06-*/day-02-*/session.md` and
+teach it. **W6 D1 is CLOSED** — `deliverable.md` written, `progress.md` and the numbers card
+updated, `grpo.py` at 96/96 with all four TODOs his.
 
-**What W6 inherits from W5 — these are measured and in the numbers card:**
+**MANDATORY OPENING (this is now a standing rule — see the skeleton-first finding below):**
+**pre-print the answer skeleton with EMPTY slots and make him fill them.** Telling him to use
+skeleton-first produces zero compliance; emitting the slots produces 100%. Do not ask him to
+structure his own answer.
 
-- **GRPO is the natural next step from two W5 results.** D1's location invariance
-  (`r + c(x)` is exactly equivalent) is *why* a group-mean baseline is free; and D5's M4
-  (the loss is exactly constant off the comparison set) is *why* on-policy regeneration is
-  the structural fix. Frame GRPO as "DPO's M4 fix, plus W4's PPO machinery minus the critic".
-- **`Δ̂ = M/β` is the invariant, `M` is not.** Across the same β sweep D5 measured margin
-  going **up** (0.4746 → 0.5947) while `Δ̂` goes **down** (1.8984 → 0.2974). Any W6 claim
-  with a β in it must be checked in both units before it is reported.
-- **The cap `logit(1−ε)` needs no held-out set.** RLVR has a *verifiable* reward, so the
-  analogous question is what the verifier's own error rate implies. Worth an explicit ask.
-- **`acc = 1.000` is the metric that reports nothing** (saturated at step 1 of 6000). RLVR's
-  pass@1 will do the same thing. Insist on a level next to every rate.
-- **≥3 seeds is a FLOOR.** W5 D5 proved W4 D4's seed claim was a 3-seed artifact (gold
-  amplification 6.09× at 3 seeds vs 1.04× at 5, same runs). W6 ablations use ≥5 seeds for
-  any tail-sensitive metric, and pair the data seed with the run seed.
-- **`dpo_lab.py` is importable and its patterns are reusable**: `train_*` returning a
-  full instrument panel with `stop_margin` for matched-margin comparisons; a `diagnose_*`
-  that is asserted **silent on a healthy run**; `select_checkpoint` from the training panel
-  alone; and `ablate` dispatching on `__dataclass_fields__`.
+**What W6 D2 (RLVR) inherits from D1 — measured, in the numbers card:**
+
+- **The dead-group law is the binding constraint on RLVR, and D2 is where it bites hardest.**
+  A verifier makes the reward objective *and* makes it binary, which is exactly the regime
+  where `p^G + (1−p)^G` collapses. Any D2 claim about curriculum, filtering, or dynamic
+  sampling should be stated as "what it does to N_eff/N", and D1 already has the closed form
+  (**G = ln(0.1)/ln(1−p)** for 90% alive) and the simulation.
+- **RLVR's memory win is the LAST 14 GB, and it is the smallest one.** 252 → 140 GB is
+  dropping the critic; 140 → 126 is caching reference logprobs; 126 → 112 is dropping the RM.
+  Do not let "RLVR saves memory" stand as the motivation — **the motivation is that a verifier
+  does not go out of distribution**, which is the W4 D5 proxy-gold result stated in reverse.
+- **Where the KL lives is a settled question now** — in the loss, outside the advantage, with
+  k3. If D2's material puts it back in the reward, that is a bug to catch, not a variant.
+- **The clip is inert at μ=1.** If D2 code sets μ=1, do not attribute anything to clipping.
+- **`no_critic` was never a WIN, it was a NULL** (5.1786 ±0.036 vs 5.1501 ±0.109, effect 3.8×
+  smaller than `full`'s own spread). Corrected at 5 sites on D1. The null is still the right
+  evidence for GRPO — it says the critic *bought nothing measurable here* — but it must be
+  stated as a null.
+- **`grpo.py` is importable and its patterns are reusable**: `group_advantage` on the last
+  axis (so `(G,)` and `(n_groups,G)` share one path); `train_grpo` returning a History panel
+  whose row *i* is the state after *i* updates so `h.kl[0] == 0` exactly; `diagnose_grpo`
+  reading the panel only; and `make_task` flavours `easy` / `mixed` / `sharp`.
+- **≥3 seeds is a FLOOR, and D1 used 8 per fixture.** Keep it. Thresholds get calibrated
+  against the *gap between distributions*, never against one healthy and one broken run.
+
+### W6 D1 grading, process gaps, and coding ownership
+
+Cold recall **4/7 (57%)**; D-recall **10/18 (56%)** and then **4/4 (100%) on a re-ask under
+skeleton-first**; derivations **10.75/16 (67%)**; mechanism **2.5/3 (83%)**; design
+**13.5/27 (50%)**; coding **19/23.5 (81%) — his best block of the day**. Total
+**63.75/98.5 = 64.7%**. **All four TODOs were his**, reversing three consecutive sessions of
+declining coding ownership.
+
+- **THE PEDAGOGICAL RESULT OF THE DAY — the skeleton-first boundary condition, found by
+  direct test, and it is now a STANDING RULE.** W5 D5 left the open question: is skeleton-first
+  a prompted technique or a retrieval-reset one? W6 D1 ran the experiment. *Telling* him to use
+  it in Block 0 produced **zero compliance** across Block 1. Then the same question was re-asked
+  with the empty slots **pre-printed by me**: **4/4 (100%)**, against **1/2** thirty minutes
+  earlier on the identical question. **The operative variable is emitting the slots before any
+  content exists — not being told to.** ⇒ **The tutor pre-prints the skeleton every time. Never
+  ask him to structure his own answer.**
+- **The maths was correct on FIRST submission every single time.** All four coding losses were
+  **calibration or numpy/torch numerics**, never derivation: a discarded `0/0`, a `where=`
+  without `out=`, `np.exp` on a torch tensor, and a diagnostic threshold set from one observed
+  broken value. This is a genuine change in the failure profile — through W5 the losses were
+  split between mechanism and mechanics. **Grade his numerics harder than his derivations now.**
+- **He found a threshold better than my reference's.** His entropy bound (`ent < 0.5`) beat my
+  1.0, which misfired on the nokl fixture; I adopted his into the reference. Worth telling him
+  — he does not yet believe his calibration instincts.
+- **MY OWN EVIDENCE is still unfilled — FOURTH ask.** The design-block slot asking for a number
+  *he* measured, plus a scope condition and a caveat, was skipped again. He now has three strong
+  candidates from today alone (the `no_critic` null, the 23× dead_frac separation, the G=8→32
+  fixture repair). **W6 D2: pre-print this slot too, and do not accept a general claim in it.**
+- **Block 5 (interview drills) was deferred by agreement**, not delivered. This is the second
+  consecutive week the drills block has gone unattempted. Either fold the drills into the
+  earlier blocks or schedule them first, before fatigue.
+
+### Bug families from W6 D1
+
+- **`np.where` / `where=` is NOT short-circuit — SEVENTH sighting, and this one was
+  undetectable by value.** `np.divide(a, b, where=m)` **without `out=`** returns *uninitialised
+  memory* in the masked lanes; numpy warns explicitly. It passed 12/12 and then a 20,000-row
+  all-dead batch still returned **exactly 0**, because fresh pages arrive zeroed. ⇒ **when a
+  value cannot be tested reliably, assert the CONTRACT the library reports** — run the check
+  under `warnings.catch_warnings` and fail on any warning. That one line catches both the
+  `where=`-without-`out=` and the discarded `0/0`.
+- **Silent numpy/torch boundary crossings.** `np.exp(torch_tensor)` returns a **numpy array**
+  when `requires_grad=False` (graph severed, six checks passed on it) and **raises** when True.
+  Related trap he avoided but should be reminded of: **padded positions have ρ = 1, not 0**
+  (logp is zeroed at pad ⇒ exp(0−0)=1), so forgetting the mask adds **a full copy of Â per pad
+  slot**, not zero.
+- **Thresholds set from a single broken observation** (the `kl > 1.5` bound was silent on a
+  real KL of 1.231). Rule taught: **air belongs between the healthy MAXIMUM and the broken
+  MINIMUM across seeds**, not between healthy and the one broken value you happened to see.
+- **Second-clause gap — still unretired, now 7 weeks.** Q3's `Δ̂`/`M` answer was correct but
+  stopped at the invariance without saying what it *implies*. Same shape as every prior
+  sighting.
+- **Wrong LEVEL — 9th sighting** (B1: answered token-level when the question was
+  sequence-level). Still the most persistent family in the log.
+- **Dead code left in a signature**: `G = adv.shape[-1]` in `grpo_surrogate`, overwritten two
+  lines later by `G = logp.shape[0]`. Cosmetic, but it is the same "read the parameter list as
+  a checklist" family from W4 D4.
+
+### Harness bugs *I* found by running a private reference before handover (seventh day, still paying)
+
+`_ref_grpo.py` monkeypatches the four TODOs and calls `grpo.main()`. Before he ever ran the
+file it found **five real defects**, three of which would have made a stage pass for the wrong
+reason:
+
+1. **`seq_token_logprobs_torch` indexed the wrong axis.** It assumed `(n_states, vocab)` but
+   `train_grpo` passes `(P, n_states, vocab)`, so it indexed the *prompt* axis with state ids.
+   **Every training stage crashed.**
+2. **The length-bias check was VACUOUS.** At ρ=1 with a constant Â, the `token` and `batch`
+   reductions are equal *by construction* — the check could not fail. Re-expressed as a
+   per-token **gradient** ratio via autograd: exactly **3.0** vs exactly **1.0**.
+3. **`clip_frac` was read AFTER `opt.step()`**, making the μ=1 claim true for the wrong reason.
+   Now measured at loss time, keyed on the **sign condition** (did the clip actually bind), and
+   accumulated as a max over inner epochs.
+4. **History rows were recorded post-update**, so `h.kl[0] = 7.9e-06` instead of exactly 0 —
+   which silently destroys row 0's usefulness as the reference baseline.
+5. **All five `diagnose` fixtures were miscalibrated, and `length_drift` had to be CUT.** With
+   t_max = 3, E|y| can only travel 1.985 → 3.0 and every learning run lengthens, so healthy
+   (1.14) and broken (1.35) have no gap. **Cutting a rule the instrument cannot support is the
+   correct move**, and the day says so out loud.
+
+Plus one bug in my own *grading* scaffold: `_fail_fast` touched **every** TODO, so
+`stage_surrogate` was blocked by an unrelated unimplemented `kl_penalty`. It now takes the
+specific names a stage uses.
+
+And one fixture repaired **by mechanism rather than by knob**: the KL-runaway fixture fired
+`dead_groups` at 2 of 5 seeds because `sharp` drives the pass rate off 0.5 and the day's own
+dead-group law contaminated it. Lowering `lr` *destroys the runaway* (KL falls to 0.83);
+raising **G from 8 to 32** fixed it (dead 0.152–0.544 → 0.004–0.265, clean at 8/8). **8-seed
+stress across 4 fixtures: 0 of 32 disagree.**
 
 ### W5 D5 grading, process gaps, and coding ownership
 
@@ -477,6 +590,59 @@ clock. **Keep the ordering: cold recall → graded drills → concept → deriva
 coding → deliverable.**
 
 ## Completed
+
+- **W6 D1 — GRPO vs PPO: what replacing the critic with a group mean actually costs.** Built
+  `week-06/code/grpo.py` (**96 staged checks**, ten stages, 5.9 s / 3.2 s `--fast`); he
+  implemented **all four TODOs**, reversing three sessions of declining coding ownership.
+  **Thesis — GRPO does not delete the value function; it replaces a LEARNED estimate of E[r|x]
+  with a MONTE-CARLO one, and unlike a critic that estimate vanishes exactly where the policy
+  succeeds.** Every property follows from the baseline being computed from the same G samples
+  it subtracts from.
+  **Headline — the dead-group law, the one consequence with no PPO analogue.** P(a group
+  carries zero signal) = **p^G + (1−p)^G**; at G=8 that is **0.78 / 5.77 / 43.05 / 66.34 /
+  92.27 %** at p = .50/.70/.90/.95/.99, so N_eff/N = **33.658%** at p=.95 and raising the pass
+  rate .90 → .95 kills a further **23.3%** of the batch. **This is a SUCCESS-driven failure —
+  improving the model degrades its own training signal, and it looks like success in every
+  other column.** Confirmed on two fixtures differing only in the verifier: healthy
+  **dead 0.0354 @ pass 0.4963** vs saturated **dead 0.8042 @ pass 0.9742** = **23×** more of
+  the batch silent on the run with the better reward. The fix is G and it is expensive:
+  **G = 45** for 90% alive at p=.95 (**ln(0.1)/ln(0.95) = 44.891**; G=44 gives 89.533%).
+  ⇒ **GRPO trades TRAINING MEMORY for INFERENCE COMPUTE, and the bill grows as the model
+  improves.** Memory bill, 7B bf16+Adam: PPO **252 GB** → GRPO **140** (−44.4%) → cached ref
+  logprobs **126** → RLVR **112** (−55.6%).
+  **The shrinkage is exact and directionless:** E[ĝ] = **((G−1)/G)·∇J** at finite G, measured
+  **0.4994 / 0.7496 / 0.8755** at G=2/4/8 with cos ≥ **0.999992**; **at G=1 the gradient is
+  identically 0**, the defining property of a contrast estimator, not an edge case. LOO =
+  centered · G/(G−1) **pathwise**, so it removes the bias and **cannot** reduce variance.
+  **The group mean is a HIGH-PASS FILTER, exactly at finite G:** c(x) deleted to
+  **0.000e+00 / 2.220e-16 / 1.210e-14 / 2.039e-10** for c = 0/1/−37.5/1e6, so a KL folded into
+  the reward keeps only its within-group deviation (**0.035726 vs 0.6842 = 19.15× deleted**)
+  and a *uniform* drift is **invisible** (2.50e-16). ⇒ **β inside the advantage is an OPEN-LOOP
+  controller** — it integrates an error it cannot see, saturates, and never errors. Hence KL
+  goes in the LOSS. Companion: k1 and k3 are both unbiased against exact enumeration to 10 dp
+  (**0.1517183046**), but **k1 is negative on 50.0% of the probability mass** and k3 on
+  **0.0%** (min +6.130e-02) — a negative reading in a minimised loss *pays* the policy to leave
+  π_ref. **The k3 preference is FEASIBILITY, not variance** (var(k1)/var(k3) reverses: **423×**
+  at KL 0.004, **0.23×** at ~0.65).
+  **÷std swaps the information weighting for its square root:** Σ|Â| is centered
+  **2G·p(1−p)** (= the Bernoulli variance = Fisher information) vs normalized
+  **2G·√(p(1−p))**; amplification is exactly 1/std (**3.0237** at k=1 vs **2.0000** at k=4 ⇒
+  k=1 boosted **1.5119×**, balanced:extreme collapsing **2.2857 → 1.5119**). **Control: the
+  bias COMPRESSES, it does not INVERT** (1.75<4.00 and 5.29<8.00 both hold).
+  **The clip is inert at μ=1, exactly:** bound-token fraction **0.000e+00** at every step vs
+  **0.2222** at μ=8 with the same lr/seed/task ⇒ **GRPO at μ=1 is REINFORCE + a group baseline
+  + a KL term wearing PPO's notation.**
+  **A correction carried in from W4 D5: `no_critic` never BEAT `full`** — **5.1786 ±0.036 vs
+  5.1501 ±0.109**, an effect **3.8× smaller than `full`'s own spread**. Fixed at 5 sites. It is
+  a null result, and a null is still the right evidence for GRPO.
+  Diagnostic thresholds calibrated against the **gap between distributions** over 8 seeds per
+  fixture (dead **0.185|0.50|0.783**, kl **0.300|1.00|1.288**, ent **0.121|0.50|0.701**) ⇒
+  **0 of 32 fixture-seeds disagree**; a fourth rule, `length_drift`, was **cut** because the
+  instrument (t_max=3) cannot support it.
+  Graded **63.75/98.5 = 64.7%**; coding **19/23.5 (81%)** was his best block.
+  **Pedagogical headline: the skeleton-first BOUNDARY CONDITION.** Being *told* to use it gave
+  zero compliance; **pre-printing the empty slots gave 4/4 (100%) on a question he scored 1/2
+  on thirty minutes earlier.** Standing rule instituted.
 
 - **W5 D1 — What Preference Data Can and Cannot Identify.** Fleshed out all five Week-5
   session plans first (D1 re-scoped off "re-derive Bradley-Terry", which W4 D1 already did).
@@ -1704,6 +1870,22 @@ coding → deliverable.**
 
 ## Running facts to reinforce (spaced repetition)
 
+- **GRPO's baseline is a STATISTIC OF THE BATCH, not a function approximator.** Everything
+  follows: it shrinks the gradient by exactly `(G−1)/G`, it deletes anything constant within
+  the group, and **it vanishes when all G agree** — which is precisely when the policy is
+  doing well. `P(dead) = p^G + (1−p)^G`.
+- **A group mean is a high-pass filter.** Put a control term inside the advantage and you are
+  controlling only its *within-group deviation*; a uniform drift is invisible. **KL goes in the
+  loss, outside the advantage, and uses k3** (k1 is negative half the time, which pays the
+  policy to leave π_ref).
+- **`Â = 0` at G = 1 is the algorithm, not a bug.** Any estimator built on contrasts within a
+  sample is identically zero at sample size 1.
+- **Before attributing behaviour to a mechanism, check the mechanism is ACTIVE.** At μ=1 the
+  PPO clip binds on exactly 0% of tokens.
+- **`np.divide(a, b, where=m)` without `out=` reads UNINITIALISED MEMORY.** It usually looks
+  like zeros. When a value cannot be tested reliably, assert the *contract* — run under
+  `warnings.catch_warnings` and fail on any warning.
+- **Read the ± before the mean.** An effect smaller than the baseline's own spread is a null.
 - LM loss: `−(1/BT) Σ log p_θ(y_{b,t} | x_{b,<t})`; one-hot label collapses the vocab sum.
 - `∂CE/∂z = softmax(z) − onehot(y)` = "prediction − target"; sums to 0 (mass is moved).
 - Stable softmax: subtract row-max, `keepdim=True` on both max and sum.

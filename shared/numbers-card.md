@@ -294,3 +294,53 @@ Format: `quantity = value (condition)`.
   opposite result*
 - **DPO ≡ tilt(BT MLE)** re-verified here: max |dev| **1.164e-13** over all 15 sequences,
   non-vacuous by **4.40e+13×**
+
+## Week 6 — GRPO & RL with verifiable rewards
+
+*(All from `week-06-grpo-rlvr-reasoning/code/grpo.py`, **96 checks**, 5.9 s.)*
+
+- **the dead-group law.** P(a group carries zero signal) = **p^G + (1−p)^G**. At G = 8:
+  **0.78% / 5.77% / 43.05% / 66.34% / 92.27%** dead at p = 0.50 / 0.70 / 0.90 / 0.95 / 0.99.
+  N_eff/N at p = 0.95 is **33.658%**. Raising the pass rate 0.90 → 0.95 kills a further
+  **23.3%** of the batch — *improving the model degrades its own training signal*
+- **the price of fixing it.** Keeping 90% of prompts alive at p = 0.95 needs **G = 45**
+  (G = 44 gives **89.533%**; closed form ln(0.1)/ln(0.95) = **44.891**). GRPO trades
+  training memory for **inference compute**, and the bill grows as the model improves
+- **seen in a real run**, two fixtures differing only in the verifier: healthy
+  **dead 0.0354 at pass 0.4963** vs saturated **dead 0.8042 at pass 0.9742** — **23×** more
+  of the batch silent on the run with the *better* reward
+- **the exact shrinkage.** E[ĝ] = **((G−1)/G)·∇J**, exactly at finite G. Measured
+  **0.4994 / 0.7496 / 0.8755** at G = 2/4/8 (want 0.5/0.75/0.875), cos ≥ **0.999992** so the
+  DIRECTION is untouched. LOO ratios **0.9987 / 0.9994 / 1.0005**. At **G = 1 the gradient
+  is identically 0** — the defining property, not an edge case
+- **LOO is a rescaling, not a variance reduction.** Â_loo = Â_centered · G/(G−1) *pathwise*
+  (max dev **0.00e+00**), so Var(ĝ_loo) = (G/(G−1))²·Var(ĝ_centered) — *larger* absolutely,
+  identical relatively. **LOO removes the shrinkage, NOT the G = 1 death**
+- **the 1/std bias.** Binary reward, k of G: Â_succ = **+√((G−k)/k)**, Â_fail = **−√(k/(G−k))**
+  (every G cancels). Group weight Σ|Â|: centered = **2G·p(1−p)** = the *variance* = Fisher
+  information; normalized = **2G·√(p(1−p))** = the *std*. Amplification is exactly 1/std:
+  **2.0000 / 2.3094 / 3.0237** at k = 4/2/1, so k=1 is boosted **1.5119×** over k=4 and the
+  balanced:extreme ratio collapses **2.2857 → 1.5119**. *Control:* balanced still outweighs
+  extreme under both (1.75<4.00, 5.29<8.00) — **the bias COMPRESSES, it does not invert**
+- **annihilation is EXACT at finite G, not in expectation.** c(x) removed to max dev
+  **0.000e+00 / 2.220e-16 / 1.210e-14 / 2.039e-10** for c = 0 / 1 / −37.5 / 1e6. A KL folded
+  into the reward survives only as its within-group deviation: **0.035726 vs 0.6842 full =
+  19.15× DELETED**; a uniform drift penalty is invisible to the gradient (**2.50e-16**).
+  *This is why DeepSeekMath puts KL in the LOSS, outside the advantage*
+- **k1 vs k3 is FEASIBILITY, not variance.** Both unbiased to 10 dp (**0.1517183046** vs
+  **0.1517183046**). k1 = −ℓ is **negative on 50.0% of the probability mass**; k3 = e^ℓ−1−ℓ
+  on **0.0%** (min **+6.130e-02**). A negative reading in a minimised loss *pays* the policy
+  to leave π_ref. (var(k1)/var(k3) REVERSES: **423×** at KL 0.004, **0.23×** at ~0.65)
+- **the clip is inert at μ=1**, exactly: bound-token fraction **0.000e+00** at every step,
+  vs **0.2222** at μ=8 with the SAME lr/seed/task. ⇒ *GRPO at μ=1 is REINFORCE + a group
+  baseline + a KL term in PPO's notation*
+- **memory, 7B bf16+Adam** (16 B/param trainable, 2 frozen): PPO **252 GB**
+  (112+112+14+14) → GRPO **140 GB** (−44.4%) → cached ref logprobs **126 GB** → RLVR, no RM
+  **112 GB** (−55.6%)
+- **the `token` length norm is a PER-TOKEN GRADIENT fact.** At ρ=1 with constant Â the
+  `token` and `batch` reductions are equal *by construction*, so it must be asserted on
+  ∂/∂logp: a token in a 3-long sequence is pushed **exactly 3.0×** less hard than one in a
+  1-long sequence; under `batch` the ratio is **exactly 1.0**
+- **diagnostic thresholds, chosen from the gap between DISTRIBUTIONS (8 seeds/fixture):**
+  dead_frac **0.185 | 0.50 | 0.783**, kl **0.300 | 1.00 | 1.288**, entropy
+  **0.121 | 0.50 | 0.701**. **0 of 32 fixture-seeds** disagree with the seed-0 verdict

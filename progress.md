@@ -2,11 +2,62 @@
 
 ## Current Status
 
-- Current week: **Week 05 — Preference Optimization: DPO & Variants — COMPLETE (5/5)**.
-  Week 04 COMPLETE (5/5). **385 property-based checks across Week 5**
+- Current week: **Week 06 — GRPO & RL with Verifiable Rewards — IN PROGRESS (1/5)**.
+  Week 05 COMPLETE (5/5), Week 04 COMPLETE (5/5). **385 property-based checks across Week 5**
   (`preference_models.py` 74, `dpo.py` 42, `dpo_trainer.py` 51, `variants.py` 126,
-  `dpo_lab.py` 92). `week-summary.md` + `retrospective.md` written.
-- Current day: **Week 5 Day 05 DONE — WEEK 5 COMPLETE** — *DPO failure modes: what the data
+  `dpo_lab.py` 92). Week 6 so far: `grpo.py` **96**.
+- Current day: **Week 6 Day 01 DONE** — *GRPO vs PPO: what replacing the critic with a group
+  mean actually costs*. `code/grpo.py`, **96 staged checks**, ten stages, 5.9 s full / 3.2 s
+  `--fast`, 0 failures. All four TODOs his.
+  **Thesis — GRPO does not delete the value function; it replaces a LEARNED estimate of E[r|x]
+  with a MONTE-CARLO one, and unlike a critic that estimate vanishes exactly where the policy
+  succeeds.** Every property follows from the baseline being computed *from the same G samples
+  it subtracts from*.
+  **Headline 1 — the dead-group law, the one consequence with no PPO analogue.**
+  P(group carries zero signal) = **p^G + (1−p)^G**; at G = 8 that is **0.78 / 5.77 / 43.05 /
+  66.34 / 92.27 %** at p = .50/.70/.90/.95/.99. N_eff/N = **33.658%** at p = .95, and raising
+  the pass rate .90 → .95 kills a further **23.3%** of the batch — *improving the model degrades
+  its own training signal*. Seen live in two fixtures differing only in the verifier: healthy
+  **dead 0.0354 at pass 0.4963** vs saturated **dead 0.8042 at pass 0.9742** = **23×** more of
+  the batch silent on the run with the better reward. The fix is G and it is expensive:
+  **G = 45** for 90% alive at p = .95 (ln(0.1)/ln(0.95) = **44.891**). GRPO trades training
+  memory (**252 → 140 → 112 GB**, −44.4% then −55.6% with RLVR) for **inference compute**, and
+  the bill grows as the model improves.
+  **Headline 2 — the shrinkage is exact and directionless.** E[ĝ] = **((G−1)/G)·∇J** at finite
+  G; measured **0.4994 / 0.7496 / 0.8755** at G = 2/4/8 with cos ≥ **0.999992**. At **G = 1 the
+  gradient is identically 0** — the defining property, not an edge case. LOO = centered ·
+  G/(G−1) **pathwise**, so it removes the shrinkage and *cannot* reduce variance.
+  **Headline 3 — the group mean is a high-pass filter, EXACTLY at finite G.** c(x) removed to
+  max dev **0.000e+00 / 2.220e-16 / 1.210e-14 / 2.039e-10** for c = 0/1/−37.5/1e6. A KL folded
+  into the reward survives only as its within-group deviation: **0.035726 vs 0.6842 full =
+  19.15× deleted**, and a *uniform* drift is invisible (**2.50e-16**). ⇒ a β inside the
+  advantage is an **open-loop controller**. Companion result: k1 and k3 are both unbiased to 10
+  dp (**0.1517183046**), but **k1 is negative on 50.0% of the probability mass** and k3 on
+  **0.0%** — so the preference for k3 is **feasibility, not variance** (var ratio *reverses*:
+  **423×** at KL 0.004, **0.23×** at ~0.65).
+  **Headline 4 — ÷std swaps information weighting for its square root.** Group weight Σ|Â| is
+  centered **2G·p(1−p)** (= the variance = Fisher information) vs normalized **2G·√(p(1−p))**;
+  amplification exactly 1/std (**3.0237** at k=1 vs **2.0000** at k=4 ⇒ **1.5119×** boost, and
+  the balanced:extreme ratio collapses **2.2857 → 1.5119**). *Control: the bias COMPRESSES the
+  weighting, it does not invert it* (1.75 < 4.00 and 5.29 < 8.00 both hold).
+  **Headline 5 — the clip is inert at μ=1, exactly.** Bound-token fraction **0.000e+00** every
+  step at μ=1 vs **0.2222** at μ=8 with the *same* lr/seed/task ⇒ **GRPO at μ=1 is REINFORCE +
+  a group baseline + a KL term wearing PPO's notation**.
+  **Headline 6 — a correction carried in from W4 D5: `no_critic` never BEAT `full`.**
+  **5.1786 ±0.036 vs 5.1501 ±0.109** — the effect is **3.8× smaller than `full`'s own spread**.
+  Corrected at 5 sites. It is a *null result*, and it is a stronger argument for GRPO than the
+  wrong reading was.
+  **Pedagogical headline — the skeleton-first boundary condition, found by direct test.**
+  *Telling* him to use skeleton-first produced **zero compliance**; making him emit the empty
+  slots before any content produced **4/4 (100%)** on a question he had scored **1/2** on
+  thirty minutes earlier. The operative variable is emitting the slots, not being told to.
+  Standing rule instituted: **the tutor pre-prints the skeleton, he fills it.**
+  Cold recall **4/7 (57%)**, D-recall **10/18 (56%)** then **4/4 on the re-ask**, derivations
+  **10.75/16 (67%)**, mechanism **2.5/3**, design **13.5/27 (50%)**, coding **19/23.5 (81%)** —
+  his best block. Total **63.75/98.5 = 64.7%**. **All four coding losses were calibration or
+  numpy/torch numerics; the mathematics was correct on first submission every time.**
+  Block 5 (interview drills) deferred by agreement.
+- Previous day: **Week 5 Day 05 DONE — WEEK 5 COMPLETE** — *DPO failure modes: what the data
   format can and cannot identify*. `code/dpo_lab.py`, **92 staged checks**, nine stages,
   65.6 s full / 34 s `--fast`, 0 failures. His output is **byte-identical to the private
   reference implementation** in `--fast` mode (`diff` clean across all 89 shared lines).
@@ -331,8 +382,8 @@
 | 02 | Transformers + generation | Complete (5/5) | Decoder-only mini-impl + debug suite |
 | 03 | RL foundations | Complete (5/5) | Toy policy-gradient implementation (213 checks) |
 | 04 | RLHF + PPO | Complete (5/5) | Toy PPO-RLHF loop + failure-mode demos (515 checks) |
-| 05 | DPO + preference optimization | Not started | DPO trainer |
-| 06 | GRPO + RLVR | Not started | Mini RLVR repo |
+| 05 | DPO + preference optimization | Complete (5/5) | DPO trainer + failure-mode lab (385 checks) |
+| 06 | GRPO + RLVR | In progress (1/5) | Mini RLVR repo (96 checks so far) |
 | 07 | Evals + reward modeling | Not started | Eval harness |
 | 08 | Training/inference systems | Not started | Systems design doc |
 | 09 | Capstone | Not started | Polished repo + writeup |
@@ -341,6 +392,60 @@
 ## Review Queue
 
 Topics to revisit:
+
+- [ ] **THE DEAD-GROUP LAW — the one GRPO consequence with no PPO analogue** (W6 D1).
+  P(zero signal) = **p^G + (1−p)^G**; at G=8 that is **43.05% at p=.90 and 66.34% at p=.95**,
+  so N_eff/N = **33.658%**. Raising the pass rate .90→.95 kills a further **23.3%** of the
+  batch: **a SUCCESS-driven failure — improving the model degrades its own training signal**,
+  and it looks like success in every other column. Confirmed live at **23×** separation
+  (dead 0.0354 @ pass 0.4963 vs 0.8042 @ pass 0.9742). Fix is G and it costs: **G=45** for 90%
+  alive at p=.95. ⇒ **GRPO trades training memory for INFERENCE compute, and the bill grows as
+  the model gets better**
+- [ ] **Centring by a statistic OF THE SAME SAMPLES shrinks the gradient EXACTLY** (W6 D1):
+  E[ĝ] = **((G−1)/G)·∇J** at finite G — the j=i term survives, the j≠i term dies by
+  independence + EGLP. Direction untouched (cos ≥ **0.999992**) so it is absorbable into the
+  lr. **At G=1 the gradient is identically zero**, which is the defining property of a
+  CONTRAST estimator, not a bug. LOO = centered · G/(G−1) **pathwise** ⇒ removes the bias,
+  **cannot** reduce variance, still dies at G=1
+- [ ] **A group mean is a HIGH-PASS FILTER, and it is exact at finite G** (W6 D1): anything
+  constant within the group is deleted to **2e-16**, so a KL folded into the reward keeps only
+  its within-group deviation (**19.15× deleted**) and a UNIFORM drift is **invisible**
+  (2.50e-16). ⇒ **a β inside the advantage is an OPEN-LOOP controller — it integrates an error
+  it cannot see, saturates, and never errors.** Hence KL goes in the LOSS. Companion: k1 and
+  k3 are both unbiased (**0.1517183046** to 10 dp), but **k1 is negative on 50.0% of the
+  probability mass** — a negative reading in a minimised loss PAYS the policy to leave π_ref.
+  **The k3 preference is FEASIBILITY, not variance** (var ratio reverses 423× → 0.23×)
+- [ ] **÷std replaces the VARIANCE weighting with the STD weighting** (W6 D1): Σ|Â| is
+  **2G·p(1−p)** centered (= Fisher information for a Bernoulli) vs **2G·√(p(1−p))** normalized;
+  amplification is exactly 1/std, boosting k=1 by **1.5119×** over k=4 and collapsing the
+  balanced:extreme ratio **2.2857 → 1.5119**. **CONTROL: it COMPRESSES, it does not INVERT.**
+  State the control — "the bias reverses the ordering" is the overclaim to avoid
+- [ ] **A ratio-based objective is INERT when the ratio is identically 1** (W6 D1): at μ=1 the
+  clip binds on **0.000e+00** of tokens at every step vs **0.2222** at μ=8, same lr/seed/task.
+  ⇒ **GRPO at μ=1 is REINFORCE + a group baseline + a KL term in PPO's notation.** Generalises:
+  before attributing behaviour to a mechanism, check the mechanism is ACTIVE
+- [ ] **`np.divide(a, b, where=m)` WITHOUT `out=` returns UNINITIALISED MEMORY** (W6 D1;
+  numpy says so explicitly in a warning). It usually *looks* right because fresh pages arrive
+  zeroed — **a 20,000-row all-dead batch still returned exactly 0.** ⇒ **when a value cannot be
+  tested reliably, assert the CONTRACT the library reports**: run under
+  `warnings.catch_warnings` and fail on any warning. Same check also catches a discarded 0/0
+  from `np.where` (**seventh sighting** of the not-short-circuit family)
+- [ ] **`np.exp` on a torch tensor SILENTLY returns a numpy array** when `requires_grad=False`
+  and RAISES when True (W6 D1) — so it passes every value check and then severs the graph.
+  Related: **padded positions have ρ = 1, not 0** (logp is zeroed at pad, exp(0−0)=1), so
+  forgetting the mask does not add zero, it adds **a full copy of Â per pad slot**
+- [ ] **Calibrate a threshold against the GAP BETWEEN DISTRIBUTIONS, not between one healthy
+  and one broken observation** (W6 D1). 8 seeds/fixture: dead **0.185 | 0.50 | 0.783**, kl
+  **0.300 | 1.00 | 1.288**, ent **0.121 | 0.50 | 0.701** ⇒ 0 of 32 disagree, where a seed-0
+  threshold gave 2 of 20 false verdicts. Corollaries: **CUT a rule the instrument cannot
+  support** (`length_drift` — E|y| can only travel 1.985→3.0 and every learning run
+  lengthens); and **fix a fixture with the MECHANISM, not the knob** (lowering lr destroyed the
+  runaway; raising **G 8→32** fixed it, because the day's own dead-group law was contaminating
+  it)
+- [ ] **A "beat" that is smaller than the baseline's OWN spread is a NULL RESULT** (W6 D1
+  correcting W4 D5): `no_critic` **5.1786 ±0.036** vs `full` **5.1501 ±0.109** was recorded as
+  a win; the effect is **3.8× smaller than `full`'s own error bar**. Corrected at 5 sites.
+  Read the ± before reading the mean
 
 - [x] **FORD/ZERMELO: the BT MLE is finite IFF the wins-digraph is strongly connected**
   (W5 D1). Equivalently: BT is logistic regression on `e_w − e_l`, so this is exactly linear
