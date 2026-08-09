@@ -148,10 +148,35 @@ would have done so anyway** — that is the whole experiment.
 7. **W5's one-line thesis on what a DPO dataset is, graph-theoretically**, and what that
    implies about where the loss is constant.
 
+> ## RESULT — the skeleton-first experiment resolved in Block 1, and the control is now void
+>
+> Block 1 issued skeleton-first in bold as a standing instruction. **It was not executed on a
+> single one of seven answers**, and the block scored **10.0/18 (56%)**. Q6 — a 1+3 slot
+> question, and the six-week-old second-clause gap — scored **1.0/2**.
+>
+> Re-asked ~30 minutes later with the format **enforced** (post the empty skeleton as its own
+> artifact, then fill it): **4.0/4 (100%)**, all three consequences correct including Gao's law
+> with `d = √KL`.
+>
+> ```
+> not issued            (W5 D5)      45%
+> ISSUED, not executed  (W6 D1 B1)   56%   <- behaviourally identical to withheld
+> enforced re-do        (W4 D4)      93%
+> ENFORCED              (W6 D1)     100%
+> ```
+>
+> **The operative variable is not instruction. It is the physical act of emitting the empty
+> slots before any content exists.** Being told to do it does not cause it to happen — that was
+> tested today at full volume, in bold, directly above the questions.
+>
+> **STANDING RULE from here on: the skeleton is PRE-PRINTED in the question by me; he fills
+> it.** No compliance step. Block 2's withheld-control arm is therefore void — the withheld
+> condition was already measured in Block 1, and running it again would cost accuracy for zero
+> information.
+
 ### Block 2 · 0:20-0:35 — Graded re-ask: the two drills that are load-bearing today
 
-Skeleton-first is **withheld** here (this is the control arm). Answer however you
-naturally would.
+Skeletons are **pre-printed** (see the result box above; the control arm was retired mid-block).
 
 1. **"When would you not use PPO?"** — re-asked from W5 D1, because today is its answer.
    PPO's bill; what DPO deletes and what it pays; what GRPO deletes and what it pays;
