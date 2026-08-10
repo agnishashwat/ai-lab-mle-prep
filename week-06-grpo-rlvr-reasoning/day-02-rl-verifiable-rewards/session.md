@@ -219,6 +219,28 @@ it. Three questions immediately after, closed-book. Skeleton pre-printed.
    Three candidates from yesterday alone, if you want them: the `no_critic` **null**, the 23×
    `dead_frac` separation, and the G = 8 → 32 fixture repair.
 
+> ## RESULT — pre-printed slots are not sufficient; they must be TYPED
+>
+> D1's finding was *emit the slots*. Block 1 today shows that is only half the rule. Three of
+> six questions came back blank with the note **"a lot of these questions are vague"**, and he
+> was right — the defect was in the slots, not the recall:
+>
+> - **Q1 tested TODAY's material in a cold-recall block.** `V \ C` / `C \ V` is Block 2 content.
+>   Cold recall may only test what he already holds. Category error; question voided.
+> - **Q3 said "graphically"** and expected a specific noun, without saying that a noun was what
+>   the slot wanted.
+> - **Q6 gave no anchor** — "the number" over an unbounded domain. **Four consecutive blank
+>   asks is evidence the SLOT is broken, not that he is avoiding it.**
+> - **Q5 named three of the seven answers in the stem**, so the enumeration could not score.
+>
+> Re-issued with each slot **typed** — `[graph-theory noun]`, `[a number]`, `[choose one of
+> four]`, `[complete this sentence]`, and Q6 reduced to a three-item menu — both came back
+> filled and substantive: **Q3 3.0/4, Q6 2.0/4**, against four prior blank asks on Q6.
+>
+> **STANDING RULE, refining D1's:** every pre-printed slot names the KIND of thing that fills
+> it — a noun, a number with units, a choice from an explicit list, or a sentence to complete.
+> An untyped slot is an open question with a line drawn under it, and it scores like one.
+
 ### Block 2 · 0:25–0:50 — Concept: incompleteness is a compute bug, unsoundness is a correctness bug
 
 **Framing.** The standard telling is "verifiable rewards are better because they are correct."
