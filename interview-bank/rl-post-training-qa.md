@@ -62,3 +62,19 @@ in 60-120 seconds. Add entries as you finish each week.
 **Deeper:**
 
 **Watch out for:**
+
+### Q: What makes a reward *verifiable*, and when does RLVR fail?
+
+**Short answer:**
+
+**Deeper:**
+
+**Watch out for:**
+
+### Q: Your math verifier is 97% accurate. Is that good enough to train against?
+
+**Short answer:**
+
+**Deeper:**
+
+**Watch out for:**
