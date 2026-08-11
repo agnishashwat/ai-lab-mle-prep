@@ -344,3 +344,72 @@ Format: `quantity = value (condition)`.
 - **diagnostic thresholds, chosen from the gap between DISTRIBUTIONS (8 seeds/fixture):**
   dead_frac **0.185 | 0.50 | 0.783**, kl **0.300 | 1.00 | 1.288**, entropy
   **0.121 | 0.50 | 0.701**. **0 of 32 fixture-seeds** disagree with the seed-0 verdict
+
+### Week 6 Day 2 — RL with verifiable rewards
+
+*(All from `week-06-grpo-rlvr-reasoning/code/rlvr.py`, **112 checks**, 5.9 s.)*
+
+- **a verifier is a SET, not a rate.** `V ⊆ C` = SOUND (no false positives),
+  `C ⊆ V` = COMPLETE (no false negatives). Same checker, same two arrays, two policies:
+  precision **0.6720 → 0.0926** and gamma **0.1515 → 0.7820** once the policy tilts toward
+  the responses it wrongly accepts. Mass-weighted gamma **0.1515** vs count-weighted
+  **0.2222** — *"our verifier is 97% accurate" is not a well-formed sentence*
+- **the soundness theorem.** `V ⊆ C` ⇒ `v_pass ≤ gold_pass` for **all 415 policies at every
+  KL**, no scope condition (max gap **−2.000e-12**). If `V \ C ≠ ∅`, sup(v_pass − gold_pass)
+  = **1.000000** for **1 false positive AND for 7** — reward hacking is a **support**
+  property, not a rate property. Their eval accuracies under uniform are **93.3% vs 53.3%**,
+  i.e. the eval statistic ranks them *opposite* to what matters under optimization
+- **the selection law.** `p_obs = p(1−α) + (1−p)γ`;
+  `P(hack | rewarded) = γ(1−p)/[p(1−α) + γ(1−p)]`. At a **fixed 1% FP rate**, α = 0.10:
+  **1.0989% / 9.0909% / 35.2518% / 68.8581%** at p = 0.500 / 0.100 / 0.020 / 0.005, → 1 as
+  p → 0. *Precision is a function of DIFFICULTY, at a fixed verifier*
+- **conditioning on ALIVE does not move the rate** (**0.34902 vs 0.34902**) — what moves is
+  CONCENTRATION. `P(the whole alive group's positive signal is a hack)` = **0.33020** at
+  p = 0.02 vs **5.9568e-04** at p = 0.5 = **554×**, same 1% verifier in both runs.
+  *(NOT 2.4e7× — that is the conditional-on-k comparison h¹ vs h⁴, not the marginal)*
+- **the dead-group law generalises to a RÉNYI ENTROPY.**
+  `P(dead) = Σ_j q_j^G = exp(−(G−1)·H_G(q))` over the reward's OUTPUT LEVELS. At p = 0.05,
+  G = 8: binary **66.3420%** → split the failure mass to (0.05, 0.40, 0.55) → **0.9029%** =
+  **73.5×** from ONE extra reward level. Buying the same with G alone needs **G = 91.77 → 92**,
+  an **11.5×** rollout bill — *reward design and group size are the same knob*
+- **the rule is SPLIT THE MODE, and it is asymmetric.** At p = 0.05 splitting the FAILURE
+  mass gives 73.5×; splitting the SUCCESS mass gives **66.3420% → 66.3420%** (nothing).
+  Exactly reversed at p = 0.95. **P(dead) = 1 exactly at G = 1**, for any reward
+- **false negatives are a COMPUTE bug, priced exactly.** A 30% extraction failure moves
+  p_obs **0.10 → 0.0700**; G for 90% of groups alive goes **22 → 32** = **+45.5% rollout
+  compute**, bought by a regex and paid in GPU-hours. A 5% FP rate instead takes **32 → 19**
+  — *unsoundness BUYS compute, which is why the cheap fix is the dangerous one*
+- **composite rewards SELF-ANNEAL.** `E[Σ_i |Â_i|] = 2(G−1)·c(1−c)` per group (emp
+  **1.26493 / 3.50591 / 1.27215** vs closed **1.26 / 3.50 / 1.26** at c = 0.10/0.50/0.90).
+  **Exactly zero at c ∈ {0,1} for ANY λ**, including λ = 1000; the same component at c = 0.5
+  carries **0.5722**. Decay **3.49869 / 1.24724 / 0.13178** = **26.55×** from c = 0.50 → 0.99.
+  *Influence tracks INCONSISTENCY, not the coefficient — a mastered component cannot be
+  re-weighted back into relevance*
+- **the λ trap.** A weighted sum is lexicographic only while λ·max(partial) < min(correctness
+  gap): at **λ = 0.99** the argmax is correct, at **λ = 1.01** it is a wrong-but-formatted
+  sequence, tied at λ = 1. `|A_norm|/|A_cent| = **2.850**`, so a λ tuned under `centered` is
+  NOT tuned under `normalized`
+- **the RM contrast.** A preference dataset is a **MATCHING** (degree ≤ 1), so the BT gradient
+  on an uncompared response is **exactly 0.0** and shifting it by 1 / −37.5 / **1e6** changes
+  the loss by exactly 0. Same data, two inits: argmax **seq 0 (gold 1.0)** vs **seq 14
+  (gold 0.0)**. *An RM's accept set is set by its INITIALISATION; a verifier's is the same
+  object under both — data, not a fit*
+- **THE DAY'S RESULT — four real runs, differing only in the checker:**
+
+```text
+                    dead_frac    v_pass    gold_pass
+  honest              0.0361     0.4400      0.4400    sound+complete: ONE column (dev 0.0)
+  leaky (hacked)      0.7694     0.9681      0.0251
+  starved             0.7833     0.0319      0.1383    gold ABOVE v = incompleteness
+  saturated (solved)  0.8361     0.9803      0.9803
+```
+
+  **The HACKED run and the SOLVED run agree on every column the reward can produce** and
+  differ **0.025 vs 0.980** on the held-out one. A k=1 group gives `Â = (G−1)/G = 0.875000`
+  whether the acceptance was a hack or a real success — **bit-identical advantage vectors**.
+  *The gold column is the only column carrying the distinction*
+- **fixture calibration (8 seeds each), thresholds from the gap between DISTRIBUTIONS:**
+  honest dead **0.017–0.042** (Δv **+0.306…+0.435**), leaky dead **0.728–0.822** (Δgold
+  **−0.115…−0.086**), starved dead **0.650–0.844** at v_pass **0.022–0.050**, saturated dead
+  **0.814–0.919** at v_pass **0.980–0.983**. Diagnostic is silent on **8/8** healthy and
+  fires `verifier_hacked` ONLY on **8/8** leaky

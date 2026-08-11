@@ -232,7 +232,26 @@ def verifier_rates(gold: np.ndarray, accept: np.ndarray,
     Guard every denominator EXPLICITLY. D1 lost a stage to `np.divide(..., where=)`
     without `out=`, which returns uninitialised memory; a plain `if` is the fix.
     """
-    raise NotImplementedError("TODO 1: verifier_rates")
+    
+    p_true = (probs * gold).sum()
+    p_obs = (probs * accept).sum()
+    p_reject = np.ones_like(accept) - accept
+    if p_true > 0:
+        alpha = (p_reject * probs * gold).sum()/p_true
+    else:
+        alpha = 0
+    if p_true < 1:
+        gamma = (accept * probs * (1-gold)).sum()/(1-p_true)
+    else:
+        gamma = 0
+    if p_obs == 0:
+        precision = 1
+    else:
+        precision = (probs * gold * accept).sum()/p_obs
+    recall = 1-alpha
+    rate = Rates(p_true, p_obs, alpha, gamma, precision, recall)
+    
+    return rate
 
 
 def hack_share(gold: np.ndarray, accept: np.ndarray, probs: np.ndarray,
@@ -268,7 +287,13 @@ def hack_share(gold: np.ndarray, accept: np.ndarray, probs: np.ndarray,
         sum_k C(G,k) x^k (1-a)^(G-k) = (x + 1 - a)^G with x = a h, minus the two
         excluded end terms.
     """
-    raise NotImplementedError("TODO 2: hack_share")
+    rate = verifier_rates(gold, accept, probs)
+    h = 1 - rate.precision
+    p_alive = 1 - rate.p_obs ** G - (1-rate.p_obs) ** G
+    if p_alive == 0:
+        return (h, 0.0)
+    p_hack_alive = (1 - rate.p_obs * (1-h)) ** G - (1-rate.p_obs) ** G - (rate.p_obs * h) ** G
+    return (h, p_hack_alive/p_alive)
 
 
 def component_shares(comp: np.ndarray, weights: np.ndarray,
@@ -300,7 +325,40 @@ def component_shares(comp: np.ndarray, weights: np.ndarray,
     Use `group_advantage(..., "centered")` from D1 -- it already operates on the
     last axis, so a whole (n_groups, G) batch goes through one call.
     """
-    raise NotImplementedError("TODO 3: component_shares")
+    rewards_all_comps = (weights[:, None] * comp)
+    rewards_all_comp_group = rewards_all_comps[:, groups]
+    advantage_all_comps = group_advantage(rewards_all_comp_group, 'centered')   # (n_comp, n_groups, G)
+
+    advantage_all_comps_averaged = np.abs(advantage_all_comps).sum(axis=(1, 2))
+    if advantage_all_comps_averaged.sum() == 0:
+        return np.zeros_like(weights, dtype=np.float64)
+    return advantage_all_comps_averaged / advantage_all_comps_averaged.sum()
+
+
+def increase_percent(x: np.ndarray, frac: float = 0.2) -> float:
+    """Relative change from the first `frac` of a run to the last `frac`.
+
+    Guarded twice, because both guards were live bugs before they were guards:
+
+      * a history shorter than 1/frac steps makes BOTH slices empty, and the
+        mean of an empty slice is nan;
+      * a baseline of exactly 0 makes the ratio 0/0, which is also nan.
+
+    nan never compares True against anything, so a rule keyed on an unguarded
+    ratio does not crash -- it silently never fires, which is strictly worse
+    than a rule that is absent, because it looks like health.
+
+    When the baseline is 0 the relative change is undefined, so fall back to the
+    ABSOLUTE change: both callers key on the sign, and the sign is preserved.
+    """
+    part = int(len(x) * frac)
+    if part < 1:
+        return 0.0
+    base = float(x[:part].mean())
+    end = float(x[-part:].mean())
+    if base == 0.0:
+        return end - base
+    return (end - base) / base
 
 
 def diagnose_rlvr(h: RlvrHistory) -> list[tuple[str, str]]:
@@ -344,9 +402,45 @@ def diagnose_rlvr(h: RlvrHistory) -> list[tuple[str, str]]:
     Write the reason in a comment here; that sentence is as much the deliverable
     as the code is.
     """
-    raise NotImplementedError("TODO 4: diagnose_rlvr")
+    report = []
+    if len(h.step) < 10:
+        return report
 
+    # THE RULE I REFUSE TO WRITE, and why.
+    # "A reward component's gradient share is decaying toward zero" looks exactly
+    # like a bug and is the HEALTH signature: TODO 3 proves E[sum|A|] = 2(G-1)c(1-c)
+    # for a component with compliance c, so the share goes to zero precisely
+    # BECAUSE the model has mastered that component -- at any lambda, since the
+    # coefficient cancels out of the share. Firing on it would mean alerting on
+    # success, and the "fix" it invites (raise that component's weight) provably
+    # does nothing. D1 cut a rule the INSTRUMENT could not support; this is a rule
+    # the SEMANTICS do not support.
 
+    d_v, d_gold = increase_percent(h.v_pass), increase_percent(h.gold_pass)
+    v_pass_mean = _tail(h.v_pass).mean()
+    dead_frac = _tail(h.dead_frac).mean()
+
+    # the only rule that reads the held-out column as a DIRECTION, and the only
+    # one that needs two of them: a single column cannot express a divergence.
+    if d_v > 0 and d_gold < 0:
+        report.append(('verifier_hacked',
+                       f"v_pass {d_v:+.4f} while gold_pass {d_gold:+.4f} "
+                       f"(relative, first fifth -> last fifth)"))
+
+    if dead_frac > 0.5 and v_pass_mean < 0.3:
+        report.append(('signal_starved',
+                       f"dead fraction {dead_frac:.4f}, verifier pass {v_pass_mean:.4f}"))
+
+    # gold is NOT optional here. The hacked run also sits at dead > 0.5 with
+    # v_pass > 0.8; every column the reward can produce agrees with the solved
+    # run, and only the held-out one disagrees.
+    if dead_frac > 0.5 and v_pass_mean > 0.8 and d_gold > 0:
+        report.append(('saturated',
+                       f"dead fraction {dead_frac:.4f}, verifier pass {v_pass_mean:.4f}, "
+                       f"gold_pass {d_gold:+.4f}"))
+
+    return report
+    
 # ---------------------------------------------------------------------------
 # Task construction + training loop (provided -- plumbing, not the lesson)
 # ---------------------------------------------------------------------------

@@ -2,11 +2,82 @@
 
 ## Current Status
 
-- Current week: **Week 06 — GRPO & RL with Verifiable Rewards — IN PROGRESS (1/5)**.
+- Current week: **Week 06 — GRPO & RL with Verifiable Rewards — IN PROGRESS (2/5)**.
   Week 05 COMPLETE (5/5), Week 04 COMPLETE (5/5). **385 property-based checks across Week 5**
   (`preference_models.py` 74, `dpo.py` 42, `dpo_trainer.py` 51, `variants.py` 126,
-  `dpo_lab.py` 92). Week 6 so far: `grpo.py` **96**.
-- Current day: **Week 6 Day 01 DONE** — *GRPO vs PPO: what replacing the critic with a group
+  `dpo_lab.py` 92). Week 6 so far: `grpo.py` **96**, `rlvr.py` **112** = **208**.
+- Current day: **Week 6 Day 02 DONE** — *RL with verifiable rewards: what "verifiable" buys and
+  what it does not*. `code/rlvr.py`, **112 staged checks**, ten stages, 5.9 s full / 4.9 s
+  `--fast`, 0 failures, clean under `-W error::RuntimeWarning`. All four TODOs his.
+  **Thesis — a verifier is a SET, not a rate.** Everything that matters is a property of `V`
+  (what the checker accepts) and its two containments with `C` (what is correct): `V ⊆ C` =
+  SOUND, `C ⊆ V` = COMPLETE. The scalar people quote is a property of `V` **and the policy it
+  was measured under**, and RL exists to change that policy.
+  **Headline 1 — the soundness theorem, and the asymmetry of the two failures.** `V ⊆ C` ⇒
+  `v_pass ≤ gold_pass` for **all 415 policies at every KL** (max gap **−2.000e-12**), no scope
+  condition — the strongest guarantee anything in post-training offers. If `V \ C ≠ ∅`,
+  sup(v_pass − gold_pass) = **1.000000** for **1 false positive AND for 7**: hacking is a
+  **support** property, not a rate property. Their eval accuracies are **93.3% vs 53.3%**, so
+  the eval statistic ranks the two checkers *opposite* to what matters under optimization.
+  Incompleteness by contrast is bounded and priced: a 30% extraction failure takes p_obs
+  **0.10 → 0.0700** and G **22 → 32** = **+45.5% rollout compute**. A 5% FP rate takes
+  **32 → 19** — *unsoundness BUYS compute, which is why the cheap fix is the dangerous one*.
+  **Headline 2 — the day's result: the hacked run and the solved run are identical on every
+  column the reward can produce.** Four real runs differing only in the checker: leaky
+  **dead 0.7694 / v_pass 0.9681 / gold 0.0251** vs saturated **0.8361 / 0.9803 / 0.9803**. A
+  k=1 group gives `Â = (G−1)/G = 0.875000` whether the acceptance was a hack or a genuine
+  success — **bit-identical advantage vectors**. The held-out gold column is the only column
+  carrying the distinction; `starved` shows the other sign (**gold 0.1383 ABOVE v_pass
+  0.0319** = incompleteness), and `honest` collapses to **one column** (dev exactly 0.0).
+  **Headline 3 — "97% accurate" is not well-formed, and precision is a function of
+  DIFFICULTY.** Same checker, same arrays, tilt the policy toward the responses it wrongly
+  accepts (what optimization does): gamma **0.1515 → 0.7820**, precision **0.6720 → 0.0926**.
+  Mass-weighted gamma **0.1515** vs count-weighted **0.2222**. And at a **fixed 1% FP rate**,
+  `P(hack | rewarded) = γ(1−p)/[p(1−α)+γ(1−p)]` runs **1.0989 / 9.0909 / 35.2518 / 68.8581 %**
+  at p = .500/.100/.020/.005 → 1 as p → 0. *Your verifier gets worse as your model gets
+  better, with no change to the verifier.* Conditioning on ALIVE leaves the per-sample rate
+  **unchanged** (0.34902 vs 0.34902) — what moves is CONCENTRATION: **0.33020** vs
+  **5.9568e-04** = **554×**.
+  **Headline 4 — D1's dead-group law generalises to a RÉNYI ENTROPY of the reward's OUTPUT
+  levels.** `P(dead) = Σ_j q_j^G = exp(−(G−1)·H_G(q))`. At p = .05, G = 8: binary **66.3420%**
+  → split the failure mass to (.05,.40,.55) → **0.9029%** = **73.5× from one extra reward
+  level**; matching that with G alone needs **G = 92**, an **11.5×** rollout bill ⇒ *reward
+  design and group size are the same knob, priced differently*. **The rule is SPLIT THE MODE**
+  and it is strictly asymmetric — splitting the SUCCESS mass at p = .05 does **nothing**
+  (66.3420% → 66.3420%), exactly reversed at p = .95.
+  **Headline 5 — a composite reward is a self-annealing curriculum.** Centering is linear so
+  `A_total = Σ_j A_j` **exactly at finite G** (max dev 2.22e-16), and
+  `E[Σ_i |Â_i|] = 2(G−1)·c(1−c)` per group (emp **1.26493 / 3.50591 / 1.27215** vs closed
+  **1.26 / 3.50 / 1.26**). The share is **exactly zero at c ∈ {0,1} for ANY λ, including
+  λ = 1000**, while the same component at c = 0.5 carries **0.5722**; decay c = .50→.90→.99 is
+  **3.49869 / 1.24724 / 0.13178** = **26.55×**. *Influence tracks INCONSISTENCY, not the
+  coefficient — a mastered component has left the gradient and cannot be re-weighted back in.*
+  Corollary: a weighted sum is lexicographic only while λ·max(partial) < min(correctness gap)
+  — argmax is correct at **λ = 0.99**, wrong-but-formatted at **λ = 1.01**.
+  **Headline 6 — the RM contrast, W5's identifiability result pointed at reward design.** A
+  preference dataset is a **MATCHING** (degree ≤ 1), so the BT gradient on an uncompared
+  response is **exactly 0.0** and shifting it by 1 / −37.5 / **1e6** changes the loss by
+  exactly 0; same data, two inits → argmax **seq 0 (gold 1.0)** vs **seq 14 (gold 0.0)**. *An
+  RM's accept set is decided by its INITIALISATION; a verifier's is the same object under both
+  — data, not a fit — so its worst case is computable BEFORE training starts.*
+  **Coding headline — a NEW bug family, six sightings in one session: unguarded denominators,
+  every one producing a NaN rather than a crash.** `component_shares` returned `[nan]` on the
+  `_fail_fast` probe **with the stage still green**; `increase_percent` hit "mean of empty
+  slice". NaN never compares True, so a threshold built on one **silently never fires** — the
+  worst possible behaviour for a diagnostic. Standing rule: run with
+  `-W error::RuntimeWarning`; "passes with a warning" is a failure.
+  **Pedagogical headline — pre-printed slots must be TYPED.** He said the Block 1 slots were
+  "vague"; the defect was real. `____________` scores like an open question; `[a number]` /
+  `[a set-theoretic definition]` / `[which containment fails]` recovers the format's value.
+  Second finding: cold recall must test PRIOR material only, and must never name candidate
+  answers in the stem. **Second-clause gap, 9th sighting** — in drill Q4/Q5 he filled **5/5
+  definitional** slots and left **5/5 number-and-consequence** slots blank.
+  Block 0 **4.0/6**, Block 1 **8.0/14 (57%)**, Block 2 check **2.5/4**, Block 3 **5.0/6**,
+  Block 4 drill **14.0/25 (56%)**, coding **112/112 checks**. The drill **repaired a same-day
+  regression**: `d = √KL` failed in Block 1 and passed under drill conditions 40 minutes later.
+  **First unforced SCOPE CONDITION in six weeks** (the `no_critic` null holds only at short
+  horizon), volunteered without being asked.
+- Previous day: **Week 6 Day 01 DONE** — *GRPO vs PPO: what replacing the critic with a group
   mean actually costs*. `code/grpo.py`, **96 staged checks**, ten stages, 5.9 s full / 3.2 s
   `--fast`, 0 failures. All four TODOs his.
   **Thesis — GRPO does not delete the value function; it replaces a LEARNED estimate of E[r|x]
@@ -383,7 +454,7 @@
 | 03 | RL foundations | Complete (5/5) | Toy policy-gradient implementation (213 checks) |
 | 04 | RLHF + PPO | Complete (5/5) | Toy PPO-RLHF loop + failure-mode demos (515 checks) |
 | 05 | DPO + preference optimization | Complete (5/5) | DPO trainer + failure-mode lab (385 checks) |
-| 06 | GRPO + RLVR | In progress (1/5) | Mini RLVR repo (96 checks so far) |
+| 06 | GRPO + RLVR | In progress (2/5) | Mini RLVR repo (208 checks so far) |
 | 07 | Evals + reward modeling | Not started | Eval harness |
 | 08 | Training/inference systems | Not started | Systems design doc |
 | 09 | Capstone | Not started | Polished repo + writeup |
@@ -393,6 +464,52 @@
 
 Topics to revisit:
 
+- [ ] **A VERIFIER IS A SET, NOT A RATE — and the two containments are not two sides of one
+  dial** (W6 D2). `V ⊆ C` = SOUND, `C ⊆ V` = COMPLETE. **Unsoundness: ask whether the set is
+  EMPTY** (sup gap = **1.000000** for 1 false positive AND for 7 — a SUPPORT property), and the
+  eval statistic ranks the two checkers **backwards** (93.3% vs 53.3%). **Incompleteness: ask
+  for the RATE**, because that is the price in rollouts (p_obs .10→.0700, G **22→32**,
+  **+45.5%** compute). A 5% FP rate takes G **32→19**: *the two failures move the same number
+  in opposite directions, so no single scalar can express verifier quality*
+- [ ] **THE HACKED RUN AND THE SOLVED RUN AGREE ON EVERY COLUMN THE REWARD CAN PRODUCE**
+  (W6 D2). leaky **0.7694 / 0.9681 / gold 0.0251** vs saturated **0.8361 / 0.9803 / gold
+  0.9803**; a k=1 group gives **Â = 0.875000** either way — **bit-identical advantage
+  vectors**. No rule reading v_pass, dead_frac, entropy or loss can separate them. **The
+  held-out gold column is not a nice-to-have, it is the only column carrying the
+  distinction**, and `starved` shows the other sign (gold **0.1383** ABOVE v_pass **0.0319**)
+- [ ] **PRECISION IS A FUNCTION OF DIFFICULTY, AT A FIXED VERIFIER** (W6 D2). At a fixed 1% FP
+  rate, `P(hack | rewarded)` = **1.10 / 9.09 / 35.25 / 68.86 %** at p = .500/.100/.020/.005.
+  And the rates are POLICY-dependent: same checker, tilt π toward its false positives and
+  precision goes **0.6720 → 0.0926**. *"Our verifier is 97% accurate" is not a well-formed
+  sentence.* Conditioning on ALIVE does NOT move the per-sample rate (0.34902 vs 0.34902) —
+  what moves is **concentration** (**554×**)
+- [ ] **DEAD GROUPS ARE A RÉNYI ENTROPY OF THE REWARD'S OUTPUT LEVELS** (W6 D2).
+  `P(dead) = Σ q_j^G = exp(−(G−1)·H_G(q))`. **SPLIT THE MODE**: at p=.05, G=8, splitting the
+  FAILURE mass takes **66.34% → 0.90%** (**73.5×**) from one extra reward level, vs **G=92**
+  (**11.5×** rollouts) to buy the same thing. Splitting the SUCCESS mass does **nothing**
+  (66.3420% → 66.3420%), reversed at p=.95 ⇒ *reward design and group size are the same knob*
+- [ ] **A COMPOSITE REWARD IS A SELF-ANNEALING CURRICULUM** (W6 D2).
+  `E[Σ|Â|] = 2(G−1)c(1−c)` per group (emp 1.26493 / 3.50591 / 1.27215 vs closed 1.26/3.50/1.26).
+  **Exactly zero share at c ∈ {0,1} for ANY λ, including 1000**; same component at c=.5 carries
+  **0.5722**. *Influence tracks INCONSISTENCY, not the coefficient — a mastered component
+  cannot be re-weighted back into relevance*, and "a component's share is decaying to zero" is
+  the **health** signature, not a fault. λ is lexicographic only below the correctness gap
+  (correct at λ=0.99, wrong-but-formatted at λ=1.01)
+- [ ] **AN RM'S ACCEPT SET IS DECIDED BY ITS INITIALISATION; A VERIFIER'S IS DATA** (W6 D2).
+  A preference dataset is a **MATCHING**, so the BT gradient on an uncompared response is
+  **exactly 0.0** and a shift of **1e6** changes the loss by exactly 0 — inits ±50 converge to
+  argmax **seq 0 (gold 1.0)** vs **seq 14 (gold 0.0)**. A verifier is the same object under
+  both ⇒ **its worst case is computable before training starts**. Do NOT cross-wire the two
+  taxonomies (sound/complete vs underdetermined/extrapolating)
+- [ ] **UNGUARDED DENOMINATORS PRODUCE NaN, NOT A CRASH — six sightings in W6 D2 alone.**
+  `component_shares` returned `[nan]` **with the stage still green**; `increase_percent` hit
+  "mean of empty slice". **NaN never compares True, so a threshold built on one silently never
+  fires.** Guard every denominator with a plain `if`; run with `-W error::RuntimeWarning` and
+  treat "passes with a warning" as a failure. (Companion to W6 D1's
+  `np.divide(..., where=)`-without-`out=` finding — same family, third form)
+- [ ] **`_tail` READS A LEVEL. A CHANGE NEEDS TWO POINTS FAR APART** (W6 D2). Measuring a trend
+  *inside* the tail window cut the leaky run's signal from **+0.2981 to +0.00562** — a **53×**
+  loss of signal-to-noise against a threshold of exactly zero
 - [ ] **THE DEAD-GROUP LAW — the one GRPO consequence with no PPO analogue** (W6 D1).
   P(zero signal) = **p^G + (1−p)^G**; at G=8 that is **43.05% at p=.90 and 66.34% at p=.95**,
   so N_eff/N = **33.658%**. Raising the pass rate .90→.95 kills a further **23.3%** of the
@@ -782,10 +899,22 @@ Topics to revisit:
 
 Add polished answers every week (see `interview-bank/`).
 
-**STATUS AFTER SIX WEEKS: the bank is EMPTY.** All four files are scaffolded Q&A with every
-`**Short answer:**` / `**Deeper:**` / `**Watch out for:**` slot blank. The drill block was
-scheduled last (1:45-1:55) and was therefore the block the clock ate, on almost every day it
-appeared.
+**STATUS AFTER SIX WEEKS AND TWO DAYS: the bank is NO LONGER EMPTY.** On W6 D2 the drill ran
+in its new slot and **five entries in `rl-post-training-qa.md` were filled (+233 lines)** — the
+first non-empty bank in the project's history. Three entries remain blank (RLHF pipeline, PPO
+clipped objective, DPO).
+
+**The caveat, recorded because it changes what the artifact is worth.** He answered the first
+three questions himself (D1 **11.0/15**, D2 Q4/Q5 **3.0/10**) and then asked me to *"please
+fill it out yourself here."* I complied and said so once. The **reference** value is intact;
+the **retrieval** value of those five entries is spent — you cannot be tested on prose you
+watched someone else write. Mitigation adopted: every entry now opens with a **cold card** —
+the entry's numbers, alone, with no surrounding argument — which is the drillable artifact.
+The rule below is unchanged and the next entries are his.
+
+**The evidence that the drill format itself works** (also W6 D2): `d = √KL` failed in Block 1
+cold recall and **passed under drill conditions 40 minutes later, same day, no teaching in
+between**. The drill is not just an output format; it is a better probe than the quiz.
 
 **Fixed on W6 D1, structurally:** the drill now runs at **1:00-1:15, before the coding block**,
 in `shared/templates/session-template.md` and in all 25 remaining session plans (W6 D2-D5, W7,
@@ -796,7 +925,7 @@ W8, W9, W10). Rules:
 - **He** writes the bank entry; model answers come after his, as a diff, never instead.
 - **An empty entry means the block did not happen.**
 
-**First back-fill owed (W6 D2):** the three questions already stubbed in
+**First back-fill owed (W6 D2): DONE.** The three questions stubbed in
 `rl-post-training-qa.md` - "GRPO vs PPO: what changes and why", "Why KL to a reference policy",
-and "KL spikes, reward improves, human evals degrade - diagnose it." W6 D1 measured the answer
-to all three and the block that owned them was skipped.
+and "KL spikes, reward improves, human evals degrade - diagnose it" - are now written, plus the
+two W6 D2 questions ("what makes a reward verifiable" and "your math verifier is 97% accurate").
