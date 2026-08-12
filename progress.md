@@ -2,11 +2,85 @@
 
 ## Current Status
 
-- Current week: **Week 06 — GRPO & RL with Verifiable Rewards — IN PROGRESS (2/5)**.
+- Current week: **Week 06 — GRPO & RL with Verifiable Rewards — IN PROGRESS (3/5)**.
   Week 05 COMPLETE (5/5), Week 04 COMPLETE (5/5). **385 property-based checks across Week 5**
   (`preference_models.py` 74, `dpo.py` 42, `dpo_trainer.py` 51, `variants.py` 126,
-  `dpo_lab.py` 92). Week 6 so far: `grpo.py` **96**, `rlvr.py` **112** = **208**.
-- Current day: **Week 6 Day 02 DONE** — *RL with verifiable rewards: what "verifiable" buys and
+  `dpo_lab.py` 92). Week 6 so far: `grpo.py` **96**, `rlvr.py` **112**, `sampling.py` **73**
+  = **281**.
+- Current day: **Week 6 Day 03 DONE** — *sampling, pass@k & rejection sampling*.
+  `code/sampling.py`, **73 staged checks**, ten stages, 0 failures, clean under
+  `-W error::RuntimeWarning`. TODO 1 and two-thirds of TODO 2 his; the rest tutor-written at
+  his request at the end of a long session.
+  **Thesis — pass@k is not a capability; it is a capability COMPOSED WITH A SELECTOR you do
+  not have.** Three selectors, three limits, same policy: **oracle → 1**, **BoN/filter → the
+  verifier's PRECISION** (measured saturating at **0.321655** while pass@k → **1.000000**),
+  **majority vote → 1 if the modal answer is right else 0**.
+  **Headline 1 — THE RESULT OF THE DAY: a rule that was measured and never fired.**
+  `coverage_collapse` (pass@1 rises while pass@k_max falls) is *the* standard claim about RL on
+  LLMs — well-posed, discriminative in principle, would have passed code review. Over **24
+  configurations** (2 flavours × 4 init scales × 3 (lr,β)) then 8 seeds × 3 fixtures, the
+  minimum of `pass@k_max(final) − pass@k_max(0)` was **+0.000e+00. Never negative, anywhere.**
+  Mechanism: on a prompt whose gold is never sampled every rollout scores the same ⇒
+  group-relative advantage **identically zero** ⇒ zero gradient. *The algorithm cannot push
+  mass off coverage it is not sampling* — **D2's dead group read as a SAFETY property**.
+  SCOPE: 15-sequence tabular softmax, sound verifier, group baseline — it says the collapse
+  needs a MECHANISM, not that it cannot happen. Three days, three cut rules, three *different*
+  reasons: D1 the **instrument** couldn't support it, D2 the **semantics** didn't, D3 the
+  **system does not exhibit it**.
+  **Headline 2 — maj@k goes to ZERO, non-monotonically, while pass@k goes to ONE.**
+  **0.3500 / 0.3517 / 0.3563 / 0.3508 / 0.3231 / 0.2764** at k=1/3/9/21/51/101 against
+  pass@101 = **1.000000**; control (modal answer correct) **0.4500 → 0.8701**. pass@k is
+  monotone in k *by construction* and cannot do this — maj@k lives on **answers**, pass@k on
+  **sequences**, and the map between them is many-to-one.
+  **Headline 3 — FILTER vs RANKER: 10.16× from the selection rule alone.** Same verifier
+  (γ=.01, α=.10), same p=.10, same n=256. Filter `γ(1−p)/[γ(1−p)+(1−α)p]` = **9.0909%** and is
+  **n-INVARIANT** (MC 9.1342/9.0926/9.0785/9.0935 at n=1/8/64/256) because it emits *every*
+  accepted sample. Ranker = `1 − (1−γ)^n` = **pass@n for the HACK SET** = **1.0000 / 7.7255 /
+  47.4404 / 92.3685 %**. *Same verifier, same budget, 9.09% vs 92.37%.*
+  **Headline 4 — the estimator, and Jensen.** Unbiased `1 − C(n−c,k)/C(n,k)` to **7.772e-16**
+  by **exchangeability**; the plug-in is `f(p̂)` with f **concave** so it **UNDER**-reports —
+  **0.493747 vs truth 0.651322 = 24.19% thrown away** at n=10,p=.1,k=10. Aggregate order
+  matters: **0.9960** mean-then-estimate vs **0.6250** estimate-then-mean on identical data.
+  **Headline 5 — the metric REWEIGHTS the benchmark.** `∂pass@k/∂p = k(1−p)^(k−1)`; at **k=1
+  every problem is weighted EXACTLY equally**, at **k=256 the two hardest carry 100.0000%** and
+  the easiest **0.000e+00**. Hard/easy ratio exactly **4.75^(k−1)**. *Changing k changes which
+  benchmark you are running.* Related scope condition: T\* moves with k **only if p is
+  heterogeneous** — homogeneous set gives T\* = 0.20 at every k, heterogeneous transitions
+  **between k=4 and k=8**.
+  **Headline 6 — best-of-n IS a KL knob, and ties are the whole exercise.**
+  `KL(BoN_n ‖ π) = log n − (n−1)/n` = **0.1931/1.2044/3.1745/4.5491** nats at n=2/8/64/256;
+  measured **+0.6853 nats** per doubling at n=64→128. A **discrete** score is strictly less
+  selective: **2.0507 < 3.1745** at n=64.
+  **Coding headline — the private reference run caught SIX defects, the most of any day**: a
+  vacuous stability check (`1 − 1.1e-59` rounds to exactly 1.0), a threshold with the wrong
+  sign, an argmax destroyed by saturation at k=1024, an operator-precedence bug
+  (`np.abs(a - b if False else c)` parses as `(a-b) if False else c`), two byte-identical
+  fixtures (`max(2, 15//2) == 15//2`), and the rejection above. Also: the crossover k came out
+  **[16, 64, 16, 64, 64]** across five seeds — a **4× range** — so it is reported as a
+  **BRACKET**; seed 0 alone would have said "k = 16".
+  **Pedagogical headline — the skeleton contract was revised FOUR times in one session**:
+  slots must (1) name the FUNCTION and which argument varies, (2) not bundle an authorship
+  judgement with a technical skill (the MY-OWN-EVIDENCE slot, blank 6 sessions running, was
+  retired), and (4) not contain a label that contradicts their own formula (my "FAILURE-side
+  term p^G" — p^G is the success side; he answered the formula correctly and did **not flag
+  the contradiction**, which is now a coaching point).
+  **Second-clause gap split TWICE.** Block 4: MECHANISM slots **9/9**, NUMBER slots **0/2**,
+  THESIS slots **0/3**. Block 5 split it again into **MECHANISM vs NAME** — he derived
+  `F(u)=u^n`, `q(u)=n·u^(n−1)` and the integral `log n − (n−1)/n` correctly while leaving
+  **"probability integral transform"** and **"Uniform(0,1)"** blank. *He can execute the object
+  and cannot name it* — identical to Jensen on Block 3, which he repaired 40 min later.
+  **Wrong-level family: 14th sighting**, and the two sharpest yet. (13) He substituted the
+  filter's **posterior** (9.09%) where the ranker's **per-sample rate** (γ=1%) was required —
+  arithmetic flawless, modelling one level off. (14) `pass_at_k` returned `product` =
+  P(all k wrong) instead of `1 − product`, inverting both edge cases; the docstring warned
+  about this exact error. Note the trap: at c=1 it returns **0.5, which is correct**, because
+  0.5 is the fixed point of x ↦ 1−x.
+  Block 0 **14/17 (82.4%)**, Block 1 **26.5/37 (71.6%)**, Block 2 check **2/3**, Block 3
+  **11.5/19**, Block 4 drill **11/20 (55%)**, Block 5 **20.25/32 (63.3%)** — total **85.25/128
+  = 66.6%**, his best day of Week 6. **Block 5 §(3) scored 5/5 — the first perfect section of
+  the week**, and it was earned by *spontaneously* reaching back to `∂pass@k/∂p = k(1−p)^(k−1)`
+  to explain why T\* moves with k. First unprompted mechanism link in six weeks.
+- Previous day: **Week 6 Day 02 DONE** — *RL with verifiable rewards: what "verifiable" buys and
   what it does not*. `code/rlvr.py`, **112 staged checks**, ten stages, 5.9 s full / 4.9 s
   `--fast`, 0 failures, clean under `-W error::RuntimeWarning`. All four TODOs his.
   **Thesis — a verifier is a SET, not a rate.** Everything that matters is a property of `V`
@@ -454,7 +528,7 @@
 | 03 | RL foundations | Complete (5/5) | Toy policy-gradient implementation (213 checks) |
 | 04 | RLHF + PPO | Complete (5/5) | Toy PPO-RLHF loop + failure-mode demos (515 checks) |
 | 05 | DPO + preference optimization | Complete (5/5) | DPO trainer + failure-mode lab (385 checks) |
-| 06 | GRPO + RLVR | In progress (2/5) | Mini RLVR repo (208 checks so far) |
+| 06 | GRPO + RLVR | In progress (3/5) | Mini RLVR repo (281 checks so far) |
 | 07 | Evals + reward modeling | Not started | Eval harness |
 | 08 | Training/inference systems | Not started | Systems design doc |
 | 09 | Capstone | Not started | Polished repo + writeup |
@@ -464,6 +538,30 @@
 
 Topics to revisit:
 
+- [ ] **pass@k IS A CAPABILITY COMPOSED WITH A SELECTOR YOU DO NOT HAVE** (W6 D3). Three
+  selectors, three limits on one policy: oracle **→ 1**, BoN/filter **→ the verifier's
+  PRECISION** (measured **0.321655** while pass@k → **1.000000**), majority vote **→ 1 if the
+  modal answer is right else 0**. maj@k measured **falling** 0.3563 (k=9) → 0.2764 (k=101)
+  while pass@101 = 1.000000 — *the vote gets worse with more compute, and pass@k cannot show
+  it because it is monotone in k by construction*.
+- [ ] **THE COLLAPSE THAT NEVER HAPPENED, AND ITS SCOPE CONDITION** (W6 D3). `coverage_collapse`
+  measured over **24 configurations + 8 seeds × 3 fixtures**: min `Δpass@k_max` = **+0.000e+00**,
+  never negative. Mechanism: unsampled gold ⇒ uniform group ⇒ **advantage identically zero** ⇒
+  zero gradient. Scope: 15-seq tabular softmax, sound verifier, group baseline. *Drill saying
+  the scope condition in the same breath as the number* — the claim is "the collapse needs a
+  mechanism", NOT "RL never narrows a policy".
+- [ ] **FILTER vs RANKER — the same verifier is two different instruments** (W6 D3). Filter
+  composition `γ(1−p)/[γ(1−p)+(1−α)p]` = **9.0909%, n-INVARIANT** (it emits *every* accepted
+  sample). Ranker composition `1 − (1−γ)^n` = **pass@n for the HACK SET** = **92.3685%** at
+  n=256. **10.16× from the selection rule alone.** Pairs with D2's selection law.
+- [ ] **THE PLUG-IN pass@k IS BIASED LOW BY JENSEN** (W6 D3). `1 − (1−c/n)^k` is `f(p̂)` with f
+  **concave** ⇒ under-reports: **0.493747 vs 0.651322 = 24.19%** at n=10,p=.1,k=10. Unbiased
+  form `1 − Π_{i=0}^{k−1}(n−c−i)/(n−i)`, proved by **exchangeability** (one probability, two
+  ways) — *not* by expanding the binomial sum. Also: mean **outside**, not inside (0.6250 vs
+  0.9960 on identical data).
+- [ ] **BEST-OF-n IS A KL YOU DID NOT BUDGET** (W6 D3). `log n − (n−1)/n` = **0.1931 / 1.2044 /
+  3.1745 / 4.5491** nats at n=2/8/64/256, **+0.6853 nats per doubling** measured. **Ties make
+  BoN less selective** so a discrete score is strictly cheaper (**2.0507 < 3.1745** at n=64).
 - [ ] **A VERIFIER IS A SET, NOT A RATE — and the two containments are not two sides of one
   dial** (W6 D2). `V ⊆ C` = SOUND, `C ⊆ V` = COMPLETE. **Unsoundness: ask whether the set is
   EMPTY** (sup gap = **1.000000** for 1 false positive AND for 7 — a SUPPORT property), and the

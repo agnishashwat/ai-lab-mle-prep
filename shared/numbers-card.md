@@ -413,3 +413,83 @@ Format: `quantity = value (condition)`.
   **−0.115…−0.086**), starved dead **0.650–0.844** at v_pass **0.022–0.050**, saturated dead
   **0.814–0.919** at v_pass **0.980–0.983**. Diagnostic is silent on **8/8** healthy and
   fires `verifier_hacked` ONLY on **8/8** leaky
+
+## Week 6 Day 3 — sampling, pass@k & rejection sampling
+
+- **THE THESIS.** *pass@k is not a capability — it is a capability COMPOSED WITH A SELECTOR you
+  do not have.* Three selectors, three limits, on the same policy: **oracle → 1**,
+  **BoN/filter → the verifier's PRECISION**, **majority vote → 1 if the modal answer is right
+  else 0**. Measured: unsound verifier saturates at **0.321655** while pass@k → **1.000000**
+- **the unbiased estimator.** `1 − C(n−c,k)/C(n,k)`, unbiased to **7.772e-16** over 9 points, by
+  **exchangeability** (compute P(a random k-subset is all-wrong) two ways). Product form
+  `Π_{i=0}^{k−1} (n−c−i)/(n−i)` — never form `C(200,100) = 9.05e58`. At **k = n** it collapses to
+  exactly `1[c ≥ 1]`
+- **the plug-in's bias.** `1 − (1−c/n)^k` is `f(p̂)` with **f concave** ⇒ Jensen ⇒ **UNDER**-reports.
+  n=10, p=0.1, k=10: **0.493747 vs truth 0.651322**, bias **−0.157575 = 24.19% thrown away**.
+  Aggregate order matters: same data, mean-then-estimate **0.9960** vs estimate-then-mean **0.6250**
+- **the identity.** `P(dead) = [1 − pass@G] + p^G` to **5.551e-17** on a 501-point grid. At G=8,
+  dead = **66.3420% at BOTH p=0.05 and p=0.95**, failure-side share **100.00% vs 0.00%**.
+  `alive(0.95) = pass@8(0.05) = 0.3365796` — *the same term, read twice*
+- **the reweighting.** `∂pass@k/∂p = k(1−p)^(k−1)`; hard/easy ratio **exactly 4.75^(k−1)** =
+  **1× / 5.456e+04× / 1.414e+10×** at k=1/8/16. At **k=1 every problem is weighted EXACTLY
+  equally** (1/6 each); at **k=256 the two hardest carry 100.0000%** and the easiest **0.000e+00**.
+  *Changing k changes which benchmark you are running*
+- **temperature × k, and its SCOPE CONDITION.** Heterogeneous set: T* = **0.20/0.20/0.20/3.00/
+  3.00/3.00** at k=1/2/4/8/16/64, transition **between k=4 and k=8**. Homogeneous set: T* =
+  **0.20 at EVERY k**. *T\* moves with k ONLY if p is heterogeneous across problems.* For one
+  problem the whole **ordering** of temperatures is k-invariant (monotone maps preserve argmax)
+- **the two decoding knobs are not the same kind of object.** Temperature preserves the
+  **support** at every finite T > 0; **top-p 0.90 leaves 11 of 15** sequences alive. *Only
+  truncation can lower pass@infinity*
+- **correlation: the gap is UNIMODAL, not monotone.** i.i.d. over-states pass@k at every k>1:
+  **+0.0706 / +0.2313 / +0.4176 / +0.4749 / +0.1921 / +0.0040 / +0.0000** at k=2/4/8/16/64/256/1024.
+  Peak **0.4749 at k=16**, back to 0 by k=1024 because both curves saturate. *Largest exactly
+  where people report*
+- **maj@k goes to ZERO, non-monotonically, while pass@k goes to ONE.** Modal answer wrong:
+  **0.3500 / 0.3517 / 0.3563 / 0.3508 / 0.3231 / 0.2764** at k=1/3/9/21/51/101 vs pass@101 =
+  **1.000000**. Control (modal answer right): **0.4500 → 0.8701**. *pass@k is monotone in k by
+  construction and CANNOT do this — maj@k lives on ANSWERS, pass@k on SEQUENCES*
+- **FILTER vs RANKER — same verifier (γ=0.01, α=0.10), same p=0.10, same budget:**
+
+```text
+  n         FILTER P(hack|emitted)      RANKER P(hack|emitted)
+  1               9.1342%                      1.0000%
+  8               9.0926%                      7.7255%
+  64              9.0785%                     47.4404%
+  256             9.0935%                     92.3685%
+```
+
+  Filter is **n-INVARIANT** (closed form **9.0909%**) — it emits *every* accepted sample, so the
+  emitted composition is one accepted sample's composition. Ranker is `1 − (1−γ)^n` = **pass@n
+  for the HACK SET**. At n=256: **9.09% vs 92.37% = 10.16×, from the SELECTION RULE alone**
+- **best-of-n IS a KL knob.** `KL(BoN_n ‖ π) = log n − (n−1)/n` = **0.1931 / 1.2044 / 3.1745 /
+  4.5491** nats at n=2/8/64/256; **√KL at n=64 = 1.7817**; each doubling ≈ log 2, **measured
+  +0.6853 nats** from n=64→128. **TIES make BoN LESS selective**, so a discrete score gives
+  strictly less KL: **2.0507 < 3.1745** at n=64 (convergence to the continuous law verified,
+  err **4.27e-07** at L=20000)
+- **THE DAY'S RESULT — the rule that was measured and NEVER FIRED.** `coverage_collapse`
+  (pass@1 rises while pass@k_max falls) is the standard claim about RL on LLMs. Over **24
+  configurations** (2 flavours × 4 init scales × 3 (lr,β)) then 8 seeds × 3 fixtures:
+
+```text
+  min over ALL runs of [ pass@k_max(final) − pass@k_max(0) ]  =  +0.000e+00
+```
+
+  **Never negative, anywhere.** Mechanism: on a prompt whose gold is never sampled every rollout
+  scores the same ⇒ group-relative advantage **identically zero** ⇒ zero gradient. *The
+  algorithm cannot push mass off coverage it is not sampling* — **D2's dead group as a SAFETY
+  property**. SCOPE: 15-sequence tabular softmax, sound verifier, group baseline — *the collapse
+  needs a MECHANISM; it is not automatic*
+- **what training DID do.** pass@1 **0.4447 → 0.9138**, gain **decaying in k and exactly zero at
+  k_max**: `+0.4691 / +0.3557 / +0.1945 / +0.0779 / +0.0216 / +0.0002 / +0.0000 / +0.0000` at
+  k=1/2/4/8/16/64/256/1024. ***1024× the samples buys 0e+00 of the improvement***
+- **a number that refused to be a number.** Crossover k (where the gain drops under the seed
+  noise floor) = **[16, 64, 16, 64, 64]** over 5 seeds — a **4× range**. Seed 0 alone says
+  "k = 16". *Report the BRACKET, not the point estimate*
+- **fixture calibration (8 seeds × 3 fixtures), thresholds from the gap between DISTRIBUTIONS:**
+  `no_coverage` final pass@k_max broken **≤ 0.3845** / healthy **≥ 1.0000** → **0.70**;
+  `mode_locked` final entropy broken **≤ 0.6597** / healthy **≥ 0.9739** → **0.80**;
+  `mass_without_support` Δpass@1 broken **≥ 0.3697** / healthy **≤ 0.1130** → **0.25**.
+  `mode_locked` **LOST a conjunct to the data** — locked spread 0.123–0.379 vs healthy
+  0.323–0.556 **OVERLAP**, so it cannot be thresholded. *Fewer conditions, because that is what
+  the measurement supports*

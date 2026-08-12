@@ -52,7 +52,7 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
   **+0.7514 → −0.4532** (worse than its own reference) at 100% train accuracy with the loss
   falling monotonically. `week-summary.md` + `retrospective.md` written.
 
-- **Week 06 — IN PROGRESS (Days 01-02 done). GRPO & RL with verifiable rewards.** Day 1
+- **Week 06 — IN PROGRESS (Days 01-03 done). GRPO & RL with verifiable rewards.** Day 1
   `grpo.py`, **96 checks**, ten stages, 5.9 s full / 3.2 s `--fast`, **all four TODOs his**.
   Thesis: *GRPO does not delete the value function; it replaces a LEARNED estimate of E[r|x]
   with a MONTE-CARLO one, and unlike a critic that estimate vanishes exactly where the policy
@@ -87,6 +87,32 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
   c ∈ {0,1} **for any λ including 1000**; and an RM's accept set is decided by its
   **initialisation** (BT gradient on an uncompared response **exactly 0.0**, a 1e6 shift costs
   0 loss) where a verifier's is **data**.
+  Day 3 `sampling.py`, **73 checks**, ten stages, clean under `-W error::RuntimeWarning`,
+  TODO 1 and two-thirds of TODO 2 his. Thesis: *pass@k is a CAPABILITY composed with a SELECTOR
+  you do not have — the three selectors have three different limits, and only one of them is the
+  one pass@k reports.* Oracle **→ 1**, filter **→ the verifier's PRECISION** (**0.321655**
+  measured while pass@k → **1.000000**), majority vote **→ 1 iff the modal answer is right**;
+  **maj@k measured FALLING** 0.3563 (k=9) → 0.2764 (k=101) against pass@101 = 1.000000, so more
+  compute makes the vote worse and pass@k structurally cannot show it. Headline:
+  **`coverage_collapse` NEVER FIRED** — min `Δpass@k_max` = **+0.000e+00** across **24
+  configurations + 8 seeds × 3 fixtures** — because unsampled gold ⇒ uniform group ⇒ advantage
+  **identically zero** ⇒ zero gradient, so **D2's dead group is a safety property** at this
+  scope (15-seq tabular softmax, sound verifier, group baseline). Supporting: the unbiased
+  estimator `1 − Π_{i=0}^{k−1}(n−c−i)/(n−i)` unbiased to **7.772e-16** by **exchangeability**
+  (one probability, two ways) while the plug-in is `f(p̂)` with f **concave** and under-reports
+  **24.19%** (0.493747 vs 0.651322) and the mean must go **outside** (0.6250 vs 0.9960 on
+  identical data); **`∂pass@k/∂p = k(1−p)^(k−1)` reweights the benchmark** — uniform at k=1, the
+  two hardest problems carrying **100.0000%** at k=256, so *changing k changes which benchmark
+  you are running*; **T\* moves with k only under heterogeneity** (0.20 → 3.00, transition
+  bracketed between k=4 and k=8; homogeneous set gives 0.20 at every k); the dead-group law and
+  pass@G are the **same algebra** (`P(dead) = p^G + (1 − pass@G)`, identity to 5.551e-17, dead
+  **66.3420%** at p=.05 and p=.95 with failure shares 100%/0%); **filter vs ranker = 10.16×**
+  from the selection rule alone (filter **9.0909% n-INVARIANT**, ranker = **pass@n for the hack
+  set** = 92.3685% at n=256); best-of-n costs **log n − (n−1)/n** = 0.1931/1.2044/3.1745/4.5491
+  nats at n=2/8/64/256 (**+0.6853 per doubling**, and **ties make BoN cheaper**: 2.0507 <
+  3.1745 at n=64); and the correlation gap is **UNIMODAL, not monotone** — peaks **0.4749 at
+  k=16** and returns to 0, overturning my own session-plan claim. Crossover k reported as the
+  **bracket [16, 64, 16, 64, 64]** across five seeds, never as a point estimate.
 
 ## SESSION-FORMAT PREFERENCE (he stated this explicitly on W4 D1 — obey it)
 
@@ -130,72 +156,117 @@ it is never the block that gets dropped for time.**
 
 ## Next session
 
-Start with the prompt: **"Start Week 6 Day 3"**. Read `week-06-*/day-03-*/session.md` and
-teach it (Sampling, pass@k & rejection sampling). **W6 D2 is CLOSED** — `deliverable.md`
-written, `progress.md`, the Review Queue and the numbers card updated, `rlvr.py` at **112/112**
-with all four TODOs his, and **five interview-bank entries filled**.
+Start with the prompt: **"Start Week 6 Day 4"**. Read `week-06-*/day-04-*/README.md` and build
+the session. **W6 D3 is CLOSED** — `deliverable.md` written, `progress.md`, the Review Queue and
+the numbers card updated, `sampling.py` at **73/73**, and **two more interview-bank entries
+filled** (Q1 RLHF pipeline, Q3 DPO).
 
-**THREE MANDATORY RULES FOR D3 (all standing, all earned by direct test):**
+**FOUR MANDATORY RULES FOR D4 (all standing, all earned by direct test):**
 
-1. **Pre-print the answer skeleton with EMPTY slots — and the slots must be TYPED.** This is
-   D1's rule plus **D2's correction, which was a real defect he called out.** `____________`
-   scores like an open question; he said the Block 1 slots were "vague" and he was right. Emit
-   `[a number]`, `[a set-theoretic definition]`, `[which containment fails]`, `[one precise
-   phrase]`, `[an ordered checklist, 4-5 items, most diagnostic FIRST]`. The type is what tells
-   him whether the slot wants a word, a number, or a sentence. **Never name the candidate
-   answers in the stem** — on D2 a stem that listed three options got those three back.
-2. **RUN THE INTERVIEW DRILL at 1:00–1:15, before the coding block.** It ran on D2 and it
-   **repaired a same-day regression**: `d = √KL` failed in Block 1 cold recall and passed under
-   drill conditions 40 minutes later, with no teaching in between. The drill is a better probe
-   than the quiz, not just a better output format. **He writes the bank entry** — see the note
-   above about D2, where he asked me to write it and I did.
+1. **Pre-print the answer skeleton with TYPED slots — and NAME THE FUNCTION.** D1 said emit
+   slots; D2 said type them; **D3 said that is still not enough.** He pushed back on Block 0
+   with *"it is not clear what function you want"* and he was right. A slot must state the
+   **function**, **which argument varies**, **which are held fixed**, and **units/precision**:
+   not `P(dead): ______` but `P(dead) for q = (0.05, 0.95) [binary reward] : [a percentage,
+   4 dp]`. Re-issued that way, the same block went from stalled to **14/17**.
+   Two further D3 corrections: **(a)** the "MY OWN EVIDENCE" slot is **retired in its open
+   form** — blank six sessions running, because it bundles an *authorship judgement* with a
+   *technical skill*. **Assign** a specific result, then ask only number → provenance → scope →
+   caveat. **(b)** Never let a label contradict its own formula. My D3 stem said "the
+   **FAILURE-side** term `p^G`" — `p^G` is the *success* side. He answered the formula
+   correctly and did **not flag the contradiction**; coach him to say *"your label and your
+   formula disagree — which do you want?"*, which is a scoring move in an interview.
+2. **RUN THE INTERVIEW DRILL at 1:00–1:20, before the coding block.** Non-negotiable. It is a
+   better probe than the quiz: D2 it repaired a same-day `√KL` regression, D3 it produced the
+   sharpest diagnostic of the week (below).
+   **The "he writes the bank entries" rule has now failed twice** (D2 and D3, both at his
+   explicit request late in the session). Stop re-litigating it at midnight — **change the
+   mechanism**: have him write a **3-bullet skeleton during the drill itself**, while the
+   material is hot, and expand it into prose afterwards. Entries written at close-out do not
+   get written. D3's two D3-specific stubs are seeded with **cold cards only** and are marked
+   `YOURS TO WRITE` — check whether that half-measure worked before deciding.
 3. **WRITE AND RUN A PRIVATE REFERENCE IMPLEMENTATION OF EVERY TODO BEFORE HANDING THE FILE
-   OVER, then delete it.** Seven-plus days running this has caught real defects. On D2 it
-   caught two that would have taught the wrong lesson: the `starved` fixture *escaped
-   starvation* at lr 0.4 (dead 0.26–0.69 across 8 seeds, mid-transition into saturation), and
-   **my own reference `saturated` rule fired on the LEAKY run** — which is the day's thesis
-   failing in my own code. Calibrate every fixture across **8 seeds** before handover.
+   OVER, then delete it.** Eight days running. **D3 was the highest-yield yet: six defects**,
+   listed in the deliverable. The one to internalise: `np.abs(a - b if False else c)` parses as
+   `(a-b) if False else c`, because the conditional binds looser than `-`. Calibrate every
+   fixture across **8 seeds** before handover.
+4. **PREFER THE NULL, AND PREFER THE BRACKET.** D3 produced both in one session. The rule
+   `coverage_collapse` was **measured 24 configurations × 8 seeds and never fired** (min
+   `Δpass@k_max` = **+0.000e+00**), so it was cut and the *rejection* became the day's headline.
+   And the crossover k came out **[16, 64, 16, 64, 64]** across five seeds, so it is reported as
+   a **bracket**, not as "k = 16". Seed 0 alone would have produced a slide-ready lie.
 
-**What W6 D3 (sampling / pass@k / rejection sampling) inherits — measured, in the numbers card:**
+**What W6 D4 inherits — measured, in the numbers card:**
 
-- **pass@k and the dead-group law are the SAME algebra, pointed at different things.**
-  `P(dead) = p^G + (1−p)^G` and `pass@k = 1 − (1−p)^k` share the `(1−p)^G` term: **the group
-  that is dead for training is exactly the group that failed pass@G**. D3 must state that
-  identity explicitly, because it means *raising pass@k and raising N_eff are the same purchase*
-  on the failure side and **opposite** on the success side (pass@k saturates where dead-groups
-  explode). D1 has the closed form (**G = ln(0.1)/ln(1−p)**, G=45 at p=.95) and D2 has the
-  general one (**P(dead) = exp(−(G−1)·H_G(q))**).
-- **TEMPERATURE IS A REWARD-DESIGN KNOB IN DISGUISE, and D2 gives the right frame.** D2's rule
-  is **SPLIT THE MODE** — one extra reward level took dead groups 66.34% → 0.90% (**73.5×**)
-  where G alone needed **92** (**11.5×** the rollout bill). Temperature moves `q`, so any D3
-  temperature claim should be priced against that table: *does raising T split the mode, or
-  just flatten everything?* And note the asymmetry: splitting the SUCCESS mass at p=.05 does
-  **nothing** (66.3420% → 66.3420%).
-- **REJECTION SAMPLING IS A VERIFIER APPLIED AT INFERENCE, so D2's containments transfer
-  verbatim.** Best-of-n filtered by an unsound checker selects **into** `V \ C` — that is D2's
-  selection law with the same formula (**P(hack | rewarded) = γ(1−p)/[p(1−α)+γ(1−p)]**,
-  **1.10 → 68.86%** as p goes .500 → .005 at a fixed 1% FP rate). The consequence D3 should
-  reach: **rejection sampling's failure mode is the same as RLVR's, but it shows up in the
-  OUTPUT rather than in the weights**, so it is recoverable — the run is not lost.
-- **THE GOLD COLUMN IS NON-NEGOTIABLE INSTRUMENTATION.** D2's headline is that a hacked run and
-  a solved run agree on *every column the reward can produce* (0.7694/0.9681 vs 0.8361/0.9803)
-  and differ **0.025 vs 0.980** only on the held-out one. If D3 builds any selection or
-  filtering harness, it needs a gold column the selector never sees, for the same reason.
-- **`rlvr.py` and `grpo.py` are both importable from `code/`** and their patterns are reusable:
-  `group_advantage` on the last axis; `train_grpo` / `train_rlvr` returning a History panel
-  whose row *i* is the state after *i* updates (`h.kl[0] == 0` exactly); `diagnose_*` reading
-  the panel only; `make_task` flavours `easy`/`mixed`/`sharp`; `make_checker` flavours
-  `honest`/`leaky`/`starved`/`saturated`; and `dead_fraction_levels` / `renyi_entropy` /
-  `g_for_alive` / `p_observed` as the reward-design calculators.
-- **RUN EVERYTHING UNDER `-W error::RuntimeWarning`.** D2 produced **six unguarded denominators
-  in one session, every one a silent NaN rather than a crash**, including one that left a stage
-  **green while returning `[nan]`**. This is now the single highest-yield check on his code.
-- **`no_critic` was never a WIN, it was a NULL** (5.1786 ±0.036 vs 5.1501 ±0.109, effect 3.8×
-  smaller than `full`'s own spread). He now volunteers the scope condition unprompted (**"holds
-  only at short horizon"**, W6 D2) — the first unforced scope condition in six weeks. Reinforce
-  it; do not let it lapse.
-- **≥3 seeds is a FLOOR; D1 and D2 both used 8 per fixture.** Keep it. Thresholds get calibrated
-  against the *gap between distributions*, never against one healthy and one broken run.
+- **THE SELECTOR THESIS.** *pass@k is a capability composed with a selector you do not have.*
+  Oracle **→ 1**, filter **→ the verifier's PRECISION** (**0.321655** measured while pass@k →
+  **1.000000**), vote **→ 1 iff the modal answer is right**. maj@k measured **falling**
+  0.3563 (k=9) → 0.2764 (k=101) against pass@101 = 1.000000. Any D4 eval claim must name its
+  selector before it names a capability.
+- **FILTER vs RANKER is the reusable frame.** Filter composition is **n-invariant**
+  (`γ(1−p)/[γ(1−p)+(1−α)p]` = 9.0909%); ranker composition is **`1 − (1−γ)^n` = pass@n for the
+  hack set** (92.3685% at n=256). **10.16× from the selection rule alone.** This is D2's
+  selection law at inference, and it generalises to anything that picks an argmax of a noisy
+  score — which is most of Week 7.
+- **BEST-OF-n IS A KL KNOB.** `log n − (n−1)/n` = **0.1931/1.2044/3.1745/4.5491** nats at
+  n=2/8/64/256, **+0.6853** per doubling measured. Ties make BoN **less** selective, so a
+  discrete score is strictly cheaper (**2.0507 < 3.1745** at n=64). Price any inference-time
+  search against the KL budget the training run was constrained to.
+- **THE METRIC REWEIGHTS THE BENCHMARK.** `∂pass@k/∂p = k(1−p)^(k−1)`: at **k=1 every problem
+  weighs exactly the same**, at **k=256 the two hardest carry 100.0000%**. *Changing k changes
+  which benchmark you are running* — directly relevant to Week 7 (evals).
+- **THE UNBIASED ESTIMATOR AND ITS PROOF.** `1 − Π_{i=0}^{k−1}(n−c−i)/(n−i)`, unbiased to
+  **7.772e-16**, proved by **exchangeability** — one probability computed two ways, never by
+  expanding the binomial. The plug-in is `f(p̂)` with f concave and under-reports by **24.19%**
+  at n=10,p=.1,k=10. And the mean goes **outside** (0.6250 vs 0.9960 on identical data).
+- **THE COLLAPSE THAT NEVER HAPPENED, WITH ITS SCOPE.** GRPO could not reduce pass@k_max in any
+  of 24 configurations, because unsampled gold ⇒ uniform group ⇒ **advantage identically zero**
+  ⇒ zero gradient. **D2's dead group is a safety property.** Scope: 15-sequence tabular softmax,
+  sound verifier, group baseline. It says the collapse needs a **mechanism** — not that RL never
+  narrows a policy. Reinforce the scope clause every time he quotes the result.
+- **`sampling.py`, `rlvr.py` and `grpo.py` are all importable from `code/`.** New in D3:
+  `pass_at_k` / `pass_at_k_exact` / `dpass_dp` / `temper` / `top_p_truncate` /
+  `selector_curves` / `bon_distribution` / `bon_kl_continuous` / `correlated_pass_at_k` /
+  `train_and_track`. `make_sample_task` flavours `easy`/`mixed`/`sharp`/`leaky`. The third
+  array `answer_id[p,y]` beside `gold`/`accept` is what makes maj@k definable at all.
+- **RUN EVERYTHING UNDER `-W error::RuntimeWarning`.** Still the single highest-yield check.
+- **≥3 seeds is a FLOOR; D1–D3 all used 8 per fixture.** Thresholds come from the *gap between
+  distributions*. D3 added the corollary: **if the distributions overlap, DROP THE CONDITION.**
+  `mode_locked` lost its spread conjunct because locked spread (0.123–0.379) and healthy spread
+  (0.323–0.556) overlap. Fewer conditions, because that is what the measurement supports.
+
+### W6 D3 grading, and the two diagnostic findings
+
+Block 0 **14/17 (82.4%)** · Block 1 **26.5/37 (71.6%)** · Block 2 check **2/3** · Block 3
+**11.5/19** · Block 4 drill **11/20 (55%)** · Block 5 **20.25/32 (63.3%)**.
+**Total 85.25/128 = 66.6% — his best day of Week 6** (D1 and D2 both sat at 57%).
+
+**FINDING 1 — the second-clause gap is not one gap, it is three, and D3 split it twice.**
+Block 4: **MECHANISM slots 9/9 filled, NUMBER slots 0/2, THESIS slots 0/3.** Block 5 split it
+again into **MECHANISM vs NAME**: he derived `F(u) = u^n`, `q(u) = n·u^(n−1)` and the integral
+`log n − (n−1)/n` correctly, while leaving **"probability integral transform"** and
+**"Uniform(0,1)"** blank. *He can execute the object and cannot name it.* Identical to Jensen on
+Block 3 — which he then **repaired 40 minutes later** once the name was said aloud. The names
+are retrievable; they are just not *first*. **Prescription: drill naming BEFORE deriving.**
+
+**FINDING 2 — wrong-level is now at 14 sightings, and D3 produced the two sharpest.**
+*(13)* He substituted the filter's **posterior** (9.09%) where the ranker's **per-sample rate**
+(γ = 1%) was required. His arithmetic was flawless — `1 − 0.909091^8 = 53.35%` is exactly right
+*for the input he chose*. The modelling was one level off and the arithmetic faithfully
+propagated it. **The error family is not carelessness: it is failing to check what KIND of
+object a slot wants before filling it.**
+*(14)* `pass_at_k` returned `product` = P(all k wrong) instead of `1 − product`, inverting both
+edge cases — and the docstring warned about this exact error. **Note the trap: at c = 1 it
+returns 0.5, which is correct**, because 0.5 is the fixed point of `x ↦ 1−x`. Spot-check only
+that value and it ships. He also wrote `c.any() < 0`, which reduces the array to one bool and
+then compares it to 0 — **always False, so the validation never fired on any input** and
+`c = 99` silently returned `−206235.25`.
+
+**THE POSITIVE, and it is significant.** Block 5 §(3) scored **5/5 — the first perfect section
+of the week** — and it was earned by *spontaneously* reaching back to `∂pass@k/∂p = k(1−p)^(k−1)`
+to explain why T\* moves with k. **First unprompted mechanism link in six weeks.** He also
+produced the correct non-obvious argument that no clip is needed on the product's numerator
+(`n−c ∈ range(k)` whenever `k > n−c`, so the exact zero is hit before any negative factor).
 
 ### W6 D2 grading, and what the day established about the format
 
@@ -2122,6 +2193,36 @@ coding → deliverable.**
 - **An RM's accept set is decided by its INITIALISATION; a verifier's is DATA.** A preference
   dataset is a MATCHING, so the BT gradient on an uncompared response is **exactly 0.0** and a
   **1e6** shift costs zero loss. A verifier's worst case is computable *before* training starts.
+- **pass@k IS A CAPABILITY COMPOSED WITH A SELECTOR YOU DO NOT HAVE.** Three selectors, three
+  limits on the SAME policy: oracle **→ 1**, filter/BoN **→ the verifier's PRECISION**
+  (**0.321655** measured while pass@k → **1.000000**), majority vote **→ 1 iff the modal answer
+  is right**. maj@k measured **falling** 0.3563 (k=9) → 0.2764 (k=101) with pass@101 = 1.000000
+  — *more compute makes the vote worse, and pass@k cannot show it because it is monotone in k by
+  construction.* **Name the selector before you quote a capability.**
+- **CHANGING k CHANGES WHICH BENCHMARK YOU ARE RUNNING.** `∂pass@k/∂p = k(1−p)^(k−1)`: at k=1
+  every problem weighs exactly the same, at k=256 the two hardest carry **100.0000%** of the
+  gradient. pass@1 and pass@256 are two different metrics over two different effective test
+  sets, not one metric at two budgets.
+- **THE PLUG-IN pass@k IS BIASED LOW, AND IT IS JENSEN.** `1 − (1−c/n)^k` is `f(p̂)` with f
+  **concave**, so it under-reports: **0.493747 vs 0.651322 = 24.19%** at n=10,p=.1,k=10. Use
+  `1 − Π_{i=0}^{k−1}(n−c−i)/(n−i)` (unbiased to **7.772e-16**, never forms a number > 1, and all
+  three edge cases fall out of the product). The proof is **exchangeability** — one probability
+  computed two ways — not a binomial expansion. Corollary: **the mean goes OUTSIDE** (0.6250 vs
+  0.9960 on identical data).
+- **THE SAME VERIFIER IS TWO INSTRUMENTS: FILTER vs RANKER, 10.16× apart.** A filter emits
+  *every* accepted sample, so its composition `γ(1−p)/[γ(1−p)+(1−α)p]` = **9.0909% is
+  n-INVARIANT**. A ranker emits the argmax, so its composition is **`1 − (1−γ)^n` = pass@n over
+  the HACK SET** = **92.3685%** at n=256. Same checker, same policy; only the selection rule
+  differs. Scaling n scales *selection pressure on the flaw*.
+- **BEST-OF-n IS A KL YOU DID NOT BUDGET:** `log n − (n−1)/n` = **0.1931/1.2044/3.1745/4.5491**
+  nats at n=2/8/64/256, **+0.6853 per doubling**. And **ties make BoN LESS selective**, so a
+  discrete score is strictly cheaper (**2.0507 < 3.1745** at n=64) — the continuous formula is
+  an upper bound. Price inference-time search against the KL the training run was held to.
+- **THE COLLAPSE THAT NEVER HAPPENED — AND SAY THE SCOPE IN THE SAME BREATH.** GRPO could not
+  reduce pass@k_max in **24 configurations × 8 seeds** (min Δ = **+0.000e+00**): unsampled gold
+  ⇒ every rollout scores alike ⇒ **advantage identically zero** ⇒ zero gradient. **D2's dead
+  group is a SAFETY property.** Scope: 15-sequence tabular softmax, sound verifier, group
+  baseline. The claim is *the collapse needs a mechanism*, NOT *RL never narrows a policy*.
 - **An unguarded denominator gives you a NaN, not a crash — and NaN never compares True, so a
   threshold built on one SILENTLY NEVER FIRES.** Six sightings in one session, one of them with
   the stage still green. Guard with a plain `if`; run under `-W error::RuntimeWarning`; treat
