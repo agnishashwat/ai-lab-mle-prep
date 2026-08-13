@@ -594,3 +594,246 @@ and it is a RANKER, which is the bad half of the split. SAME verifier, SAME budg
 **Deeper:**
 
 **Watch out for:**
+
+---
+
+### Q: How would you design the data curriculum for an RLVR run?
+
+**Cold card:** `p* = a/(a+b+k−1) → 1/(k+1)`; 0.5 only at k=1 · `G ≈ 2.3026k` → 4/6/11/20/38/149 at k=1/2/4/8/16/64 · **88.34% dead** at (report pass@64, train at p*, G=8) · `p_floor = γ(1−τ)/[τ(1−α)]/(1+·) = 1/11`, crosses `1/(k+1)` at **k=10 exactly** · `/std` tilts by `G/4` = **16× at G=64** · training at 0.5 while reporting pass@8 costs **22.17×** · band narrows **19.07× in p, 1.43× in logit-p**
+
+**Short answer:** A curriculum is a **controller**, so I need three things before I write any
+code: a **measured** quantity to control, a **set point**, and the **constraints that make the
+set point infeasible**. The measured quantity is the current per-prompt success rate `p`,
+estimated from recent rollouts — not a static difficulty label assigned once, because `p` is a
+property of the *policy*, and the policy is the thing I am changing. The set point is **not 0.5**.
+It is `1/(k+1)`, where `k` is the pass@k budget I report. And the constraints are two walls with
+**opposite fixes**, which is why this is a control problem and not an optimisation.
+
+**Deeper:**
+
+**1. The set point falls out of a product, not a preference.** The value of a rollout is
+(how much the policy moves) × (what a unit of movement is worth to the metric):
+
+```
+progress:  Δp ∝ p^a (1−p)^b            (a = b = 1 for the plain group-advantage mass, 2(G−1)p(1−p))
+weight:    ∂pass@k/∂p = k(1−p)^(k−1)   ← the METRIC's derivative, in this direction
+value(p) ∝ p^a (1−p)^(b+k−1)   ⇒   p* = a/(a + b + k − 1)   →   1/(k+1) at a=b=1
+```
+
+`p* = 1/2` **only at k = 1**. The folk rule "train at 50%" is the `k=1` special case of a
+`k`-dependent law, repeated after everyone stopped reporting `k=1`. And I would **measure**
+`(a, b)` for my stack rather than assume `(1,1)` — the exponents are the empirical part; the
+`+k−1` is not, it is arithmetic.
+
+The size of the mistake, at pass@8, training at 0.5 instead of 1/9:
+
+```
+progress  2.53× BETTER at p=0.5      weight  56.12× WORSE      net  22.17× of the available signal, gone
+```
+
+**2. Wall one — dead groups. The metric you report sets your group size.** A group is dead
+(all-0 or all-1) with probability `p^G + (1−p)^G`, and every advantage in it is exactly zero:
+
+```
+G to keep 90% alive at p*:  G = ln(0.1)/ln(1 − p*) = ln(10)/ln(1+1/k) → 2.3026·k
+                            4 / 6 / 11 / 20 / 38 / 149  at k = 1/2/4/8/16/64
+P(dead | G=8, p=p*):        0.78 / 3.92 / 16.78 / 38.97 / 61.57 / 88.34 %
+```
+
+**Report pass@64, train at the difficulty that maximises it, use the G=8 everyone uses, and 88%
+of your groups return zero gradient.** This is the number I would open with, because it is the
+one that reframes group size from a compute knob into a *consequence of your eval choice*.
+
+**3. Wall two — the precision floor. Below some `p`, your signal is mostly false positives.**
+With false-negative rate α and false-positive rate γ, demanding `P(hack | rewarded) ≤ τ`:
+
+```
+p_floor = R/(1+R),  R = γ(1−τ)/[τ(1−α)]
+γ=1%, α=10%, τ=10%  ⇒  p_floor = 1/11 = 0.0909, and it crosses 1/(k+1) at k = 10 EXACTLY
+```
+
+So for `k ≤ 10` the metric's optimum is legal and the verifier is not binding; for `k > 10` the
+verifier is binding and I train *above* the metric's optimum and eat the loss:
+
+```
+value retained at the floor:  0.9793 (k=8) / 1.0000 (k=10) / 0.8872 (16) / 0.3804 (32) / 0.0358 (64)
+```
+
+**At pass@64, a 1% false-positive rate costs 96.4% of the signal the metric was asking for.** And
+raising the learning rate does not help: the noise floor is `γ(1−γ) = 0.0099` and does not shrink
+with `p`, so at `p = 0.001` roughly 92% of gradient magnitude is false positives. **You cannot
+raise the LR out of a bad SNR — it scales signal and noise identically.**
+
+**4. Which wall binds is a measurement, and only one of them is purchasable.**
+
+```
+γ = 0.01,  G = 8  ->  floor 0.0909  vs  dead-50% wall 0.0830  ->  PRECISION binds
+γ = 0.001, G = 8  ->  floor 0.0099  vs  dead-50% wall 0.0830  ->  DEAD GROUPS bind
+```
+
+The dead-group wall is **bought with compute** (raise `G`). The precision floor is not — no
+amount of sampling makes a false positive into a true one. So I check which one binds *before*
+asking for GPUs.
+
+**5. What I would actually build.** Estimate `p̂` per prompt from an EMA of recent rollouts —
+the sensor is `ĉ/G` and **I have already paid for it**, it is the group I just rolled out. Sample
+prompts whose `p̂` sits in a band around `clip(p*, p_floor, ·)`, control in **logit-`p` space**
+(the value curve is roughly symmetric there and the band is multiplicative, not additive), and
+re-estimate continuously. **Logit space is not cosmetic** — the 50%-of-peak band narrows
+**19.07×** in `p` from k=1 to k=64 (0.7071 → 0.0371) but only **1.43×** in logit-`p`
+(3.526 → 2.465 nats). Controlling the wrong coordinate makes the problem **13.3× harder than it
+is**, and a fixed additive tolerance like `p* ± 0.05` is meaningless at k=64, where the entire
+legal band is 0.037 wide. Second operational note: the two walls need
+**opposite data moves** — scaffolding/hints at the bottom, harder items at the top. A hint that
+lifts a prompt from `p = 0.01` to `p = 0.15` buys **12.88× the signal** and drops dead groups
+92.27% → 27.25%, which is what you would otherwise get by raising `G` from **8 to 130**. The hint
+is free. The 16× rollout budget is not.
+
+**Watch out for:**
+- **You already have a curriculum, whether you designed one or not.** GRPO's `/std` reweights
+  groups by `1/σ`, which favours near-dead groups — it moves the effective set point by up to
+  **4.2×** (at G=64, k=4: 0.2000 → 0.0474). *Any per-group rescaling is a reweighting of the
+  problem distribution, i.e. a curriculum.* Say this before proposing a new one.
+- Do not defend `p* = 1/2` by symmetry. `p(1−p)` is symmetric; `pass@k` is **not**, and the
+  product is what you optimise. The asymmetry enters entirely through the metric.
+- `∂pass@k/∂p`, not its reciprocal, and the exponent is `k−1`, not `k`. Getting the exponent
+  wrong turns `1/(k+1)` into `1/(k+2)` — small at k=64, but it is the kind of error that reads
+  as "recited" rather than "derived."
+- Static difficulty labels are **stale by construction**: an item at `p = 0.1` when you labelled
+  it is at `p = 0.4` two thousand steps later, and it is now the wrong item.
+
+---
+
+### Q: Your reward curve is flat for 2000 steps. Diagnose it — cheapest measurement first.
+
+**Cold card:** dead groups give **exactly 0**, not small · `dead_frac` is invariant under `p ↔ 1−p`; `p_obs` is not — that is the discriminant · `U = 2(G−1)p(1−p)·J`, `J = 1−α−γ` · `U ≡ 0` in p on the `α+γ=1` line · FREE: `dead_frac`, `p_obs`, `‖∇θ‖`. EXPENSIVE: `Cov(r,s)`, needs gold labels
+
+**Short answer:** Flat is not one failure, it is four, and they have **opposite fixes** — so the
+answer is an *ordering* of measurements, not a list of hypotheses. I order by price, and the good
+news is that the first three splits are free: they read off rollouts I have already paid for.
+The expensive one — the verifier check — needs held-out **gold labels**, so it goes last.
+
+**Deeper:**
+
+```
+FREE (already in the rollouts I just did):
+  1. dead_frac = fraction of groups all-0 or all-1     ─┐ these two together split
+     p_obs     = mean observed success rate            ─┘ the whole space
+  2. mean |A| over ALIVE groups, and ‖∇θ‖ per step
+
+EXPENSIVE (needs a labelled slice the reward never sees):
+  3. Cov(r, s) between verifier reward and true success
+```
+
+```
+dead_frac HIGH, p_obs ≈ 0  ->  ZERO-REWARD CLIFF     nothing is ever solved
+dead_frac HIGH, p_obs ≈ 1  ->  SATURATED SET         everything is always solved
+dead_frac LOW,  |A| healthy, Cov(r,s) ≈ 0  ->  BROKEN VERIFIER   signal exists, points nowhere
+dead_frac LOW,  |A| healthy, Cov ok, ‖∇θ‖ ≈ 0  ->  BROKEN LOSS/OPTIMIZER
+```
+
+**Why `p_obs` is the right second number.** `dead_frac = p^G + (1−p)^G` is **invariant under
+`p ↔ 1−p`** — it cannot tell "too hard" from "too easy," and those are the two branches that
+need opposite data. `p_obs` breaks exactly that symmetry, and it costs nothing.
+
+**Why `Cov(r, s)` goes last even though it is the most diagnostic.** The useful signal is
+`U = (G−1)Cov(r,s) = 2(G−1)p(1−p)(1−α−γ)`: the group mechanics give you `2(G−1)p(1−p)` and the
+verifier multiplies it by Youden's `J = 1−α−γ`. On the line `α + γ = 1` this is **identically
+zero in `p`** — a verifier that is exactly a coin flip produces a perfectly healthy-looking
+`mean |A|`, a perfectly healthy `dead_frac`, and zero learning, forever. But measuring `Cov(r,s)`
+requires the gold column the reward is not allowed to see, so I pay for it only after the free
+splits fail to explain the flatness.
+
+**The fixes, which is the half that makes the diagnosis worth anything:**
+
+| diagnosis | fix | do NOT |
+|---|---|---|
+| zero-reward cliff | scaffolding / hints / easier data / raise `G` — **move `p`** | touch the loss |
+| saturated set | harder data; **retire the solved prompts** | add more of the same |
+| broken verifier | fix α/γ. **No amount of compute helps** | raise the LR |
+| broken loss | plumbing: advantage detached, `no_grad` on the wrong branch, LR = 0 | change the data |
+
+**Watch out for:**
+- **Cliff and saturated are indistinguishable on the reward curve and on `dead_frac`, and their
+  fixes are opposites.** Get it backwards — add harder data to a cliff — and you make it worse in
+  a way that still looks exactly like flat. This is the trap the question is testing.
+- A dead group contributes **exactly zero**, not something small. So the flat curve is not "weak
+  learning," it is *a fraction of your batch that is not in the optimisation at all*. Report
+  `mean |A|` over **alive** groups only, or the two effects mix and you can read neither.
+- Do not open with "raise the learning rate." Three of the four causes are unaffected by it, and
+  in the verifier case the LR scales the false-positive gradient identically to the true one.
+- The wrong-level trap: `U` is a per-**group** expectation. Averaging `p` across prompts and then
+  evaluating `2(G−1)p̄(1−p̄)` is not the mean of the per-prompt values, and the gap is exactly the
+  variance you are trying to diagnose.
+
+---
+
+### Q: How would you detect benchmark contamination — and what does it do to *training*?
+
+**Cold card:** eval inflation `= c·(1 − pass@k(p_true))` — **decays in k**: 3.500 / 2.450 / 1.201 / 0.288 / 0.017 / 0.000 pts at k=1/2/4/8/16/64 (c=5%, p_true=0.30) · D3's RL gain: +0.4691 at k=1 → +0.0000 at k=1024, same shape · perturbed twin: honest `Δ≈0`, memorised `Δ≈1−p_true` · **the control is the answer** · a memorised item is a **saturated dead group**
+
+**Short answer:** Perturbed twins, **with a control** — and then the part most answers omit:
+contamination is not only an eval problem, it is a **rollout-budget** problem. A memorised item
+comes back unanimous, so it is a saturated dead group: it consumes its share of the batch,
+returns exactly zero gradient, and scores **1.0** on the reward curve while doing it.
+
+**Deeper:**
+
+**1. Detection — the method.** For each benchmark item, build a matched twin that preserves the
+reasoning structure and changes only instance-specific surface (numbers, names, ordering), so a
+memorised answer no longer applies. Measure `Δ = p(original) − p(twin)`:
+
+```
+honest item:     Δ ≈ 0
+memorised item:  Δ ≈ 1 − p_true
+```
+
+**2. Detection — the control, which is the actual answer.** Apply the **same perturbation to
+items I know are clean** (post-cutoff, or privately authored). If the control shows `Δ ≈ 0`, the
+perturbation is difficulty-neutral and the signal on suspect items is memorisation. If the
+control moves, **my detector is measuring itself** — a perturbation that is intrinsically hard
+convicts every item on the list. *A control is what converts an observation into evidence*; it is
+also, verbatim, GSM1k's methodology.
+
+**3. The signature in `k`, with a direction.** Inflation of mean pass@k is `c·(1 − pass@k(p_true))`:
+
+```
+c = 5%, p_true = 0.30:   3.500 / 2.450 / 1.201 / 0.288 / 0.017 / 0.000 points  at k = 1/2/4/8/16/64
+```
+
+**Invisible by k = 64.** Which is the same shape as yesterday's result about RL:
+
+```
+D3  RL's pass@k gain:     +0.4691 at k=1  ->  +0.0000 at k=1024
+D4  contamination's lie:  +0.0350 at k=1  ->  +0.0000 at k=64
+```
+
+**One sentence generates both: a saturating metric cannot see a change in something already
+saturated.** The uncomfortable corollary is that the metric that displays my improvement most
+clearly is the metric that displays contamination most clearly, and I cannot have one without the
+other — **reporting only pass@1 maximises my exposure to both.**
+
+**4. The training-side consequence — the half nobody has.** A memorised item has `p ≈ 1`, so its
+group comes back `c = G`, unanimous, and every advantage is `A_i = 0`.
+
+> **A contaminated item is a saturated dead group.** A contaminated fraction `c` costs exactly `c`
+> of the rollout budget for exactly zero gradient — and it is **invisible on the reward curve**,
+> because those groups score 1.0. Contamination does not merely inflate the eval; it silently buys
+> nothing while looking like the best-performing data in the run.
+
+Which means contamination has a **free** detector on the training side that needs no twins at all:
+prompts that are persistently in the `dead & p_obs ≈ 1` bucket from step zero. That is the same
+bucket as "genuinely solved," so it is a candidate list rather than a verdict — but it is produced
+by rollouts I already ran, and it costs nothing to look.
+
+**Watch out for:**
+- Twins without a control are not evidence. If asked for one number, I give the **control's Δ**,
+  not the suspect's.
+- n-gram / substring overlap detection misses paraphrase and translation contamination entirely,
+  and it cannot be run at all against a model whose training corpus I do not have — which is
+  every model I would be evaluating.
+- Do not report the twin gap as a single scalar over the benchmark. Contamination is
+  item-concentrated, so the **distribution** of `Δ` is bimodal and its mean hides that.
+- Retiring contaminated items *improves* your measured score change while shrinking the eval set,
+  so quote pass@k before and after on the **same** surviving subset, or the cleanup itself becomes
+  an unfalsifiable improvement.

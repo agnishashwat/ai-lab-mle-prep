@@ -47,7 +47,12 @@ Now the day's thesis, in three parts.
 > label and `r ∈ {0,1}` the *verifier's* label. The advantage mass that lands on the truth is
 >
 > ```
-> U(p) = E[ Σ_i A_i · s_i ]  =  (G−1)·Cov(r, s)  =  2(G−1)·p(1−p)·(1 − α − γ)
+> U(p) = E[ Σ_i A_i · s̃_i ]  =  2(G−1)·Cov(r, s)  =  2(G−1)·p(1−p)·(1 − α − γ)
+>
+> with the ±1 convention s̃ = 2s−1. Under s ∈ {0,1} you get exactly half:
+> U = (G−1)·Cov(r, s) = (G−1)p(1−p)J, no factor 2. Say which one you are quoting.
+> The ±1 convention is the useful one because it makes J *exactly* the fraction
+> of the advantage mass that is useful: U = J · E[Σ|A|].
 > ```
 >
 > The verifier enters as **`J = 1 − α − γ`, Youden's J — a multiplicative constant with no `p` in
@@ -388,7 +393,8 @@ signal as the advantage mass that lands on the truth, `U = E[Σ_i A_i s_i]`:
 ```
 Σ_i (r_i − r̄) s_i  =  Σ_i r_i s_i − (1/G)(Σ_i r_i)(Σ_j s_j)
 E[(Σ r)(Σ s)] = G·E[rs] + G(G−1)·E[r]E[s]            (G diagonal terms, G(G−1) independent pairs)
-⇒  U = G·E[rs] − E[rs] − (G−1)E[r]E[s]  =  (G−1)·Cov(r, s)
+⇒  U = G·E[rs] − E[rs] − (G−1)E[r]E[s]  =  (G−1)·Cov(r, s)      [s ∈ {0,1}]
+    and with s̃ = 2s−1 every term doubles:  U = 2(G−1)·Cov(r, s)
 ```
 
 then evaluate the covariance, which is four lines and no cleverness:
@@ -456,6 +462,18 @@ Then the corollary that turns it into a config file. Keeping 90% of groups alive
 G = ln(0.1)/ln(1 − p*)  =  ln(10)/ln(1 + 1/k)  →  2.3026·k        (the limit, from above)
 k  =  1        2        4        8       16       64      256
 G  =  3.3219   5.6789  10.3189  19.5494  37.9810  148.5138  590.6123    ⇒ ceil: 4 / 6 / 11 / 20 / 38 / 149 / 591
+
+**CORRECTION, measured in Block 6.** That row is single-sided: ln(0.1)/ln(1−p*)
+counts only the all-FAIL tail. At k=1 the set point is 1/2, where the all-PASS
+tail is exactly as large, so it undercounts deaths by 2× and gives 4 where the
+honest criterion p^G + (1−p)^G ≤ 0.1 needs **5**. By k=2 (p* = 1/3) the easy tail
+is 1.5% of the total and the two agree forever after. So the true row is
+
+    5 / 6 / 11 / 20 / 38 / 149 / 591
+
+This is your own W6 D1 numbers-card correction — the two-branch
+`G = ln(0.1)/ln(max(p, 1−p))` — recurring, and it recurs at *precisely* the one
+k where the set point sits at 1/2. The approximation G* ≈ 2.3026k is unaffected.
 2.3026k = 2.30  4.61   9.21    18.42    36.84   147.37   589.46
 ```
 
@@ -754,3 +772,98 @@ Have a number for each. Four days now compose into one quantitative story with n
 *the signal dies at both walls, the precision dies at the low wall, the metric puts all its weight
 at the low wall, and the curriculum is the controller that has to satisfy all three at once* — and
 that story is a far better deep-dive than any description of a training run.
+
+---
+
+## Block 6 addendum — what the code changed about the day
+
+Eight harness defects, and four of them changed a claim in this file.
+
+**1. The `U/mass` ratio is not constant in `p`, and the corrected version is better.**
+`mass = E[Σ|A|]` is evaluated under the *verifier's* labels, at `p_obs`, not at `p`.
+So
+
+    ratio = U / mass = p(1−p)·J / [p_obs(1−p_obs)]        p_obs = p(1−α) + (1−p)γ
+
+which is the **SNR row already in this file**, not a new object:
+
+    0.8973 / 0.8980 / 0.6454 / 0.3109 / 0.0825   at p = 0.5 / 0.1 / 0.02 / 0.005 / 0.001
+
+The "verifier is a multiplier" thesis survives, stated properly: **`argmax_p U = 1/2`
+for every `(α, γ)` with `J > 0`** — verified at `(0,0)`, `(.1,.01)`, `(.3,.05)`,
+`(.45,.50)`. A verifier cannot *tilt* a curriculum. And separately, the useful
+*fraction* collapses linearly at low `p` with slope `J/[γ(1−γ)] = 89.90`, unless
+`γ = 0`, in which case **`ratio → 1` as `p → 0` for any `α`**. Soundness is exactly
+the property that stops the collapse. That is the mechanism under the precision floor.
+
+**2. At `(G=64, k=1)` the whitened set point does not exist.**
+The whitened objective is `G·P(alive)` times the metric weight; at `k=1` that weight
+is 1 and `P(alive)` at `G=64` is 1.0 to machine precision across the middle of the
+range. Flat to `1e-15` over `p ∈ [0.4166, 0.5834]` — a plateau 0.167 wide. The
+argmax is whatever your grid returns. Report "no preference", not a third
+significant figure. This is the whitening thesis in extremis: with a large `G` and a
+`k` that asks for nothing, there is nothing left to prefer.
+
+**3. The whitening tilt is a ratio of ratios.**
+
+    whitened/centered at p → 0    =  G²/(G−1)                  9.143 at G=8
+    whitened/centered at p = 1/2  =  4G(1−2^(1−G))/(G−1)       4.536 at G=8
+    TILT = the quotient           =  G/[4(1−2^(1−G))]  ≈ G/4   2.0157 at G=8, 16.0000 at G=64
+
+The `(G−1)` cancels, which is why the answer is clean.
+
+**4. `(a, b)` measured: `(1.900, 1.911)`, `R² = 0.9979`.**
+The prediction `(2,2)` was written into the stage docstring *before* the run — exact
+ascent moves `p` by `~lr·‖∇p‖² ∝ p²(1−p)²`, so the advantage-mass model `(1,1)` is
+the wrong law for this optimiser. It moves the `k=8` set point from `0.1111` to
+`0.1758`, a factor of 1.58. **Measure `(a,b)`; the `+k−1` is arithmetic, the
+exponents are not.**
+
+### The cut rule, and why the prediction was wrong
+
+`mean_p_rising` is cut, but **not** for the redundancy I pre-registered. Measured:
+the rise in share-above-`p_hi` is **+0.796…+0.938 on the healthy fixture and only
++0.373…+0.410 on the sick one.** It does not merely fire on healthy runs — it fires
+*twice as hard* on them, because rising `p` **is** learning. Reason: fires-on-healthy.
+
+Two consequences, and the second is the useful one:
+
+- the `rise` conjunct inside `saturated_band` was dead weight and was removed;
+  the alive-fraction **fall** carries all the discrimination
+  (healthy `−0.319…+0.244`, sick `+0.594…+0.667`)
+- the redundancy the prediction expected *was* real, but in the wrong place: the
+  collinearity check found `budget_dead` and `saturated_band` with identical
+  fire-sets — which turned out to be a **fixture-set** defect, not a rule defect.
+  Three fixtures cannot separate four rules. The bench went to six, and
+  `cliff` and `floor_violated` fired for the first time.
+
+Four days, four cut rules, four different reasons: instrument (D1) / semantics (D2) /
+the system does not exhibit it (D3) / **it fires on healthy, harder than on sick (D4)**.
+
+### Two calibration laws the panel taught
+
+- **A threshold is calibrated for a regime.** At 150 steps the alive-fall gap is 0.35
+  wide; at 60 steps it is 0.014 wide and *no* threshold separates. The panel runs at
+  its calibrated regime even under `--fast`. You may re-derive thresholds for a
+  faster one; you may not borrow them.
+- **A change statistic must not overlap the estimator's burn-in.** `p_hat` is an EMA
+  from a prior, so a head window at step 0 measures the *sensor* converging: prompts
+  whose true `p` never left `1e-4` read as having moved `0.047…0.276`, and `cliff`
+  could not fire on the fixture built for it. Start the head window after burn-in.
+
+And when two fixtures landed inside a threshold's uncertainty band (`coin_flip`
+3/5, `bad_verifier` 2/5), they were **reported as borderline rather than tuned
+away**. Moving a threshold until a fixture behaves is fitting the panel to the bench.
+
+### The defect that would have invalidated everything
+
+`_tilt_to_target` bisected a **non-monotone** map. The scalar logit bonus is applied
+to every `(state, action)` pair on a correct sequence's path, and those pairs are
+*shared* with incorrect sequences through the same prefix — so for ~30% of
+correct-sets a bonus of `−40` drives `p` to **1.0**. Bisection assumes a monotone
+bracket, silently returned an endpoint when it did not have one, and the fixture's
+advertised "exact known difficulty" was wrong on **40% of prompts, with errors up to
+0.97** — while every stage downstream quoted those difficulties to four decimals.
+The twin-gap control read `+0.097` instead of `0`; it now reads `+0.000000`.
+
+**Verify the bracket. If you cannot, do not use a root-finder that requires one.**

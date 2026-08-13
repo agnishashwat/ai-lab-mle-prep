@@ -1027,3 +1027,58 @@ W8, W9, W10). Rules:
 `rl-post-training-qa.md` - "GRPO vs PPO: what changes and why", "Why KL to a reference policy",
 and "KL spikes, reward improves, human evals degrade - diagnose it" - are now written, plus the
 two W6 D2 questions ("what makes a reward verifiable" and "your math verifier is 97% accurate").
+
+---
+
+## Week 6 Day 4 — Reasoning Data Curriculum (complete)
+
+**Thesis: a curriculum is a controller, and its set point is `p* = 1/(k+1)`, not 0.5.**
+Second thesis: **the verifier is a multiplier, not a preference — it does not tilt the
+curriculum, it floors it.**
+
+Blocks: 0 (11.0/16) · 1 cold recall (23.15/32) · 2 (1.8/4) · 3 (2.3/4) · 4 interview
+drill (8.9/15) · 5 derivations (**3.55/4 — best block of the day**) · 6 code
+(`curriculum.py`, 10 stages, **106 checks**) · 7 close-out.
+
+**Learner model.** Numbers are solid; **formulas — especially exponents — are the weak
+point.** Wrote `∂pass@k/∂p` with `^k` instead of `^(k−1)` in Block 0 and inverted it to
+`∂p/∂pass@k` in Block 4. Block 5 was a step change: correct mechanism *and* correct
+attribution (the pass@k asymmetry, not the whitening, breaks the symmetry), plus
+base-rate neglect named unprompted.
+
+**Two findings credited to the learner.**
+1. **Which wall binds is a consequence of your alive-tolerance, not a fact about the
+   system.** He used the 90%-alive criterion (`p_wall = 0.2501`) where I had used
+   50%-dead (`0.0830`) and got the *opposite* binding answer. Both internally correct.
+   State the tolerance or two people argue past each other for a week while both right.
+2. His **W6 D1 two-branch `g_for_alive` correction recurred** in the D4 `G*` table:
+   the single-sided `ln(0.1)/ln(1−p*)` gives 4 at k=1 where the both-tails criterion
+   needs **5** — wrong at *precisely* the one k whose set point is 1/2. Both
+   `session.md` and `shared/numbers-card.md` now carry the correction with credit.
+
+**Rule violation, logged.** I wrote all three D4 interview-bank entries myself after he
+asked me to. Their retrieval value is spent. **D5 must re-test those three cold cards
+from memory**, plus the REINFORCE variance-sources skeleton.
+
+**Standing debt, now 3 days old:** the two W6 D3 entries in `rl-post-training-qa.md`
+(lines ~537–596) still have blank `Short answer:` / `Deeper:` / `Watch out for:`.
+
+**The cut rule, and a refuted prediction.** `mean_p_rising` is cut — but *not* for the
+redundancy I pre-registered. Measured, it fires **twice as hard on healthy runs
+(+0.796…+0.938) as on sick ones (+0.373…+0.410)**, because rising p *is* learning.
+Reason: fires-on-healthy. The same measurement showed the `rise` conjunct inside
+`saturated_band` was dead weight; alive-fall carries all the discrimination. Four days,
+four cut rules, four distinct reasons: instrument / semantics / the system does not
+exhibit it / **it fires on healthy, harder than on sick**.
+
+**New results this day.** `(a,b)` measured at **(1.900, 1.911), R² = 0.9979** — the (2,2)
+prediction written *before* the run was confirmed, and it moves the k=8 set point 1.58×.
+The 50%-of-peak band narrows **19.07× in p but only 1.43× in logit-p** (ratio 13.33×) —
+the quantitative case for logit-space control. At **(G=64, k=1) the whitened set point
+does not exist**: flat to 1e-15 over a 0.167-wide plateau. And the whitening tilt is a
+**ratio of ratios**, `G/[4(1−2^(1−G))]`, in which the `(G−1)` cancels.
+
+**Eight harness defects** from the private reference run (seventh consecutive day it has
+paid). The worst: `_tilt_to_target` bisected a **non-monotone** map, so **40% of fixture
+difficulties were silently wrong, with errors up to 0.97**, while every stage quoted them
+to four decimals. That one would have invalidated the day. All eight are in `HANDOFF.md`.

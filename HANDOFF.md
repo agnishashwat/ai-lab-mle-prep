@@ -2592,3 +2592,49 @@ coding → deliverable.**
 - **A CONTROL converts an observation into evidence.** "Gold peaks early" is a statement about
   training length until a healthy run peaks at step 1270 and gives back **exactly 0.0000**; then
   it is a statement about the **data**. One extra run. (W5 D5.)
+- **An absolute tolerance is only meaningful on a quantity you have checked is O(1).**
+  W6 D4 asserted `< 1e-15` on `2(G−1)p(1−p)`, which is **31.5** at G=64, p=0.5 — a demand for
+  `1e-16` *relative*, below machine epsilon. The exact enumeration was fine; the harness was
+  wrong. Scale the tolerance, or state the magnitude next to it.
+- **The closed form is not automatically the reference.** `1 − p^G − (1−p)^G` cancels
+  catastrophically at small p — at G=64 it loses ~13 significant figures near p=1e-4, and the
+  64-term Binomial *enumeration* was the accurate one. Rewrite with `expm1`/`log1p` and the
+  disagreement vanishes. Whichever expression is better conditioned is the reference. (W6 D4.)
+- **"The smallest point in my grid" is not "→ 0".** W6 D4 measured a `p → 0` slope at
+  `grid[1] = 5e-4` and got 85.34 against a predicted 89.90 — a 5% "failure" that was really
+  "5e-4 is not small compared to the `γ/J = 0.0112` scale where the linear regime starts".
+  Evaluate a limit as a limit. And **query exact values, not the nearest grid point**: at
+  p = 0.001 a 2.5e-4 snap is a 25% error. A grid is a plotting device, not a lookup table.
+- **Never set a threshold equal to the quantity it tests.** `|p* − 1/2| > 0.1` against a true
+  value of *exactly* 0.1 fails on floating point (`0.09999999999999998 > 0.1` is False). Assert
+  the value, not a hand-picked distance from a value. (W6 D4.)
+- **VERIFY THE BRACKET, or do not use a root-finder that needs one.** W6 D4's `_tilt_to_target`
+  bisected a **non-monotone** map: the scalar logit bonus went on every `(state, action)` pair of
+  a correct sequence, and those pairs are *shared* with incorrect sequences through the same
+  prefix — so for ~30% of correct-sets a bonus of **−40 drove p to 1.0**. Bisection silently
+  returned an endpoint, and the fixture's advertised "exact known difficulty" was wrong on **40%
+  of prompts with errors up to 0.97**, while every stage downstream quoted it to four decimals.
+  Fix: dense scan + local refinement (no monotonicity assumption), **return the achieved value**
+  so the caller must check it, and **reject** fixtures whose target is unattainable. The
+  twin-gap control went from `+0.097` to `+0.000000`. Seventh consecutive day the reference run
+  paid — and this one would have invalidated the whole day.
+- **A change statistic must not overlap the estimator's burn-in.** `p_hat` is an EMA from a
+  prior, so a head window at step 0 measures the **sensor** converging, not the system moving:
+  prompts whose true p never left 1e-4 read as having moved **0.047–0.276**, and the `cliff`
+  rule could not fire on the fixture built for it. Start the head window after burn-in. (W6 D4.)
+- **A threshold is calibrated FOR A REGIME.** The same rule's healthy/sick gap was **0.35 wide at
+  150 steps and 0.014 wide at 60** — at the fast setting *no* threshold separates. Run the panel
+  at its calibrated regime even under `--fast`; you may re-derive thresholds for a faster one,
+  but you may not borrow them. (W6 D4.)
+- **Identical fire-sets can be a BENCH defect, not a rule defect.** W6 D4's collinearity check
+  reported `budget_dead` and `saturated_band` as the same rule. They are not — **three fixtures
+  cannot separate four rules**, and `cliff` and `floor_violated` had never fired at all. The
+  bench went 3 → 6 fixtures and all four rules separated. Non-collinearity measured on a
+  fixture set that does not span the failure modes is measuring the bench.
+- **When a fixture lands inside a threshold's uncertainty band, REPORT IT, do not tune it away.**
+  Two W6 D4 fixtures gave seed-dependent verdicts (3/5 and 2/5). Moving the threshold until they
+  behave is fitting the panel to the bench. A threshold has a band; say so.
+- **A detector is an estimator.** The contamination twin-gap test has
+  `se = sqrt(p(1−p)/n_contaminated)`; at n = 4 that is **0.23**, and a measured 0.4667 against an
+  expected 0.7000 is **0.9 se** — not a disagreement, an unpowered estimate. Size the fixture to
+  the claim before reading its output. (W6 D4.)

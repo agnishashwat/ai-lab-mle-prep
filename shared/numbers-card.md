@@ -306,6 +306,13 @@ Format: `quantity = value (condition)`.
 - **the price of fixing it.** Keeping 90% of prompts alive at p = 0.95 needs **G = 45**
   (G = 44 gives **89.533%**; closed form ln(0.1)/ln(0.95) = **44.891**). GRPO trades
   training memory for **inference compute**, and the bill grows as the model improves
+  - **CORRECTION (learner's, W6 D1; confirmed by measurement W6 D4).** The closed form
+    as written, `ln(0.1)/ln(1−p)`, is **single-sided** — it counts only the all-FAIL
+    tail. The honest criterion is `p^G + (1−p)^G ≤ 0.1`, i.e. the two-branch
+    `G = ln(0.1)/ln(max(p, 1−p))`. It happens to be right at p = 0.95 because the
+    easy tail is negligible there, and it is **wrong by a factor of 2 in the dead
+    mass exactly at p = 1/2**, where it returns 4 instead of **5**. See W6 D4 for the
+    `G*` table, where this recurs at precisely the one k whose set point is 1/2.
 - **seen in a real run**, two fixtures differing only in the verifier: healthy
   **dead 0.0354 at pass 0.4963** vs saturated **dead 0.8042 at pass 0.9742** — **23×** more
   of the batch silent on the run with the *better* reward
@@ -493,3 +500,102 @@ Format: `quantity = value (condition)`.
   `mode_locked` **LOST a conjunct to the data** — locked spread 0.123–0.379 vs healthy
   0.323–0.556 **OVERLAP**, so it cannot be thresholded. *Fewer conditions, because that is what
   the measurement supports*
+
+## Week 6 Day 4 — reasoning data curriculum (`code/curriculum.py`, **106 checks**; 15 seqs, G=8, 16 prompts)
+
+**The set point is a function of the metric you report.**
+
+- **the family.** `p* = a/(a + b + k − 1)`, from `Δp ∝ p^a(1−p)^b` and
+  `∂pass@k/∂p = k(1−p)^(k−1)`. At a = b = 1 it is **`p* = 1/(k+1)`**:
+  **0.5000 / 0.2000 / 0.1111 / 0.0588 / 0.0154** at k = 1/4/8/16/64
+- **`p* = 1/2` ⟺ `a = b + k − 1`, NOT ⟺ `k = 1`.** (2,1,2) also gives 1/2; (2,2,2) gives
+  exactly **2/5**. "Train where the model is at 50%" is one point of a family
+- **measure (a,b), do not assume them.** Measured on the stack: **(1.900, 1.911),
+  R² = 0.9979** — exact ascent moves p by `~lr‖∇p‖² ∝ p²(1−p)²`, so (2,2) is the law,
+  not the advantage-mass (1,1). Moves the k=8 set point **0.1111 → 0.1758 (1.58×)**.
+  The `+k−1` is arithmetic; the exponents are not
+- **the cost of the folk answer.** Train at 0.5, report pass@8: progress rate **2.53×
+  better**, metric weight **56.12× worse**, net **22.17× of the useful signal lost**
+
+**Group size at the set point.**
+
+- `G* ≈ 2.3026·k`, approached from above. Both-tails exact integers:
+  **5 / 6 / 11 / 20 / 38 / 149 / 591** at k = 1/2/4/8/16/64/256
+- the single-sided `ln(0.1)/ln(1−p*)` gives **4 at k=1 and is wrong there and only
+  there** (at p* = 1/2 the easy tail is half the deaths) — the W6 D1 correction again
+- **with G = 8 anyway**, P(dead | p*) = **0.78 / 3.92 / 16.78 / 38.97 / 61.57 / 88.34 /
+  96.93 %** at k = 1/2/4/8/16/64/256. A correctly-targeted curriculum is *supposed*
+  to look mostly dead
+
+**The verifier is a multiplier, not a preference.**
+
+- `U = E[Σ A_i s̃_i] = 2(G−1)p(1−p)J = J·E[Σ|A|]` under **s̃ = 2s−1** — so **J is exactly
+  the fraction of the advantage mass that is useful**. With s ∈ {0,1} you get half
+- **`argmax_p U = 1/2` for EVERY (α,γ) with J > 0** — verified at (0,0), (.1,.01),
+  (.3,.05), (.45,.50). A verifier **cannot tilt a curriculum**
+- **α + γ = 1 ⇒ U ≡ 0 in p**, exactly. Healthy |A|, healthy dead_frac, zero learning,
+  forever. **α + γ > 1 ⇒ U < 0 everywhere**: the gradient points backwards
+- **the useful fraction** `U/mass = p(1−p)J / [p_obs(1−p_obs)]` (mass is at `p_obs`,
+  U at `p`) = **0.8973 / 0.8980 / 0.6454 / 0.3109 / 0.0825** at p = .5/.1/.02/.005/.001.
+  Collapse slope `J/[γ(1−γ)]` = **89.90**; the noise floor γ(1−γ) = 0.0099 **does not
+  shrink with p**, so you cannot raise the LR out of it
+- **γ = 0 ⇒ ratio → 1 as p → 0, at any α.** Soundness is *exactly* the property that
+  stops the collapse — which is why the FP question is "is the set empty", not "how big"
+
+**...it floors the curriculum instead.**
+
+- `p_floor = γ(1−τ) / [τ(1−α) + γ(1−τ)]` = **0.090909** at (γ,α,τ) = (.01,.10,.10);
+  **0.174312** at τ=.05; **0.230769** at γ=.03; **0.500000** at γ=.10
+- **crossover with 1/(k+1) at k = 10.0000 EXACTLY** (solved, not scanned) — beyond
+  pass@10 the verifier binds, not the metric
+- **value retention v(floor)/v(p*)** = **0.9793 / 1.0000 / 0.8872 / 0.3804 / 0.0358**
+  at k = 8/10/16/32/64 — at pass@64 a **1% FP rate costs 96.4%** of the signal
+- **γ = 0.10 has J = 0.80 and p_floor = 0.50.** A respectable Youden index *and*
+  unusable below the median: **J is a multiplier on magnitude, p_floor is a constraint
+  on the domain.** Different objects — hence base-rate neglect
+- **which wall binds depends on your alive-tolerance** (learner's finding): the dead
+  wall at G=8 is **p = 0.2501 / 0.1591 / 0.0830** at a 10% / 25% / 50% tolerance, so
+  the dead wall binds at 10% and the precision floor binds at 50%. Both correct
+
+**Control in log-odds, not in p.**
+
+- 50%-of-peak band: **[0.1464, 0.8536] at k=1 → [0.0036, 0.0407] at k=64**
+- width in p **0.70711 → 0.03709 = 19.07× narrower**; in logit-p **3.5255 → 2.4654 =
+  only 1.43×**. **Ratio 13.33×** — controlling in p makes it 13× harder than it is
+- hi/lo *grows* **5.83 → 11.33**: the band is not shrinking uniformly
+
+**`/std` is itself a curriculum.**
+
+- centered `ΣA² = c(G−c)/G`: at G=64, **c=1 → 0.9844 vs c=G/2 → 16.0 = 16.25×**.
+  Whitened, **both → 64**. That equalisation *is* the tilt
+- **TILT is a ratio of ratios**: `[G²/(G−1)] / [4G(1−2^(1−G))/(G−1)] = G/[4(1−2^(1−G))]
+  ≈ G/4` = **2.0157 at G=8, 16.0000 at G=64.** The (G−1) cancels
+- the tilt is **symmetric** — it lifts c=1 and c=G−1 equally; **pass@k picks which tail
+  wins**, which is why the whitened set point moves *down*
+- whitened p* / metric p*: G=8 → **1.00 / 0.75 / 0.82 / 0.88 / 0.96**;
+  G=64 → **0.24 / 0.32 / 0.44 / 0.71** at k = 4/8/16/64. Up to **4.2×**
+- **at (G=64, k=1) the whitened set point does not exist** — flat to 1e-15 over
+  **p ∈ [0.4166, 0.5834]**. Report "no preference", not a third significant figure
+- **negative control:** at G=2, whitened argmax == metric argmax (P(alive) = 2p(1−p))
+
+**Contamination: the eval lie decays, the training cost does not.**
+
+- inflation = `c(1 − pass@k(p_true))` = **3.500 / 2.450 / 1.201 / 0.288 / 0.017 / 0.000**
+  points at k = 1/2/4/8/16/64 (c = 0.05, p_true = 0.30) — same shape as D3's RL gain
+- a memorised prompt is **dead on the SUCCESS side, ~100%**: contaminated fraction c
+  costs exactly c of the rollout budget for zero gradient, and it is **invisible on the
+  reward curve** because those groups score 1.0
+- **twin gap 0.7000 = 1 − p_true, control +0.000000**, populations fully separated.
+  But the detector is an **estimator**: `se = sqrt(p(1−p)/n_contaminated)`; at n = 4
+  that is **0.23** and it cannot tell a clean set from a quarter-rotten one
+
+**Calibration laws (from the diagnostic panel).**
+
+- **a threshold is calibrated for a REGIME**: the alive-fall gap is **0.35 wide at 150
+  steps and 0.014 wide at 60**. Re-derive, never borrow
+- **a change statistic must not overlap the estimator's burn-in**: with the head window
+  at step 0, prompts whose true p never left 1e-4 read as having moved **0.047–0.276**
+- **three fixtures cannot separate four rules** — `budget_dead`/`saturated_band` looked
+  collinear until the bench went 3 → 6 fixtures
+- **cut rule `mean_p_rising`, reason: fires on healthy HARDER than on sick** —
+  **+0.796…+0.938 healthy vs +0.373…+0.410 sick.** Rising p *is* learning
