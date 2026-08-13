@@ -306,6 +306,18 @@ class CurrHistory:
 # ---------------------------------------------------------------------------
 # Exercises -- the four TODO bodies
 # ---------------------------------------------------------------------------
+def combination(c, G):
+    combs = np.ones_like(c, dtype=np.float64)
+    for i in range(1, int(G//2)+1):
+        combs[i] = (combs[i-1] * (G-i+1))/i
+    
+    for i in range(int((G+1)//2)):
+        combs[-i-1] = combs[i]
+    
+    return combs
+
+
+
 
 def signal_curve(p: np.ndarray | float, G: int,
                  mode: str = "center") -> tuple[np.ndarray, np.ndarray]:
@@ -353,7 +365,25 @@ def signal_curve(p: np.ndarray | float, G: int,
         p = 0 and p = 1 give exactly (0.0, 0.0) under BOTH modes
         anything else in `mode` raises ValueError
     """
-    raise NotImplementedError("TODO 1: signal_curve")
+    p = np.asarray(p, dtype=np.float64)
+    c = np.arange(G+1)
+    combs = combination(c, G)
+    prob_c = (p[..., None] ** c) * (1 - p[..., None])**(G-c) * combs[None, :]
+
+    if mode == 'center':
+        sum_abs = np.asarray(2 * c * (G-c) / G, dtype=np.float64)
+        sum_square = sum_abs/2
+    elif mode == 'whiten':
+        sum_abs = np.asarray(2 * (c * (G-c)) ** 0.5, dtype=np.float64)
+        sum_square = G * np.ones_like(c, dtype=np.float64)
+        sum_square[0] = 0.0
+        sum_square[-1] = 0.0
+    else:
+        raise ValueError(mode)
+
+    sum_abs_weighted = prob_c @ sum_abs
+    sum_square_weighted = prob_c @ sum_square
+    return (sum_abs_weighted, sum_square_weighted)
 
 
 def useful_signal(p: np.ndarray | float, alpha: float, gamma: float,
@@ -432,7 +462,15 @@ def useful_signal(p: np.ndarray | float, alpha: float, gamma: float,
             is alive at p_obs = 0.9 and the trainer sees a healthy pile of mass,
             all of it noise. Guard the division; return 0.0, never nan.
     """
-    raise NotImplementedError("TODO 2: useful_signal")
+    p_obs = p * (1-alpha) + (1-p) * gamma
+    mass, _ = signal_curve(p_obs, G, mode='center')
+    # U = 2 * (G-1) * p * (1-p) * (1-alpha-gamma)
+    m1 = p * (1-alpha) - (1-p) * gamma
+    U = (G-1) * (m1 - p_obs * (2 * p - 1))
+
+    mass_safe = np.where(mass > 0, mass, 1)
+    ratio = np.where(mass>0, U/mass_safe, 0)
+    return (U, mass, ratio)
 
 
 @dataclass(frozen=True)
@@ -444,6 +482,63 @@ class SetPoint:
     p_star: float           # the one you would actually target
     binding: str            # "metric" | "precision" | "whiten"
     band: tuple[float, float]   # 50%-of-peak band of the UNCONSTRAINED value curve
+
+def whitened_argmax(k: int, G: int, rounds: int = 5, npts: int = 4001) -> float:
+    """argmax_p P(alive; G) * (1-p)^(k-1). NUMERICAL -- this root has no closed form.
+
+    Three deliberate choices, each of which is the day's lesson in miniature:
+
+    THE LOGIT AXIS. Optimise in z = log(p/(1-p)), not in p. The 50%-of-peak band
+    narrows 19.07x in p between k=1 and k=64 but only 1.43x in log-odds, so a grid
+    that is well-conditioned at k=1 is useless at k=64 in p and fine in z.
+
+    LOGS, NOT THE PRODUCT. At k=64 the raw product is ~1e-30 near the optimum.
+    log P(alive) + (k-1) log1p(-p) is the same argmax, evaluated in a range float64
+    can actually resolve.
+
+    P_ALIVE, NOT `1 - p**G - (1-p)**G`. The literal form cancels catastrophically:
+    at G=64, p=1e-4 it disagrees with the well-conditioned form in the 13th
+    significant figure, and we are refining to 1e-6.
+
+    COARSE-TO-FINE, NOT BISECTION ON THE DERIVATIVE. Verified unimodal (exactly one
+    interior sign change of df on a 200k-point grid) for every (G, k) the stages
+    exercise -- EXCEPT (G=64, k=1), where the objective is a flat plateau and the
+    argmax is not identified at all. That case is deliberately absent from
+    `stage_whiten`'s sweep; see the "NOT IDENTIFIED" check. A bracketing method
+    would have returned a confident number there.
+    """
+    lo, hi = -30.0, 30.0
+    best = 0.5
+    for _ in range(rounds):
+        z = np.linspace(lo, hi, npts)
+        p = 1.0 / (1.0 + np.exp(-z))
+        f = np.log(np.maximum(p_alive(p, G), 1e-300)) + (k - 1) * np.log1p(-p)
+        i = int(np.argmax(f))
+        best = float(p[i])
+        lo, hi = float(z[max(i - 1, 0)]), float(z[min(i + 1, npts - 1)])
+    return best
+
+def find_range_ascending(low, high, threshold, k, a, b, eps):   
+    while high > low + eps:
+        mid = low + (high-low)/2
+        midval = value_curve(mid, k, a, b)
+        if midval < threshold:
+            low = mid
+        elif midval > threshold:
+            high = mid
+        else: return mid
+    return mid
+
+def find_range_descending(low, high, threshold, k, a, b, eps):
+    while high > low + eps:
+        mid = low + (high-low)/2
+        midval = value_curve(mid, k, a, b)
+        if midval < threshold:
+            high = mid
+        elif midval > threshold:
+            low = mid
+        else: return mid
+    return mid
 
 
 def set_point(k: int, a: float = 1.0, b: float = 1.0, G: int = 8,
@@ -500,7 +595,73 @@ def set_point(k: int, a: float = 1.0, b: float = 1.0, G: int = 8,
             control, and if your whitened optimiser disagrees here it is broken)
         raises ValueError for k < 1, a <= 0, b <= 0, G < 2, unknown mode
     """
-    raise NotImplementedError("TODO 3: set_point")
+    if k < 1:
+        raise ValueError(k)
+
+    if a <= 0:
+        raise ValueError(a)
+
+    if b <= 0:
+        raise ValueError(b)
+    
+    if G < 2:
+        raise ValueError(G)
+
+    metric = a/(a+b+k-1)
+    p_floor = precision_floor(gamma, alpha, tau)
+    whitened = whitened_argmax(k, G)
+    if mode == 'center':
+        if metric >= p_floor:
+            p_star = metric
+            binding = "metric" # "metric" | "precision" | "whiten"
+        else:
+            p_star = p_floor
+            binding = "precision"
+    elif mode == 'whiten':
+        if whitened >= p_floor:
+            p_star = whitened
+            binding = "whiten" # "metric" | "precision" | "whiten"
+        else:
+            p_star = p_floor
+            binding = "precision"
+    else:
+        raise ValueError(mode)
+    
+    max_objective = value_curve(metric, k, a, b)
+    eps = 1e-8
+    left_lim = find_range_ascending(0, metric, max_objective/2, k, a, b, eps)
+    right_lim = find_range_descending(metric, 1, max_objective/2, k, a, b, eps)
+
+    setpoint = SetPoint(metric, p_floor, whitened, p_star, binding, (left_lim, right_lim))
+    return setpoint
+
+# --- diagnose_curriculum thresholds ----------------------------------------
+# Every one is a LEVEL, calibrated from the gap between DISTRIBUTIONS over 5
+# paired seeds per fixture, at the 150-step regime, with the measured ranges in
+# the comment. A threshold with no air on both sides is a coin flip wearing a
+# number, so the ranges are the deliverable and the constant is a consequence.
+CLIFF_PIN = 0.05      # p_hat level that counts as "pinned at zero"
+CLIFF_MOVE = 0.05     # |tail - head| that counts as "not moving"
+CLIFF_SHARE = 0.50    # healthy 0.06..0.13, coin_flip 0.06..0.25 | too_hard 0.94..1.00
+ALIVE_FALL = 0.40     # healthy 0.04..0.24, uniform 0.07..0.22   | open_loop 0.59..0.67
+DEAD_LEVEL = 0.60     # healthy 0.36..0.54, uniform 0.37..0.49   | open_loop 0.67..0.78 (thin)
+FLOOR_SHARE = 0.125   # healthy 0.01..0.07, uniform 0.02..0.04   | too_hard 0.83..1.00
+
+
+def _windows(T: int) -> tuple[slice, slice]:
+    """(head, tail) for CHANGE statistics on p_hat, with the EMA burn-in excluded.
+
+    p_hat is an EMA (0.6) from a 0.5 prior, so the first fifth of the run is the
+    SENSOR CONVERGING, not the policy moving: with head = step 0 the prompts whose
+    true p never leaves 1e-4 read as having "moved" 0.047..0.276 and `cliff` cannot
+    fire on the fixture built for it. The head therefore starts AFTER the burn-in.
+
+    `dead_frac` is a direct per-step count, not an EMA, so it has no burn-in and
+    `saturated_band` measures its fall from step 0 -- excluding the burn-in there
+    would throw away the part of the decay that carries the discrimination.
+    """
+    q = T // 5
+    return slice(q, 2 * q), slice(T - q, T)
 
 
 def diagnose_curriculum(h: CurrHistory, *, gamma: float = 0.01,
@@ -583,8 +744,63 @@ def diagnose_curriculum(h: CurrHistory, *, gamma: float = 0.01,
     Using `p_true` would produce a diagnostic that cannot be ported, which is the
     same defect as a rule stated in terms of the task.
     """
-    raise NotImplementedError("TODO 4: diagnose_curriculum")
+    out: list[tuple[str, str]] = []
+    T = int(len(h.step))
+    if T < 5:            # below the calibrated regime -- refuse, do not guess
+        return out
+    head, tail = _windows(T)
 
+    # cliff -- LEVEL and CHANGE conjoined. The level-only version fires on every
+    # healthy curriculum that starts hard, which is the whole exercise.
+    pinned = h.p_hat[tail].mean(0) < CLIFF_PIN
+    still = np.abs(h.p_hat[tail].mean(0) - h.p_hat[head].mean(0)) < CLIFF_MOVE
+    stuck = float(np.mean(pinned & still))
+    if stuck > CLIFF_SHARE:
+        out.append(("cliff", f"{stuck:.0%} of prompts pinned below p_hat "
+                             f"{CLIFF_PIN} AND unmoved (<{CLIFF_MOVE}) between "
+                             f"steps {head.start}-{head.stop} and {tail.start}-{T}"))
+
+    # saturated_band -- OPEN-LOOP DECAY. The `rise` conjunct was measured and cut:
+    # the share above p_hi rises +0.796..+0.938 on the HEALTHY fixture and only
+    # +0.373..+0.410 on the sick one, so it discriminates backwards. The
+    # alive-fraction FALL carries all of it.
+    alive = 1.0 - h.dead_frac
+    fall = float(alive[:T // 5].mean() - alive[tail].mean())
+    if fall > ALIVE_FALL:
+        out.append(("saturated_band", f"alive fraction fell {fall:+.3f} "
+                                      f"({alive[:T // 5].mean():.3f} -> "
+                                      f"{alive[tail].mean():.3f}): the curriculum "
+                                      f"solved its own band and is training on nothing"))
+
+    # floor_violated -- a LEVEL (W5 D5). "We are training where the verifier cannot
+    # be trusted" is true of a snapshot; a delta-based version cannot say it. The
+    # rates are an INPUT: diagnosing a gamma=0.10 run with the default 0.01 asks
+    # about a verifier that does not exist.
+    p_floor = precision_floor(gamma, alpha, tau)
+    act = h.active[tail].astype(np.int64)
+    ph = h.p_hat[tail]
+    below = float(np.mean([float((ph[t, act[t]] < p_floor).mean())
+                           for t in range(act.shape[0])])) if act.size else 0.0
+    if below > FLOOR_SHARE:
+        out.append(("floor_violated", f"{below:.0%} of the rollout budget is spent "
+                                      f"on prompts below p_floor = {p_floor:.4f} "
+                                      f"(gamma={gamma}, alpha={alpha}, tau={tau}): "
+                                      f"more than tau of those rewards are hacks"))
+
+    # budget_dead -- THE TWO SIDES SEPARATELY. D3's identity says dead_frac alone
+    # cannot tell you which, and the two sides need OPPOSITE fixes.
+    dead = float(h.dead_frac[tail].mean())
+    if dead > DEAD_LEVEL:
+        fail = float(h.dead_fail[tail].mean())
+        succ = float(h.dead_succ[tail].mean())
+        out.append(("budget_dead", f"{dead:.3f} of groups dead -- fail-side {fail:.3f} "
+                                   f"(SCAFFOLD these) vs success-side {succ:.3f} "
+                                   f"(RETIRE these); the sum is not actionable"))
+
+    # `mean_p_rising` IS DELIBERATELY ABSENT. Suspected redundant with
+    # saturated_band; MEASURED to fire on healthy runs twice as hard as on sick
+    # ones, because rising p IS learning. Cut for FIRES-ON-HEALTHY, not redundancy.
+    return out
 
 # ---------------------------------------------------------------------------
 # Fixtures and the training loop (provided -- nothing below is a TODO)

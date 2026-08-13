@@ -1082,3 +1082,20 @@ does not exist**: flat to 1e-15 over a 0.167-wide plateau. And the whitening til
 paid). The worst: `_tilt_to_target` bisected a **non-monotone** map, so **40% of fixture
 difficulties were silently wrong, with errors up to 0.97**, while every stage quoted them
 to four decimals. That one would have invalidated the day. All eight are in `HANDOFF.md`.
+
+**W6 D4 follow-up — the four TODOs implemented, `curriculum.py` at 106/106.** The learner
+wrote `signal_curve`, `useful_signal` and `set_point` across several review rounds; the tutor
+wrote the `whitened_argmax` helper and `diagnose_curriculum` on request (both logged — that
+is **three** tutor-written artefacts this day, after the three interview-bank entries, and the
+retrieval value of all of them is spent). Defects the review caught, in order: binomial
+coefficients wrong three ways, then **int64 overflow at G=64** after the fix; dead groups
+credited `G` instead of `0` under whitening, which flattens `E[ΣA²]` to a constant and deletes
+the day's headline; `p_obs` written as a **product** of the two reward cells instead of a sum,
+which made the useful fraction ~99 (a share above 1) and **constant in p**; `np.where` used as
+a division guard. Every one was found by a check the learner could have run unaided —
+`combs.sum() == 2**G`, `ratio ≤ 1`, `p_obs → γ as p → 0`.
+
+**New numbers.** The shipped diagnostic panel calibrates to `CLIFF_SHARE 0.50 / ALIVE_FALL
+0.40 / DEAD_LEVEL 0.60 / FLOOR_SHARE 0.125`, all four rules with distinct fire-sets over 6
+fixtures × 5 paired seeds. `floor_violated` only works as a **share of budget**, not a mean —
+as a mean it is silent on the fixture built for it.

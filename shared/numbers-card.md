@@ -599,3 +599,27 @@ Format: `quantity = value (condition)`.
   collinear until the bench went 3 → 6 fixtures
 - **cut rule `mean_p_rising`, reason: fires on healthy HARDER than on sick** —
   **+0.796…+0.938 healthy vs +0.373…+0.410 sick.** Rising p *is* learning
+
+**The shipped panel** (TODO 4, calibrated over 5 paired seeds × 6 fixtures at 150 steps).
+
+| threshold | value | healthy / uniform | sick |
+| --- | --- | --- | --- |
+| `CLIFF_SHARE` | 0.50 | 0.06–0.13 | `too_hard` 0.94–1.00 |
+| `ALIVE_FALL` | 0.40 | 0.04–0.24 | `open_loop` 0.59–0.67 |
+| `DEAD_LEVEL` | 0.60 | 0.36–0.54 | `open_loop` 0.67–0.78 (thin) |
+| `FLOOR_SHARE` | 0.125 | 0.01–0.07 | `too_hard` 0.83–1.00 |
+
+Fire-sets, and they are all distinct — which is what non-collinearity actually means:
+
+- `healthy` **{}** · `uniform` **{}** — silent is a *check*, not an aspiration
+- `open_loop` **{saturated_band, budget_dead}** — stable, 5/5
+- `too_hard` **{cliff, budget_dead, floor_violated}** — stable, 5/5
+- `coin_flip` **{budget_dead}** or **{+floor_violated}** — borderline, 3/5
+- `bad_verifier` **{}** or **{floor_violated}** — borderline, 3/5
+
+**`floor_violated` is a SHARE, not a MEAN — and that is the whole rule.** Written as
+"mean realised p below the floor" it reads **0.237…0.400 ABOVE** the floor on
+`bad_verifier` and goes permanently silent. Written as "share of the rollout budget
+below the floor" the same runs read **0.000…0.172** and straddle. The mean is dominated
+by the prompts you are training on *correctly*; the question "are we training where the
+verifier cannot be trusted" is about the **tail of the budget**, not the average prompt.

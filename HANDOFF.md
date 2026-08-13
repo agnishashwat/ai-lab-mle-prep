@@ -2638,3 +2638,22 @@ coding → deliverable.**
   `se = sqrt(p(1−p)/n_contaminated)`; at n = 4 that is **0.23**, and a measured 0.4667 against an
   expected 0.7000 is **0.9 se** — not a disagreement, an unpowered estimate. Size the fixture to
   the claim before reading its output. (W6 D4.)
+- **A LEVEL rule must name WHOSE level: a mean and a share are different rules.** W6 D4's
+  `floor_violated` written as *"mean realised p below `precision_floor`"* reads **0.237–0.400
+  ABOVE** the floor on the `bad_verifier` fixture and is permanently silent; written as *"share
+  of the rollout budget below the floor"* the identical runs read **0.000–0.172** and straddle
+  the threshold. The mean is dominated by the prompts you are training on correctly. "Are we
+  training where the verifier cannot be trusted" is a question about the **tail of the budget**.
+  Before picking a threshold, pick the *statistic* — and check it moves on the fixture built for it.
+- **Ask what precision the CONSUMER needs before choosing a dtype.** W6 D4's learner-written
+  binomial coefficients used `int64` for exactness; the intermediate `C(64,31) × 33 = 5.86e19`
+  **overflowed** (int64 max 9.22e18) and, under `-W error::RuntimeWarning`, crashed. But the
+  coefficients are immediately multiplied by `p^c (1−p)^(G−c)`, which carries ~1e-16 relative
+  error anyway — the exactness was destroyed on the next line. `float64` gives a worst relative
+  error of **9.8e-16 at G=64** and no range problem. A float truncation bug "fixed" with `//`
+  became an integer overflow bug because the premise (*these must be exact integers*) was never
+  examined. Diagnostic that finds it in one line: `combs.sum() == 2**G`.
+- **`np.where` does not guard a division — it evaluates both branches.** Twice in one W6 D4
+  session: `np.where(mask, U/mass, 0)` still raises `divide by zero`. Sanitise the denominator
+  *first* (`np.where(mass > 0, mass, 1.0)`), then divide. And guard the variable the contract
+  names: a mask on `p ∈ (0,1)` is not a mask on `mass == 0`.
