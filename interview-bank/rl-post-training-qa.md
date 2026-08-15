@@ -536,11 +536,9 @@ hacked run and a solved run are identical on every column the reward can produce
 
 ### Q: Your model gets 85% pass@64 and 30% pass@1. What do you actually know?
 
-> **YOURS TO WRITE.** The cold card below is seeded with your own W6 D3 measurements so you
-> are not starting from a blank page. The prose is the exercise — the drill showed MECHANISM
-> slots filling 9/9 while THESIS slots went 0/3, and this is a thesis question.
-> A full worked answer already exists in `week-06-.../day-03-.../deliverable.md` — write
-> yours first, then compare.
+> **LEARNER-WRITTEN on W6 D5.** The first response caught that `p=0.30` and
+> `pass@64=0.85` are inconsistent for one homogeneous prompt. The repaired answer below keeps
+> that catch and makes the benchmark aggregation level explicit.
 
 **Cold card (drill this alone):**
 
@@ -560,16 +558,38 @@ UNDER-report. n=10 p=0.1 k=10: 0.493747 vs truth 0.651322 = 24.19% thrown away
 
 **Short answer:**
 
+At benchmark level, `pass@64 = 0.85` means there is an average 85% chance that at least one of
+64 rollouts is correct, **using an oracle to identify it**. `pass@1 = 0.30` is the one-draw
+average; both numbers can coexist because we compute pass@k per prompt and then average, so
+`mean_x f(p_x) ≠ f(mean_x p_x)`. We cannot use the oracle in the actual system, so this is not
+shippable until we check what the filter, ranker, or vote actually emits against held-out gold.
+
 **Deeper:**
 
+The two numbers establish two different things. Pass@1 measures average one-sample correctness.
+Pass@64 measures whether correct output mass is reachable within a 64-sample budget, composed
+with a selector that always recognises correctness. Heterogeneous prompt difficulties are
+load-bearing: applying `1−(1−p)^64` to the mean pass@1 would incorrectly predict nearly 1.
+
+The next production check is direct: run the exact deployed selector and compare its emitted
+answer with held-out gold. Report selector accuracy and verifier precision alongside oracle
+pass@64. In my own fixture, pass@k approached 1 while a verifier-driven selector saturated at
+precision and majority voting could get worse as k grew.
+
 **Watch out for:**
+
+- Do not call pass@k a capability without naming its **oracle selector**.
+- Do not compute pass@k from the benchmark's mean pass@1; compute per prompt, then average.
+- `dead_frac` diagnoses training signal. It does not measure whether deployment can select the
+  right answer.
 
 ---
 
 ### Q: Best-of-64 against your reward model beat greedy decoding. Ship it?
 
-> **YOURS TO WRITE.** Same deal. This one is a FILTER-vs-RANKER question wearing a
-> best-of-n costume, and the number that answers it is a KL.
+> **LEARNER-WRITTEN on W6 D5.** The initial answer correctly demanded effect size and matched
+> inference cost. The repair moved the circular proxy judge to the first sentence and kept those
+> operational checks.
 
 **Cold card (drill this alone):**
 
@@ -581,25 +601,50 @@ best-of-n IS a KL move you did not budget for:
   so BoN-64 is a 3.17-nat move against a policy you KL-constrained during training
 
 and it is a RANKER, which is the bad half of the split. SAME verifier, SAME budget:
-  FILTER  P(hack|emitted) = gamma(1-p)/[gamma(1-p)+(1-alpha)p] = 9.09%, n-INVARIANT
-  RANKER  P(hack|emitted) = 1 - (1-gamma)^n   = pass@n FOR THE HACK SET
-          1.0000% / 7.7255% / 47.4404% / 92.3685%  at n = 1/8/64/256
-  at n=256: 9.09% vs 92.37% -- 10.16x, from the SELECTION RULE alone
+  FILTER  P(hack|accepted emission)
+          = gamma(1-p)/[gamma(1-p)+(1-alpha)p] = 9.09%, n-INVARIANT
+  FILTER  P(hack output) = [1-(1-p_obs)^n] * P(hack|accepted emission)
+          0.9000% / 5.1426% / 9.0794% / 9.0909%  at n = 1/8/64/256
+  RANKER  P(any top-scored hack) = 1 - [1-(1-p)gamma]^n
+          = pass@n for policy hack mass (1-p)gamma
+          0.9000% / 6.9772% / 43.9322% / 90.1178%  at n = 1/8/64/256
+  at n=256: 9.09% vs 90.12% -- 9.91x, from the SELECTION RULE alone
 
 "beat greedy decoding" was measured with the RM as judge. Ask for the held-out column.
 ```
 
 **Short answer:**
 
+No, because the same reward model selected the output and judged it. Evaluate greedy and the
+**BoN-64 emitted output** on held-out gold labels or human annotations at matched inference cost.
+BoN-64 also moves the emitted distribution by
+`log 64 − 63/64 = 3.1745` nats of KL in the continuous no-tie case, so it crosses a distribution
+shift that the policy's training-time KL constraint did not budget for.
+
 **Deeper:**
 
+If `U = F_π(score)`, then under the base policy `U ~ Uniform(0,1)`. The maximum of `n` draws has
+density `n u^(n−1)`, so `q(y)/π(y) = n u^(n−1)` and
+`KL(q‖π) = log n − (n−1)/n`. Score ties reduce the shift; fully tied scores with uniform
+tie-breaking give `q=π` and KL exactly zero.
+
+BoN is a **ranker**, not a filter. A filter uniformly emitting among accepted samples preserves
+the verifier's posterior error rate; a max-score ranker compounds any exploitable false-positive
+tail across all 64 attempts. The independent held-out column therefore decides whether the gain
+is real, while matched inference cost decides whether it is worth buying.
+
 **Watch out for:**
+
+- Compare greedy output with the **BoN-emitted output**, not greedy with `pass@64`; pass@64 still
+  uses the unavailable oracle.
+- "The reward model score improved" is circular when that reward model also chose the winner.
+- Include the 64× rollout bill and latency in the comparison, not only accuracy.
 
 ---
 
 ### Q: How would you design the data curriculum for an RLVR run?
 
-**Cold card:** `p* = a/(a+b+k−1) → 1/(k+1)`; 0.5 only at k=1 · `G ≈ 2.3026k` → 4/6/11/20/38/149 at k=1/2/4/8/16/64 · **88.34% dead** at (report pass@64, train at p*, G=8) · `p_floor = γ(1−τ)/[τ(1−α)]/(1+·) = 1/11`, crosses `1/(k+1)` at **k=10 exactly** · `/std` tilts by `G/4` = **16× at G=64** · training at 0.5 while reporting pass@8 costs **22.17×** · band narrows **19.07× in p, 1.43× in logit-p**
+**Cold card:** `p* = a/(a+b+k−1) → 1/(k+1)`; 0.5 only at k=1 · exact 90%-alive `G` → 5/6/11/20/38/149 at k=1/2/4/8/16/64 (`G ≈ 2.3026k` is one-sided) · **88.34% dead** at (report pass@64, train at p*, G=8) · `p_floor = γ(1−τ)/[τ(1−α)]/(1+·) = 1/11`, crosses `1/(k+1)` at **k=10 exactly** · `/std` tilts by `G/4` = **16× at G=64** · training at 0.5 while reporting pass@8 costs **22.17×** · band narrows **19.07× in p, 1.43× in logit-p**
 
 **Short answer:** A curriculum is a **controller**, so I need three things before I write any
 code: a **measured** quantity to control, a **set point**, and the **constraints that make the
@@ -635,8 +680,9 @@ progress  2.53× BETTER at p=0.5      weight  56.12× WORSE      net  22.17× of
 (all-0 or all-1) with probability `p^G + (1−p)^G`, and every advantage in it is exactly zero:
 
 ```
-G to keep 90% alive at p*:  G = ln(0.1)/ln(1 − p*) = ln(10)/ln(1+1/k) → 2.3026·k
-                            4 / 6 / 11 / 20 / 38 / 149  at k = 1/2/4/8/16/64
+G to keep 90% alive at p*:  min G with p*^G + (1-p*)^G <= 0.1
+                            5 / 6 / 11 / 20 / 38 / 149  at k = 1/2/4/8/16/64
+one-sided approximation:    ln(0.1)/ln(1-p*) -> 2.3026*k asymptotically
 P(dead | G=8, p=p*):        0.78 / 3.92 / 16.78 / 38.97 / 61.57 / 88.34 %
 ```
 
@@ -837,3 +883,45 @@ by rollouts I already ran, and it costs nothing to look.
 - Retiring contaminated items *improves* your measured score change while shrinking the eval set,
   so quote pass@k before and after on the **same** surviving subset, or the cleanup itself becomes
   an unfalsifiable improvement.
+
+---
+
+### Q: How would you validate an end-to-end RLVR/GRPO system without letting held-out gold leak into training?
+
+> **LEARNER-WRITTEN on W6 D5.** The learner independently separated a gold-mutation software
+> test from a perturbed-twin contamination test; the scope condition below was added during
+> repair.
+
+**Cold card:** every `p` needs an event type · mutate `gold`, hold θ/samples/RNG/`accept` fixed:
+update bit-identical · mutate reachable `accept`: update changes · perturbed twins test data
+contamination, not code dependency · clean control converts a drop into evidence · calibration
+repairs the controller coordinate, not an unsound reward objective
+
+**Short answer:**
+
+First test the software boundary: change the gold labels while holding θ, samples, RNG, and
+verifier accepts fixed; the policy update must remain bit-identical. Then change reachable
+verifier labels and require the update to change, so the first result is non-vacuous. Separately,
+test contamination with perturbed twins and apply the same perturbation to a clean post-cutoff or
+privately authored control. A suspect-only drop is evidence of memorisation; a drop in both sets
+means the perturbation itself made the task harder.
+
+**Deeper:**
+
+The two tests answer different questions. The metamorphic test proves that hidden truth is not a
+software dependency of the reward or policy loss. The twin test asks whether benchmark content
+was already in the model's data. Conflating them can produce a clean dependency graph and a
+contaminated benchmark, or a clean benchmark and a gold-leaking implementation.
+
+Gold may legitimately enter a held-out panel and a periodic calibration audit. To isolate the
+policy-loss boundary, freeze the data policy or use the raw sensor with uniform prompt sampling;
+otherwise changing gold can intentionally change calibrated curriculum selection even though it
+never enters the reward. Finally, calibration only maps `p_obs` into a scheduling estimate of
+`p_gold`; it cannot turn a false-positive verifier reward into a correct objective.
+
+**Watch out for:**
+
+- No twin drop means **no evidence of memorisation**, not proof of genuine reasoning.
+- A twin drop without a clean perturbation control is not evidence; the transformation may simply
+  be harder.
+- Always pair the gold-mutation test with an `accept`-mutation control, or a no-op trainer passes.

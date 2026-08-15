@@ -86,21 +86,25 @@ and monotone transformations do not move an argmax. The whole effect is heteroge
 through `(1−p)^(k−1)`. Same mechanism as the thesis. Note also that the transition is **sharp**,
 not gradual: between k = 4 and k = 8 here.
 
-**(c) A filter's composition is n-invariant; a ranker's is not, and the ranker's failure is
-literally pass@n pointed at your verifier's error set.** Same verifier (γ = 1% false positives),
-same budget, two selection rules:
+**(c) A filter's accepted-output composition is n-invariant; its unconditional risk is not.
+A ranker's failure is literally pass@n pointed at your verifier's error set.** Same verifier
+(`γ=P(accept|incorrect)=1%`), same policy (`p=.10`), same budget, two selection rules:
 
 ```
 FILTER  (accept-set, emit a uniformly random accepted sample):
-        P(hack | emitted) = γ(1−p)/[p(1−α)+γ(1−p)] = 9.09%  at n = 1, 2, 8, 64, 256 — IDENTICAL
+        P(hack | accepted emission) = γ(1−p)/[p(1−α)+γ(1−p)] = 9.09% — n-INVARIANT
+        P(hack output) = [1−(1−p_obs)^n] × 9.09%
+                       = 0.90% / 5.14% / 9.08% / 9.09%  at n = 1 / 8 / 64 / 256
 RANKER  (argmax of the score, and the score is +∞ on V \ C):
-        P(hack | emitted) = 1 − (1−γ)^n = 1.00% / 7.73% / 47.44% / 92.37%  at n = 1 / 8 / 64 / 256
+        P(any top-scored hack) = 1 − [1−(1−p)γ]^n
+                               = 0.90% / 6.98% / 43.93% / 90.12%  at n = 1 / 8 / 64 / 256
 ```
 
-**At n = 256 the same verifier gives 9.1% or 92.4% depending only on whether you filter or
-rank.** Increasing the best-of-n budget does not change *what a filter emits* — it only changes
-how often it emits anything. A ranker takes the **extreme** of a noisy score, and the extreme of
-a noisy score is wherever the noise is largest. That is why best-of-n against an RM
+**At n = 1 the selectors agree; at n = 256 the same verifier gives 9.1% or 90.1% depending only
+on whether you filter or rank.** Increasing the budget does not change a filter's composition
+*once it accepts*; it changes how often the fallback is needed. A ranker takes the **extreme** of
+a noisy score, and the extreme of a noisy score is wherever the noise is largest. That is why
+best-of-n against an RM
 over-optimizes and best-of-n against a unit test does not, and it is the inference-time version
 of yesterday's `V \ C` result. Yesterday: *unsoundness costs the run*. Today: *unsoundness costs
 the sample, and the bill grows with n*.
@@ -523,10 +527,11 @@ p = 0.05 and p = 0.95, both at G = 8. Then state, in one sentence, why D1's `sig
 >
 > ```
 > he wrote : P(hack tops) = 1 − [1 − γ(1−p)/(γ(1−p)+(1−α)p)]^n = 1 − (1 − 0.0909)^n
-> correct  : P(hack tops) = 1 − (1 − γ)^n                       = 1 − (1 − 0.01)^n
+> correct  : P(hack tops) = 1 − [1 − (1−p)γ]^n                 = 1 − (1 − 0.009)^n
 > ```
 >
-> He substituted a **posterior over the emitted set** where a **per-sample rate** was required.
+> He substituted a **posterior over the emitted set** where the **marginal per-draw hack mass**
+> `(1−p)γ` was required.
 > His arithmetic was flawless — `1 − 0.909091^8 = 53.35%` is exactly right *for the input he
 > chose*. The modelling was one level off, and the arithmetic then faithfully propagated it.
 > This is the cleanest demonstration yet that the error family is not carelessness: it is a
@@ -570,13 +575,15 @@ reward or the policy) and say what breaks it — the answer is one word, and it 
 
 ```
 FILTER : emit a uniformly random accepted sample.
-         P(hack | emitted) = γ(1−p)/[p(1−α) + γ(1−p)]  — INDEPENDENT of n.
+         P(hack | accepted emission) = γ(1−p)/[p(1−α) + γ(1−p)] — INDEPENDENT of n.
+         P(hack output) = [1−(1−p_obs)^n] · P(hack | accepted emission).
 RANKER : emit argmax of a score that is maximal on V \ C.
-         P(hack | emitted) = 1 − (1−γ)^n  — which is pass@n FOR THE HACK SET.
+         P(any top-scored hack) = 1 − [1−(1−p)γ]^n
+                                — pass@n for hack mass (1−p)γ.
 ```
 
 Prove the first by exchangeability (the same argument as Block 3 — this is not a coincidence, and
-say why). Evaluate the second at γ = 1%, n = 1/8/64/256. Then the synthesis, which is the day's
+say why). Evaluate the second at `p=.10`, `γ=1%`, n = 1/8/64/256. Then the synthesis, which is the day's
 best sentence: **best-of-n applies pass@n to your verifier's error set as enthusiastically as it
 applies it to the solution set.** Then state the design rule that follows, in the imperative.
 
@@ -658,8 +665,10 @@ Stages (ten), asserting at minimum:
    with q = (0.35 correct, 0.40 wrong, 0.25 wrong) where **maj@k is non-monotone and → 0**
    (measured: 0.3500 / 0.3563 / 0.3225 / 0.0974 at k = 1 / 9 / 51 / 501) while pass@k → 0.9999.
 7. `stage_filter_ranker` — filter composition **n-invariant to < 1e-15** in closed form and
-   within MC error over n ∈ {1,2,8,64,256}; ranker `1 − (1−γ)^n` = **1.00 / 7.73 / 47.44 /
-   92.37%**; and the two evaluated side by side at n = 256 for the **same** verifier.
+   within MC error over n ∈ {1,2,8,64,256}; comparable filter output risk
+   **0.90 / 5.14 / 9.08 / 9.09%** versus ranker `1 − [1−(1−p)γ]^n` =
+   **0.90 / 6.98 / 43.93 / 90.12%**; and the two evaluated side by side for the **same**
+   verifier and policy.
 8. `stage_bon_kl` — the exact enumerated KL of `bon_distribution` against `log n − (n−1)/n`,
    agreeing in the tie-free limit and **documented where it does not**; monotone in n; the
    per-doubling increment; and `n = 1` giving exactly 0.
@@ -720,8 +729,10 @@ mark a real one:
   your training KL. Almost nobody knows inference-time selection has a closed-form KL, and it
   turns "just crank n" into a point on a curve you have already seen bend.
 - **Separate the filter from the ranker.** A set-membership selector's composition is
-  **n-invariant**; an argmax selector's degrades as `1 − (1−γ)^n`. Same verifier, **9.1% vs 92.4%**
-  at n = 256. That single sentence explains why unit-test filtering scales and RM reranking does
+  **n-invariant conditional on acceptance**; under fallback its unconditional risk approaches
+  that composition. An argmax selector compounds marginal hack mass as
+  `1 − [1−(1−p)γ]^n`. Same verifier and policy, **9.1% vs 90.1%** at n = 256. That single
+  sentence explains why unit-test filtering scales and RM reranking does
   not, and it is yesterday's `V \ C` result moved from the weights to the outputs — which also
   means it is **recoverable**: a bad sample is discarded, a bad gradient is not.
 

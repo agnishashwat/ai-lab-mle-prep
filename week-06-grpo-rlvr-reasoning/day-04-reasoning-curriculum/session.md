@@ -51,8 +51,10 @@ Now the day's thesis, in three parts.
 >
 > with the ±1 convention s̃ = 2s−1. Under s ∈ {0,1} you get exactly half:
 > U = (G−1)·Cov(r, s) = (G−1)p(1−p)J, no factor 2. Say which one you are quoting.
-> The ±1 convention is the useful one because it makes J *exactly* the fraction
-> of the advantage mass that is useful: U = J · E[Σ|A|].
+> With the ±1 convention, `U = J·M_gold`, where
+> `M_gold = 2(G−1)p(1−p)` is the counterfactual gold-reward advantage mass. The
+> observed verifier-reward mass is instead `M_obs = 2(G−1)p_obs(1−p_obs)`, so the
+> useful fraction is `U/M_obs`, not generally `J`.
 > ```
 >
 > The verifier enters as **`J = 1 − α − γ`, Youden's J — a multiplicative constant with no `p` in
@@ -209,12 +211,15 @@ close it. Three questions immediately after, closed-book.
    the one-sentence consequence: [complete the sentence] "changing k changes ____________________"
    ```
 
-2. **Filter vs ranker.** Formulas: filter `P(hack|emitted) = γ(1−p)/[p(1−α)+γ(1−p)]`; ranker
-   `P(hack|emitted) = 1 − (1−γ)^n`. Varying **n**; held fixed at `γ = 0.01, α = 0.10, p = 0.10`.
+2. **Filter vs ranker.** Formulas: filter composition
+   `P(hack|accepted emission) = γ(1−p)/[p(1−α)+γ(1−p)]`; filter output risk
+   `[1−(1−p_obs)^n]P(hack|accepted emission)`; ranker
+   `P(any top-scored hack) = 1 − [1−(1−p)γ]^n`. Varying **n**; held fixed at
+   `γ = 0.01, α = 0.10, p = 0.10`.
 
    ```
-   FILTER at n = 1 / 8 / 64 / 256: [four percentages, 4 dp] ______ ______ ______ ______
-   the property of that row, in one word: ______________
+   FILTER output at n = 1 / 8 / 64 / 256: [four percentages, 4 dp] ______ ______ ______ ______
+   FILTER accepted-output composition: [percentage, 4 dp] ______; property: ______________
    RANKER at n = 1 / 8 / 64 / 256: [four percentages, 4 dp] ______ ______ ______ ______
    the ratio at n = 256: [a number, 2 dp] ______×
    the ranker's formula IS pass@n for [a noun phrase] ____________________

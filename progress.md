@@ -2,16 +2,17 @@
 
 ## Current Status
 
-- Current week: **Week 06 — GRPO & RL with Verifiable Rewards — IN PROGRESS (3/5)**.
-  Week 05 COMPLETE (5/5), Week 04 COMPLETE (5/5). **385 property-based checks across Week 5**
-  (`preference_models.py` 74, `dpo.py` 42, `dpo_trainer.py` 51, `variants.py` 126,
-  `dpo_lab.py` 92). Week 6 so far: `grpo.py` **96**, `rlvr.py` **112**, `sampling.py` **73**
-  = **281**.
-- Current day: **Week 6 Day 03 DONE** — *sampling, pass@k & rejection sampling*.
-  `code/sampling.py`, **73 staged checks**, ten stages, 0 failures, clean under
-  `-W error::RuntimeWarning`. TODO 1 and two-thirds of TODO 2 his; the rest tutor-written at
-  his request at the end of a long session.
-  **Thesis — pass@k is not a capability; it is a capability COMPOSED WITH A SELECTOR you do
+- Current week: **Week 06 — GRPO & RL with Verifiable Rewards — COMPLETE (5/5)**.
+  **462 staged checks** across the week: `grpo.py` **96**, `rlvr.py` **112**,
+  `sampling.py` **73**, `curriculum.py` **106**, `mini_rlvr.py` **75**. Fast and full Day 5
+  suites are clean under `-W error::RuntimeWarning`.
+- Current day: **Week 6 Day 05 DONE** — *mini RLVR/GRPO capstone*. The composed loop preserves
+  the truth boundary, calibrates only the scheduling sensor, evaluates deployable selectors
+  separately from oracle pass@k, and uses paired random events across ablation arms. Full result:
+  final-policy controller effect **+0.0041 per 1,000 rollouts**, paired spread
+  **0.0021 → null**; leaky calibrated gold gain **−0.0051**, verifier–gold gap **0.2405**.
+  **Thesis: every `p` needs an event type.**
+- Historical Day 3: **pass@k is not a capability; it is a capability COMPOSED WITH A SELECTOR you do
   not have.** Three selectors, three limits, same policy: **oracle → 1**, **BoN/filter → the
   verifier's PRECISION** (measured saturating at **0.321655** while pass@k → **1.000000**),
   **majority vote → 1 if the modal answer is right else 0**.
@@ -32,11 +33,12 @@
   pass@101 = **1.000000**; control (modal answer correct) **0.4500 → 0.8701**. pass@k is
   monotone in k *by construction* and cannot do this — maj@k lives on **answers**, pass@k on
   **sequences**, and the map between them is many-to-one.
-  **Headline 3 — FILTER vs RANKER: 10.16× from the selection rule alone.** Same verifier
-  (γ=.01, α=.10), same p=.10, same n=256. Filter `γ(1−p)/[γ(1−p)+(1−α)p]` = **9.0909%** and is
-  **n-INVARIANT** (MC 9.1342/9.0926/9.0785/9.0935 at n=1/8/64/256) because it emits *every*
-  accepted sample. Ranker = `1 − (1−γ)^n` = **pass@n for the HACK SET** = **1.0000 / 7.7255 /
-  47.4404 / 92.3685 %**. *Same verifier, same budget, 9.09% vs 92.37%.*
+  **Headline 3 — FILTER vs RANKER: 9.91× from the selection rule alone.** Same verifier
+  (γ=.01, α=.10), same p=.10, same n=256. The filter's accepted-output composition
+  `γ(1−p)/[γ(1−p)+(1−α)p]` is **9.0909%, n-INVARIANT**; its unconditional fallback risk is
+  **0.9000 / 5.1426 / 9.0794 / 9.0909%** at n=1/8/64/256. Ranker
+  `1 − [1−(1−p)γ]^n` = **pass@n for policy hack mass `(1−p)γ`** =
+  **0.9000 / 6.9772 / 43.9322 / 90.1178%**. *Equal at n=1; 9.09% vs 90.12% at n=256.*
   **Headline 4 — the estimator, and Jensen.** Unbiased `1 − C(n−c,k)/C(n,k)` to **7.772e-16**
   by **exchangeability**; the plug-in is `f(p̂)` with f **concave** so it **UNDER**-reports —
   **0.493747 vs truth 0.651322 = 24.19% thrown away** at n=10,p=.1,k=10. Aggregate order
@@ -70,8 +72,9 @@
   **"probability integral transform"** and **"Uniform(0,1)"** blank. *He can execute the object
   and cannot name it* — identical to Jensen on Block 3, which he repaired 40 min later.
   **Wrong-level family: 14th sighting**, and the two sharpest yet. (13) He substituted the
-  filter's **posterior** (9.09%) where the ranker's **per-sample rate** (γ=1%) was required —
-  arithmetic flawless, modelling one level off. (14) `pass_at_k` returned `product` =
+  filter's **posterior** (9.09%) where the ranker's **per-draw hack mass**
+  (`(1−p)γ=0.9%`) was required — arithmetic flawless, modelling one level off.
+  (14) `pass_at_k` returned `product` =
   P(all k wrong) instead of `1 − product`, inverting both edge cases; the docstring warned
   about this exact error. Note the trap: at c=1 it returns **0.5, which is correct**, because
   0.5 is the fixed point of x ↦ 1−x.
@@ -528,7 +531,7 @@
 | 03 | RL foundations | Complete (5/5) | Toy policy-gradient implementation (213 checks) |
 | 04 | RLHF + PPO | Complete (5/5) | Toy PPO-RLHF loop + failure-mode demos (515 checks) |
 | 05 | DPO + preference optimization | Complete (5/5) | DPO trainer + failure-mode lab (385 checks) |
-| 06 | GRPO + RLVR | In progress (3/5) | Mini RLVR repo (281 checks so far) |
+| 06 | GRPO + RLVR | Complete (5/5) | Mini RLVR capstone + cheat sheet (462 checks) |
 | 07 | Evals + reward modeling | Not started | Eval harness |
 | 08 | Training/inference systems | Not started | Systems design doc |
 | 09 | Capstone | Not started | Polished repo + writeup |
@@ -551,9 +554,10 @@ Topics to revisit:
   the scope condition in the same breath as the number* — the claim is "the collapse needs a
   mechanism", NOT "RL never narrows a policy".
 - [ ] **FILTER vs RANKER — the same verifier is two different instruments** (W6 D3). Filter
-  composition `γ(1−p)/[γ(1−p)+(1−α)p]` = **9.0909%, n-INVARIANT** (it emits *every* accepted
-  sample). Ranker composition `1 − (1−γ)^n` = **pass@n for the HACK SET** = **92.3685%** at
-  n=256. **10.16× from the selection rule alone.** Pairs with D2's selection law.
+  accepted-output composition `γ(1−p)/[γ(1−p)+(1−α)p]` = **9.0909%, n-INVARIANT**; its
+  unconditional fallback risk reaches **9.0909%** at n=256. Ranker hack probability
+  `1 − [1−(1−p)γ]^n` = **pass@n for policy hack mass `(1−p)γ`** = **90.1178%** at n=256.
+  **9.91× from the selection rule alone.** Pairs with D2's selection law.
 - [ ] **THE PLUG-IN pass@k IS BIASED LOW BY JENSEN** (W6 D3). `1 − (1−c/n)^k` is `f(p̂)` with f
   **concave** ⇒ under-reports: **0.493747 vs 0.651322 = 24.19%** at n=10,p=.1,k=10. Unbiased
   form `1 − Π_{i=0}^{k−1}(n−c−i)/(n−i)`, proved by **exchangeability** (one probability, two
@@ -1099,3 +1103,42 @@ a division guard. Every one was found by a check the learner could have run unai
 0.40 / DEAD_LEVEL 0.60 / FLOOR_SHARE 0.125`, all four rules with distinct fire-sets over 6
 fixtures × 5 paired seeds. `floor_violated` only works as a **share of budget**, not a mean —
 as a mean it is silent on the fixture built for it.
+
+---
+
+## Week 6 Day 5 — Mini RLVR / GRPO Loop (complete)
+
+**Thesis: every `p` needs an event type.** `p_obs` is verifier acceptance and controls reward
+deaths; `p_gold` is held-out correctness and controls oracle evaluation/curriculum value;
+`p_answer[a]` controls voting. The capstone composes all four prior days without allowing these
+events to collapse into one unnamed "success rate."
+
+`code/mini_rlvr.py` is complete at **75/75 checks** in both fast and full regimes. Its ten stages
+cover contracts, sensor inversion, rollout laws, truth-boundary mutation, the imported estimator,
+controller timing, selector separation, deterministic training, paired ablation, and calibrated
+diagnostics.
+
+**Pre-registered ablation result.** Across five paired full-regime seeds, calibrated band tracking
+improved final-policy gold pass@8 by **+0.014309 per 1,000 rollouts** versus **+0.010175** for
+uniform sampling. The paired effect was **+0.004134** with spread **0.002114**. Conclusion:
+**null / unresolved**, not a controller win.
+
+**Calibration result.** Honest raw/calibrated policies are bit-identical (**max θ difference
+0.000000**). Calibration reduces sensor error by **0.076343** on the starved fixture and
+**0.365958** on the leaky fixture. It does not repair the leaky objective: calibrated gold
+pass@8 changes **−0.005075** over 1,344 rollouts and the final verifier–gold gap is **0.240452**.
+
+**Truth boundary.** Mutating `gold` while holding θ, samples, RNG, `accept`, and the data policy
+fixed leaves final θ bit-identical. Mutating reachable `accept` changes θ, and all-zero `accept`
+is an exact no-op. Perturbed twins remain a separate contamination test and require a clean
+post-cutoff/private control.
+
+**Learner model.** The learner supplied the calibration core, correctly explained why gold can
+evaluate but not construct a ranker, repaired the KL-level diagnostic, caught the homogeneous-p
+inconsistency in the pass@64 interview prompt, and independently separated truth-boundary from
+contamination testing. The tutor completed TODO 2 on request and wrote TODOs 3–4 after conceptual
+checks; this ownership limitation is recorded in the retrospective.
+
+**Closeout complete.** Day 5 deliverable, numbers card, two outstanding Day 3 interview entries,
+new capstone interview entry, week summary, retrospective, progress, and handoff are updated.
+Next: **Week 7 Day 1**.

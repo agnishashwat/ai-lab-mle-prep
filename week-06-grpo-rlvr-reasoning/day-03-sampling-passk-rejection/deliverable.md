@@ -37,8 +37,9 @@ the dead-group law  = P(dead) = [1 − pass@G] + p^G
 the reweighting     = ∂pass@k/∂p = k(1−p)^(k−1)
 best-of-n as KL     = KL(BoN_n ‖ π) = log n − (n−1)/n          (continuous score)
 BoN with ties       = P(max at level s) = (F_s + m_s)^n − F_s^n
-filter composition  = γ(1−p) / [γ(1−p) + (1−α)p]               — independent of n
-ranker composition  = 1 − (1−γ)^n                              — pass@n for the HACK set
+filter composition  = γ(1−p) / [γ(1−p) + (1−α)p]               — conditional on acceptance
+filter hack prob.   = [1−(1−p_obs)^n] · filter composition      — first-sample fallback
+ranker hack prob.    = 1 − [1−(1−p)γ]^n                        — pass@n for hack mass (1−p)γ
 ```
 
 ## Implementation Notes
@@ -90,8 +91,9 @@ pass@infinity, and it is truncation.*
 at k=2/4/8/16/64/256/1024. Peak **0.4749 at k=16**, back to zero by k=1024, because both curves
 saturate. *The gap is largest exactly in the range people report.*
 
-**Selectors.** A sound verifier makes BoN@k **equal** pass@k at every k. An unsound one makes it
-converge to **precision 0.321655** while pass@k → **1.000000**. maj@k on a fixture whose modal
+**Selectors.** An exact verifier (`V=C`) makes BoN@k **equal** pass@k at every k; soundness alone
+does not suffice when the verifier is incomplete. An unsound verifier makes BoN converge to
+**precision 0.321655** while pass@k → **1.000000**. maj@k on a fixture whose modal
 answer is wrong: **0.3500 / 0.3517 / 0.3563 / 0.3508 / 0.3231 / 0.2764** at k=1/3/9/21/51/101 —
 rises, peaks near k≈9, then falls, while pass@101 = **1.000000**. Control: when the mode is
 correct, maj@k rises **0.4500 → 0.8701**.
@@ -100,17 +102,18 @@ correct, maj@k rises **0.4500 → 0.8701**.
 same budget:
 
 ```text
-  n        FILTER  P(hack|emitted)      RANKER  P(hack|emitted)
-  1              9.1342%                       1.0000%
-  8              9.0926%                       7.7255%
-  64             9.0785%                      47.4404%
-  256            9.0935%                      92.3685%
+  n        FILTER P(hack output)        RANKER P(hack output)
+  1              0.9000%                       0.9000%
+  8              5.1426%                       6.9772%
+  64             9.0794%                      43.9322%
+  256            9.0909%                      90.1178%
 ```
 
-Filter is **n-invariant** (closed form 9.0909%) because it emits *every* accepted sample, so the
-composition of the emitted set is the composition of one accepted sample. Ranker is
-`1 − (1−γ)^n` — **pass@n for the hack set**. At n=256: **9.09% vs 92.37%, a 10.16× difference
-from the selection rule alone.**
+The filter's **accepted-output composition** is n-invariant (closed form 9.0909%). Its
+unconditional hack probability includes the chance of finding any accepted sample, so it equals
+the ranker at n=1 and approaches 9.0909%. Ranker is `1 − [1−(1−p)γ]^n` — **pass@n for policy
+hack mass `(1−p)γ`**. At n=256: **9.09% vs 90.12%, a 9.91× difference from the selection rule
+alone.**
 
 **Best-of-n as a KL knob.** `KL(BoN_n ‖ π) = log n − (n−1)/n` = **0.1931 / 1.2044 / 3.1745 /
 4.5491** nats at n=2/8/64/256. `√KL` at n=64 is **1.7817**. Each doubling adds ~log 2 —
@@ -197,8 +200,10 @@ So the first question is which selector you intend to ship, and the second is wh
 **sound**. The gap between 30 and 85 is only bankable to the extent you have something that can
 find the right sample — and *how* you spend the budget matters more than its size. Same
 verifier, same n=256: used as a **filter**, 9.09% of what you emit is a false accept, and that
-number is *independent of n*. Used as a **ranker**, it is 92.37%, because a ranker is running
-pass@n on the hack set. **10.16× worse from the selection rule alone.**
+accepted-output composition is *independent of n*; under fallback its unconditional risk approaches
+that value as abstention vanishes. Used as a **ranker**, the probability of at least one top-scored
+hack is 90.12%, because a ranker is running pass@n on policy hack mass `(1−p)γ`.
+**9.91× worse from the selection rule alone.**
 
 One caveat on the 85% itself: if it was computed as `1 − (1 − c/n)^k` it is biased **low** by
 Jensen — at n=10, k=10 that estimator returns 0.4937 against a truth of 0.6513, a **24%**

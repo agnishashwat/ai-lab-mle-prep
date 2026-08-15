@@ -459,16 +459,17 @@ Format: `quantity = value (condition)`.
 - **FILTER vs RANKER — same verifier (γ=0.01, α=0.10), same p=0.10, same budget:**
 
 ```text
-  n         FILTER P(hack|emitted)      RANKER P(hack|emitted)
-  1               9.1342%                      1.0000%
-  8               9.0926%                      7.7255%
-  64              9.0785%                     47.4404%
-  256             9.0935%                     92.3685%
+  n         FILTER P(hack output)       RANKER P(hack output)
+  1               0.9000%                      0.9000%
+  8               5.1426%                      6.9772%
+  64              9.0794%                     43.9322%
+  256             9.0909%                     90.1178%
 ```
 
-  Filter is **n-INVARIANT** (closed form **9.0909%**) — it emits *every* accepted sample, so the
-  emitted composition is one accepted sample's composition. Ranker is `1 − (1−γ)^n` = **pass@n
-  for the HACK SET**. At n=256: **9.09% vs 92.37% = 10.16×, from the SELECTION RULE alone**
+  The filter's **accepted-output composition** is n-invariant at **9.0909%**. Its unconditional
+  risk under first-sample fallback is `[1−(1−p_obs)^n]` times that posterior, so both selectors
+  equal **0.9000% at n=1**. Ranker hack probability is `1 − [1−(1−p)γ]^n` = **pass@n for policy
+  hack mass `(1−p)γ`**. At n=256: **9.09% vs 90.12% = 9.91×, from the selection rule alone**
 - **best-of-n IS a KL knob.** `KL(BoN_n ‖ π) = log n − (n−1)/n` = **0.1931 / 1.2044 / 3.1745 /
   4.5491** nats at n=2/8/64/256; **√KL at n=64 = 1.7817**; each doubling ≈ log 2, **measured
   +0.6853 nats** from n=64→128. **TIES make BoN LESS selective**, so a discrete score gives
@@ -529,8 +530,10 @@ Format: `quantity = value (condition)`.
 
 **The verifier is a multiplier, not a preference.**
 
-- `U = E[Σ A_i s̃_i] = 2(G−1)p(1−p)J = J·E[Σ|A|]` under **s̃ = 2s−1** — so **J is exactly
-  the fraction of the advantage mass that is useful**. With s ∈ {0,1} you get half
+- `U = E[Σ A_i s̃_i] = 2(G−1)p(1−p)J = J·M_gold` under **s̃ = 2s−1**, where
+  `M_gold=2(G−1)p(1−p)` is counterfactual gold-reward advantage mass. With s ∈ {0,1} you get half
+- observed verifier-reward mass is `M_obs=2(G−1)p_obs(1−p_obs)`, so its useful fraction is
+  `U/M_obs`, not generally `J`
 - **`argmax_p U = 1/2` for EVERY (α,γ) with J > 0** — verified at (0,0), (.1,.01),
   (.3,.05), (.45,.50). A verifier **cannot tilt a curriculum**
 - **α + γ = 1 ⇒ U ≡ 0 in p**, exactly. Healthy |A|, healthy dead_frac, zero learning,
@@ -623,3 +626,30 @@ Fire-sets, and they are all distinct — which is what non-collinearity actually
 below the floor" the same runs read **0.000…0.172** and straddle. The mean is dominated
 by the prompts you are training on *correctly*; the question "are we training where the
 verifier cannot be trusted" is about the **tail of the budget**, not the average prompt.
+
+## Week 6 Day 5 — mini RLVR/GRPO loop (`code/mini_rlvr.py`, **75 checks**)
+
+- **THE THESIS: every `p` needs an event type.** `p_obs` drives reward-group deaths;
+  `p_gold` drives oracle pass@k and curriculum value; `p_answer[a]` drives voting.
+- **sensor identity:** `p_obs = γ + (1−α−γ)p_gold = γ + Jp_gold`; inverse
+  `p̂_gold = (p̂_obs−γ)/J`, with raw inverse retained, scheduling estimate projected, and
+  **`J≤0` rejected**.
+- **truth boundary:** mutate `gold` with θ/samples/RNG/`accept`/data policy fixed ⇒ final θ
+  **bit-identical**; mutate reachable `accept` ⇒ θ changes; all-zero `accept` ⇒ exact no-op.
+- **paired randomness:** one uniform for every `(step,prompt,draw)`, including inactive prompts;
+  separate sampler RNG. Different controller arms never shift each other's rollout stream.
+- **honest negative control:** raw vs calibrated final θ difference **0.000000 exactly** over
+  5 seeds.
+- **calibration repairs the coordinate:** starved sensor-error reduction mean **0.076343**
+  (range **0.063569–0.090097**); leaky mean **0.365958**
+  (**0.311036–0.401402**).
+- **calibration does not repair the objective:** leaky calibrated gold pass@8 gain
+  **−0.005075** over 1,344 rollouts, final verifier–gold gap **0.240452**.
+- **controller result is a NULL at the final-policy endpoint:** per 1,000 rollouts, band gain
+  **+0.014309**, uniform gain **+0.010175**; paired effect **+0.004134**, spread **0.002114**.
+- **one policy, six non-interchangeable numbers** on the leaky step-0 panel:
+  verifier pass@8 **0.999956**, oracle gold pass@8 **0.764608**, filter **0.391510**,
+  ranker **0.419953**, vote **0.332450**, precision **0.383829**.
+- **diagnostic thresholds, measured:** dead budget **0.584583**, sensor mismatch **0.166659**,
+  reward hacking **0.110000**, selector gap **0.150000**, KL runaway **0.430424**.
+  Every rule is strict `measured > threshold`, reads a tail level, and is silent on health.

@@ -4,6 +4,8 @@
 
 Understand modern reasoning-focused RL: verifiable rewards, group baselines, pass@k, curriculum.
 
+**Status:** Complete - **462 staged checks** across five code artifacts.
+
 ## Weekly Deliverable
 
 Mini RLVR repo: generate N completions, score with a verifier, compute group advantages, update policy (or simulate the update math).
@@ -39,5 +41,6 @@ By the end of this week, I should be able to:
 - `code/` - reusable code for the week
 - `notes/` - exploratory notes, paper notes, scratch derivations
 - `artifacts/` - polished outputs (diagrams, notebooks, reports)
+- `cheat-sheet.md` - full Week 6 retrieval sheet: equations, numbers, debugging, interview cards
 - `week-summary.md` - condensed explanation written after finishing the week
 - `retrospective.md` - what clicked, what was confusing, what to review

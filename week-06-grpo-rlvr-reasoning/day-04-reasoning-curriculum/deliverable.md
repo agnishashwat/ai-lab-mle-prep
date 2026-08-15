@@ -38,8 +38,9 @@ coexist happily.
     p* = 1/2  ⟺  a = b + k − 1                          (NOT ⟺ k = 1)
     G*        = ln(0.1)/ln(1 − p*) ≈ 2.3026·k           (single-sided; see caveat)
     U(p)      = E[Σ A_i·s̃_i] = 2(G−1)·p(1−p)·J          (±1 convention: s̃ = 2s−1)
-              = J · E[Σ|A|]      ⇒ J is exactly the USEFUL FRACTION of the mass
-    ratio     = U/mass = p(1−p)J / [p_obs(1−p_obs)]     the SNR; → 1 as p→0 iff γ = 0
+              = J · M_gold,  M_gold = 2(G−1)p(1−p)       counterfactual gold mass
+    mass_obs  = 2(G−1)p_obs(1−p_obs)                     verifier-reward advantage mass
+    ratio     = U/mass_obs = p(1−p)J/[p_obs(1−p_obs)]   the SNR; → 1 as p→0 iff γ = 0
     p_floor   = γ(1−τ) / [τ(1−α) + γ(1−τ)]
     J         = 1 − α − γ                                (Youden)
     ΣA² (cen) = c(G−c)/G                                 vs G under whitening
@@ -50,8 +51,8 @@ coexist happily.
 
 - **The ±1 convention is not cosmetic.** With `s ∈ {0,1}` failures contribute nothing
   to `Σ A_i s_i` even though their negative advantages are doing real work, and you
-  get exactly half. `s̃ = 2s−1` gives the factor 2 and makes `J` the useful fraction.
-  Say which one you are quoting.
+  get exactly half. `s̃ = 2s−1` gives the factor 2 and makes `U=J·M_gold`, where
+  `M_gold` is counterfactual gold-reward advantage mass. Say which convention you are quoting.
 - **`mass` is at `p_obs`, `U` is at `p`.** They have different denominators. Conflating
   them is what made me write "ratio → J, constant in p", which is false.
 - **Verify the bracket.** `_tilt_to_target` bisected a non-monotone map — gold

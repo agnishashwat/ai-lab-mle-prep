@@ -52,7 +52,8 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
   **+0.7514 → −0.4532** (worse than its own reference) at 100% train accuracy with the loss
   falling monotonically. `week-summary.md` + `retrospective.md` written.
 
-- **Week 06 — IN PROGRESS (Days 01-03 done). GRPO & RL with verifiable rewards.** Day 1
+- **Week 06 — COMPLETE (Days 01-05 done). GRPO & RL with verifiable rewards. 462 checks
+  across the week.** Day 1
   `grpo.py`, **96 checks**, ten stages, 5.9 s full / 3.2 s `--fast`, **all four TODOs his**.
   Thesis: *GRPO does not delete the value function; it replaces a LEARNED estimate of E[r|x]
   with a MONTE-CARLO one, and unlike a critic that estimate vanishes exactly where the policy
@@ -106,13 +107,25 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
   you are running*; **T\* moves with k only under heterogeneity** (0.20 → 3.00, transition
   bracketed between k=4 and k=8; homogeneous set gives 0.20 at every k); the dead-group law and
   pass@G are the **same algebra** (`P(dead) = p^G + (1 − pass@G)`, identity to 5.551e-17, dead
-  **66.3420%** at p=.05 and p=.95 with failure shares 100%/0%); **filter vs ranker = 10.16×**
-  from the selection rule alone (filter **9.0909% n-INVARIANT**, ranker = **pass@n for the hack
-  set** = 92.3685% at n=256); best-of-n costs **log n − (n−1)/n** = 0.1931/1.2044/3.1745/4.5491
+  **66.3420%** at p=.05 and p=.95 with failure shares 100%/0%); **filter vs ranker = 9.91×**
+  from the selection rule alone (filter accepted-output composition **9.0909% n-INVARIANT**,
+  unconditional fallback risk **9.0909%** at n=256; ranker `1−[1−(1−p)γ]^n` =
+  **90.1178%**); best-of-n costs
+  **log n − (n−1)/n** = 0.1931/1.2044/3.1745/4.5491
   nats at n=2/8/64/256 (**+0.6853 per doubling**, and **ties make BoN cheaper**: 2.0507 <
   3.1745 at n=64); and the correlation gap is **UNIMODAL, not monotone** — peaks **0.4749 at
   k=16** and returns to 0, overturning my own session-plan claim. Crossover k reported as the
   **bracket [16, 64, 16, 64, 64]** across five seeds, never as a point estimate.
+  Day 4 `curriculum.py`, **106 checks**. Thesis: *a curriculum is a controller whose set point
+  depends on the metric*: `p*=a/(a+b+k−1)`, reducing to `1/(k+1)`. The verifier multiplies
+  useful signal by `J`; false positives impose a precision floor instead of tilting the optimum.
+  At pass@64 with G=8, **88.34%** of groups are dead at the nominal set point.
+  Day 5 `mini_rlvr.py`, **75 checks** in fast and full regimes. Thesis: **every `p` needs an
+  event type**. The truth-boundary mutation is bit-identical, honest raw/calibrated arms are
+  exactly identical, and calibration repairs sensor error but not an unsound objective. Full
+  paired result at the final-policy endpoint: controller **+0.0041 per 1,000 rollouts**, spread
+  **0.0021 → null**; leaky calibrated gold gain **−0.0051**, verifier–gold gap **0.2405**. Week
+  summary and retrospective are written.
 
 ## SESSION-FORMAT PREFERENCE (he stated this explicitly on W4 D1 — obey it)
 
@@ -148,18 +161,19 @@ it is never the block that gets dropped for time.**
   reference value is intact; the retrieval value of those five entries is spent.** Do not
   repeat this: next time, hold the line, or at most write ONE entry as a worked model and make
   him write the next. On W5 D5 the same request was granted and the block scored nothing.
-- **`rl-post-training-qa.md`'s W6 questions are now WRITTEN** — "GRPO vs PPO", "Why KL to a
-  reference policy", "KL spikes / reward improves / human evals degrade", "what makes a reward
-  verifiable", and "your math verifier is 97% accurate". **The back-fill debt is cleared.**
-  Three entries remain blank: RLHF pipeline, PPO clipped objective, DPO. **Drill those next**,
-  and make him write them.
+- **`rl-post-training-qa.md`'s Week 6 questions are all written.** The two outstanding Day 3
+  entries (pass@64/pass@1 and BoN-64) and the Day 5 truth-boundary entry were completed from the
+  learner's own answers on D5. Precision repairs are marked explicitly rather than substituted
+  as tutor models.
 
 ## Next session
 
-Start with the prompt: **"Start Week 6 Day 4"**. Read `week-06-*/day-04-*/README.md` and build
-the session. **W6 D3 is CLOSED** — `deliverable.md` written, `progress.md`, the Review Queue and
-the numbers card updated, `sampling.py` at **73/73**, and **two more interview-bank entries
-filled** (Q1 RLHF pipeline, Q3 DPO).
+Start with the prompt: **"Start Week 7 Day 1"**. Week 6 is closed: all five code artifacts,
+deliverables, the numbers card, interview bank, week summary, retrospective, progress, and this
+handoff are current. Begin Week 7 from its existing README/session template; do not reopen the
+Day 5 capstone unless a regression appears.
+
+### Historical session instructions
 
 **FOUR MANDATORY RULES FOR D4 (all standing, all earned by direct test):**
 
@@ -204,8 +218,10 @@ filled** (Q1 RLHF pipeline, Q3 DPO).
   0.3563 (k=9) → 0.2764 (k=101) against pass@101 = 1.000000. Any D4 eval claim must name its
   selector before it names a capability.
 - **FILTER vs RANKER is the reusable frame.** Filter composition is **n-invariant**
-  (`γ(1−p)/[γ(1−p)+(1−α)p]` = 9.0909%); ranker composition is **`1 − (1−γ)^n` = pass@n for the
-  hack set** (92.3685% at n=256). **10.16× from the selection rule alone.** This is D2's
+  conditional on an accepted emission (`γ(1−p)/[γ(1−p)+(1−α)p]` = 9.0909%); under fallback,
+  unconditional risk approaches that value. Ranker hack probability is
+  **`1−[1−(1−p)γ]^n` = pass@n for policy hack mass `(1−p)γ`** (90.1178% at n=256).
+  **9.91× from the selection rule alone.** This is D2's
   selection law at inference, and it generalises to anything that picks an argmax of a noisy
   score — which is most of Week 7.
 - **BEST-OF-n IS A KL KNOB.** `log n − (n−1)/n` = **0.1931/1.2044/3.1745/4.5491** nats at
@@ -250,8 +266,9 @@ Block 3 — which he then **repaired 40 minutes later** once the name was said a
 are retrievable; they are just not *first*. **Prescription: drill naming BEFORE deriving.**
 
 **FINDING 2 — wrong-level is now at 14 sightings, and D3 produced the two sharpest.**
-*(13)* He substituted the filter's **posterior** (9.09%) where the ranker's **per-sample rate**
-(γ = 1%) was required. His arithmetic was flawless — `1 − 0.909091^8 = 53.35%` is exactly right
+*(13)* He substituted the filter's **posterior** (9.09%) where the ranker's **per-draw hack mass**
+(`(1−p)γ = 0.9%`) was required. His arithmetic was flawless —
+`1 − 0.909091^8 = 53.35%` is exactly right
 *for the input he chose*. The modelling was one level off and the arithmetic faithfully
 propagated it. **The error family is not carelessness: it is failing to check what KIND of
 object a slot wants before filling it.**
@@ -798,6 +815,18 @@ coding → deliverable.**
 
 ## Completed
 
+- **W6 D5 — mini RLVR/GRPO capstone.** Built
+  `week-06-grpo-rlvr-reasoning/code/mini_rlvr.py`, **75/75 checks** in
+  fast and full modes under runtime-warning errors. Composes D1–D4 through explicit event
+  boundaries: `p_obs` for reward deaths, `p_gold` for held-out evaluation/curriculum value, and
+  `p_answer` for voting. Truth mutation leaves the fixed-data-policy update bit-identical;
+  accept mutation changes it. Final-policy paired result per 1,000 rollouts: controller effect
+  **+0.004134**, spread **0.002114 → null**. Calibration repairs starved/leaky sensor error by
+  **0.076343/0.365958**, but leaky gold falls **0.005075** over 1,344 rollouts and the final
+  verifier–gold gap remains **0.240452**.
+- **W6 D4 — reasoning curriculum.** Built `curriculum.py`, **106/106 checks**. Set point
+  `p*=a/(a+b+k−1)`, precision floor, logit-space controller, whitening tilt, contamination
+  training cost, and four calibrated diagnostics with one measured cut rule.
 - **W6 D2 — RL with verifiable rewards: what "verifiable" buys and what it does not.** Built
   `week-06/code/rlvr.py` (**112 staged checks**, ten stages, 5.9 s full / 4.9 s `--fast`, under
   `-W error::RuntimeWarning`); **all four TODOs his.**
@@ -2162,6 +2191,19 @@ coding → deliverable.**
   each function the moment he writes it, not after finishing the file.
 - **Auto-commit + push is authorized** (`agnishashwat` identity; see
   `.cursor/rules/auto-commit.mdc`). Confirm only for destructive git ops or secrets.
+- **GitHub auth trap:** the persisted `gh` account is `agnishashwat`, but `GH_TOKEN` belongs to
+  `sshivam_LinkedIn` and overrides the keyring. Run personal GitHub CLI commands as
+  `env -u GH_TOKEN gh ...`.
+- **Git push credential trap:** global and local `credential.helper=store` entries accumulate and
+  can return the stale LinkedIn credential first. Clear the helper chain for personal pushes:
+
+  ```bash
+  env -u GH_TOKEN git \
+    -c credential.helper= \
+    -c credential.helper='!gh auth git-credential' \
+    push
+  ```
+
 - Each day ends by writing that day's `deliverable.md` and updating `progress.md` + this file.
 
 ## Running facts to reinforce (spaced repetition)
@@ -2209,11 +2251,13 @@ coding → deliverable.**
   three edge cases fall out of the product). The proof is **exchangeability** — one probability
   computed two ways — not a binomial expansion. Corollary: **the mean goes OUTSIDE** (0.6250 vs
   0.9960 on identical data).
-- **THE SAME VERIFIER IS TWO INSTRUMENTS: FILTER vs RANKER, 10.16× apart.** A filter emits
-  *every* accepted sample, so its composition `γ(1−p)/[γ(1−p)+(1−α)p]` = **9.0909% is
-  n-INVARIANT**. A ranker emits the argmax, so its composition is **`1 − (1−γ)^n` = pass@n over
-  the HACK SET** = **92.3685%** at n=256. Same checker, same policy; only the selection rule
-  differs. Scaling n scales *selection pressure on the flaw*.
+- **THE SAME VERIFIER IS TWO INSTRUMENTS: FILTER vs RANKER, 9.91× apart.** A filter emits
+  uniformly from accepted samples, so its accepted-output composition
+  `γ(1−p)/[γ(1−p)+(1−α)p]` = **9.0909% is n-INVARIANT**; under fallback, unconditional risk
+  approaches that value. A ranker emits the argmax, so its hack probability is
+  **`1−[1−(1−p)γ]^n` = pass@n over policy hack mass `(1−p)γ`** = **90.1178%** at n=256.
+  Same checker, same policy; only the selection rule differs. Scaling n scales *selection
+  pressure on the flaw*.
 - **BEST-OF-n IS A KL YOU DID NOT BUDGET:** `log n − (n−1)/n` = **0.1931/1.2044/3.1745/4.5491**
   nats at n=2/8/64/256, **+0.6853 per doubling**. And **ties make BoN LESS selective**, so a
   discrete score is strictly cheaper (**2.0507 < 3.1745** at n=64) — the continuous formula is
@@ -2657,3 +2701,15 @@ coding → deliverable.**
   session: `np.where(mask, U/mass, 0)` still raises `divide by zero`. Sanitise the denominator
   *first* (`np.where(mass > 0, mass, 1.0)`), then divide. And guard the variable the contract
   names: a mask on `p ∈ (0,1)` is not a mask on `mass == 0`.
+- **COMMON RANDOM NUMBERS MUST BE INDEXED BY THE EVENT, not by control flow.** W6 D5
+  pre-generates one uniform for every `(step,prompt,draw)`, including inactive prompts, and uses
+  a separate sampler RNG. Otherwise two controller arms that choose different prompts shift all
+  later randomness and the paired difference is confounded. Inactive uniforms are discarded,
+  never cached as rollouts.
+- **CALIBRATION REPAIRS A COORDINATE, NOT AN OBJECTIVE.** The D5 leaky arm reduced sensor error
+  by **0.365958** while final-policy gold pass@8 fell **0.005075** and verifier–gold stayed split
+  by **0.240452**. `p̂_gold=(p̂_obs−γ)/J` can tell the scheduler where it is; it cannot make a
+  false-positive reward correct.
+- **A PLATEAU CAN STILL BE RUNAWAY.** Diagnostic rules on KL/support read tail **levels**, not
+  continued trends. Requiring KL to keep increasing declares a policy healthy the moment it
+  settles far outside `π_ref`.

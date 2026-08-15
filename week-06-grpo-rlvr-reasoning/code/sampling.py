@@ -20,8 +20,8 @@ THE THESIS
         maj@k  -> 1   iff correct is the MODAL answer  MASS
 
     -- and, when the selector is wrong, two different FAILURE SHAPES. A FILTER's
-    output composition is independent of n; a RANKER's is 1 - (1-gamma)^n, which
-    is pass@n pointed at your verifier's error set.
+    accepted-output composition is independent of n; a RANKER's hack probability is
+    1 - [1 - (1-p)gamma]^n, which is pass@n pointed at the false-positive mass.
 
 THE IDENTITY THAT OPENS THE DAY (D1 and pass@k are the same algebra)
 
@@ -382,9 +382,11 @@ def selector_curves(probs: np.ndarray, gold: np.ndarray, accept: np.ndarray,
             P(gold | rejected) = P(gold and not accept) / (1 - a)
 
         THE RESULT THIS ENCODES: the first factor is the only place k appears.
-        A filter's OUTPUT COMPOSITION is n-invariant -- raising the budget changes
-        how often you emit ANYTHING, never what you emit. Contrast a RANKER
-        (`bon_distribution`), whose composition degrades as 1 - (1-gamma)^n.
+        A filter's ACCEPTED-OUTPUT COMPOSITION is n-invariant -- raising the
+        budget changes how often there is an accepted emission and therefore
+        changes unconditional output risk under the fallback. Contrast a RANKER
+        (`bon_distribution`), whose unconditional hack probability grows as
+        1 - [1 - (1-p)gamma]^n.
 
         GUARD BOTH DENOMINATORS. a = 0 and a = 1 are both reachable in the
         fixtures, and each kills exactly one of them. This is D2's six-NaNs
@@ -1145,7 +1147,7 @@ def stage_selectors(ctx: Ctx) -> None:
     _check("oracle IS pass@k, exactly",
            float(np.max(np.abs(cur.oracle - want))) < 1e-15,
            f"p_gold = {p_gold:.6f}, pass@64 = {want[-1]:.6f}")
-    _check("a SOUND verifier makes BoN@k EQUAL pass@k at every k",
+    _check("an EXACT verifier (V=C) makes BoN@k EQUAL pass@k at every k",
            float(np.max(np.abs(cur.bon - cur.oracle))) < 1e-12)
 
     # an UNSOUND verifier: BoN saturates BELOW 1 -- at the precision, not at 1
@@ -1180,7 +1182,7 @@ def stage_selectors(ctx: Ctx) -> None:
 
 
 def stage_filter_ranker(ctx: Ctx) -> None:
-    """a FILTER's composition is n-invariant; a RANKER's is 1 - (1-gamma)^n"""
+    """a FILTER's conditional composition is invariant; a RANKER compounds flaws"""
     _fail_fast(ctx, "selectors")
     p, alpha, gamma = 0.10, 0.10, 0.01
     law = gamma * (1 - p) / (p * (1 - alpha) + gamma * (1 - p))
@@ -1188,7 +1190,7 @@ def stage_filter_ranker(ctx: Ctx) -> None:
            abs(law - 0.0909090909) < 1e-9, f"{100 * law:.4f}%")
 
     rng = np.random.default_rng(0)
-    comps = []
+    conditional_comps = []
     for n in [1, 2, 8, 64, 256]:
         N = ctx.sim
         correct = rng.random((N, n)) < p
@@ -1198,18 +1200,26 @@ def stage_filter_ranker(ctx: Ctx) -> None:
         den = acc.sum(1)[any_acc]
         if den.size == 0:
             raise AssertionError("no accepted samples -- fixture is degenerate")
-        comps.append(float((num / den).mean()))
-    _check("FILTER: P(hack | emitted) is INDEPENDENT of n, within MC error",
-           max(abs(c - law) for c in comps) < 0.006,
-           "  ".join(f"n={n}:{100 * c:.4f}%" for n, c in zip([1, 2, 8, 64, 256], comps)))
+        conditional_comps.append(float((num / den).mean()))
+    _check("FILTER: P(hack | accepted emission) is INDEPENDENT of n",
+           max(abs(c - law) for c in conditional_comps) < 0.006,
+           "  ".join(f"n={n}:{100 * c:.4f}%" for n, c in
+                    zip([1, 2, 8, 64, 256], conditional_comps)))
 
-    ranker = [1 - (1 - gamma) ** n for n in [1, 8, 64, 256]]
-    _check("RANKER: P(hack | emitted) = 1 - (1-gamma)^n = pass@n FOR THE HACK SET",
-           abs(ranker[0] - 0.01) < 1e-12 and abs(ranker[-1] - 0.9236845) < 1e-6,
-           "  ".join(f"n={n}:{100 * r:.4f}%" for n, r in zip([1, 8, 64, 256], ranker)))
-    _check("SAME verifier, SAME budget n=256: filter 9.09% vs ranker 92.37%",
-           abs(comps[-1] - law) < 0.006 and ranker[-1] > 0.92,
-           f"{ranker[-1] / law:.2f}x worse, from the SELECTION RULE alone")
+    budgets = [1, 8, 64, 256]
+    p_obs = p * (1 - alpha) + (1 - p) * gamma
+    filter_hack = [(1 - (1 - p_obs) ** n) * law for n in budgets]
+    hack_mass = (1 - p) * gamma
+    ranker = [1 - (1 - hack_mass) ** n for n in budgets]
+    _check("RANKER: P(any top-scored hack) = 1-[1-(1-p)gamma]^n",
+           abs(ranker[0] - 0.009) < 1e-12 and abs(ranker[-1] - 0.901177566) < 1e-9,
+           "  ".join(f"n={n}:{100 * r:.4f}%" for n, r in zip(budgets, ranker)))
+    _check("COMPARABLE risk: equal at n=1, filter 9.09% vs ranker 90.12% at n=256",
+           abs(filter_hack[0] - ranker[0]) < 1e-12 and
+           abs(filter_hack[-1] - law) < 1e-12 and ranker[-1] > 0.90,
+           f"filter/ranker n=1: {100*filter_hack[0]:.2f}%/{100*ranker[0]:.2f}%; "
+           f"n=256: {100*filter_hack[-1]:.2f}%/{100*ranker[-1]:.2f}% "
+           f"({ranker[-1] / filter_hack[-1]:.2f}x)")
 
 
 def stage_bon_kl(ctx: Ctx) -> None:

@@ -21,12 +21,14 @@ THE THESIS
 
 THE SECOND THESIS -- the verifier is a MULTIPLIER, not a preference
 
-        E[sum_i |A_i|]     =  2(G-1) p(1-p)            total advantage mass
-        U = E[sum_i A_i s~_i] = 2(G-1) p(1-p) (1-alpha-gamma)      s~ = 2s-1
+        M_gold = 2(G-1) p(1-p)                         counterfactual gold mass
+        U = E[sum_i A_i s~_i] = M_gold (1-alpha-gamma)              s~ = 2s-1
 
-    so U = J * E[sum|A|] with J = 1 - alpha - gamma, YOUDEN'S J. The verifier
-    multiplies the whole curve by a CONSTANT IN p. It therefore does not TILT the
-    curriculum at all -- it cannot move the argmax. What it does is FLOOR it:
+    so U = J * M_gold with J = 1 - alpha - gamma, YOUDEN'S J. This is not J
+    times the observed verifier-advantage mass, which is
+    2(G-1)p_obs(1-p_obs). The verifier multiplies the gold-aligned curve by a
+    CONSTANT IN p. It therefore does not TILT the curriculum at all -- it cannot
+    move the argmax. What it does is FLOOR it:
 
         P(hack | rewarded) <= tau   <=>   p >= p_floor = R/(1+R),
         R = gamma(1-tau) / [tau(1-alpha)]
