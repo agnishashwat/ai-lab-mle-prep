@@ -2,16 +2,17 @@
 
 ## Current Status
 
-- Current week: **Week 06 — GRPO & RL with Verifiable Rewards — COMPLETE (5/5)**.
-  **462 staged checks** across the week: `grpo.py` **96**, `rlvr.py` **112**,
-  `sampling.py` **73**, `curriculum.py` **106**, `mini_rlvr.py` **75**. Fast and full Day 5
-  suites are clean under `-W error::RuntimeWarning`.
-- Current day: **Week 6 Day 05 DONE** — *mini RLVR/GRPO capstone*. The composed loop preserves
-  the truth boundary, calibrates only the scheduling sensor, evaluates deployable selectors
-  separately from oracle pass@k, and uses paired random events across ablation arms. Full result:
-  final-policy controller effect **+0.0041 per 1,000 rollouts**, paired spread
-  **0.0021 → null**; leaky calibrated gold gain **−0.0051**, verifier–gold gap **0.2405**.
-  **Thesis: every `p` needs an event type.**
+- Current week: **Week 08 — Training & Inference Systems — IN PROGRESS (1/5)**.
+  **Week 07 is intentionally deferred**, not skipped permanently.
+- Current day: **Week 8 Day 01 DONE** — *GPU memory math*. Built
+  `code/gpu_memory.py` with model-state, dense-tensor, MHA/GQA/MQA KV-cache,
+  activation-scenario, and KV-capacity accounting; **9 tests pass**.
+  **Thesis: a model fits only when its peak live bytes fit; parameter bytes are
+  one term, not the answer.**
+- Headline numbers: 7B BF16 weights = **14 GB = 13.0 GiB**; classic
+  mixed-precision Adam = **112 GB = 104.3 GiB** before activations; the
+  32-layer MHA example uses **512 KiB/token**, **2 GiB at 4k×B1**, and
+  **64 GiB at 8k×B16**.
 - Historical Day 3: **pass@k is not a capability; it is a capability COMPOSED WITH A SELECTOR you do
   not have.** Three selectors, three limits, same policy: **oracle → 1**, **BoN/filter → the
   verifier's PRECISION** (measured saturating at **0.321655** while pass@k → **1.000000**),
@@ -532,8 +533,8 @@
 | 04 | RLHF + PPO | Complete (5/5) | Toy PPO-RLHF loop + failure-mode demos (515 checks) |
 | 05 | DPO + preference optimization | Complete (5/5) | DPO trainer + failure-mode lab (385 checks) |
 | 06 | GRPO + RLVR | Complete (5/5) | Mini RLVR capstone + cheat sheet (462 checks) |
-| 07 | Evals + reward modeling | Not started | Eval harness |
-| 08 | Training/inference systems | Not started | Systems design doc |
+| 07 | Evals + reward modeling | Deferred (0/5) | Eval harness |
+| 08 | Training/inference systems | In progress (1/5) | GPU memory calculator; systems design doc pending |
 | 09 | Capstone | Not started | Polished repo + writeup |
 | 10 | Interview conversion | Not started | Interview packet |
 
@@ -1141,4 +1142,23 @@ checks; this ownership limitation is recorded in the retrospective.
 
 **Closeout complete.** Day 5 deliverable, numbers card, two outstanding Day 3 interview entries,
 new capstone interview entry, week summary, retrospective, progress, and handoff are updated.
-Next: **Week 7 Day 1**.
+Historical next step at Week 6 closeout: **Week 7 Day 1**. This was subsequently deferred by
+explicit learner choice; see the Week 8 Day 1 entry below.
+
+## Week 08 Day 01 - GPU memory math
+
+Week 07 was explicitly deferred so systems work could begin directly. Built
+`week-08-training-inference-systems/code/gpu_memory.py`; the learner implemented
+all four TODOs. Two dimensional-analysis corrections were needed: every
+model-state component must multiply by parameter count, while KV cache must
+**not** multiply by parameter count. The final **9-test suite passes**.
+
+The learner correctly derived 14 GB of BF16 weights, 112 GB / 104.3 GiB of
+classic mixed-precision Adam state, 2 GiB of KV at 4k×B1, 64 GiB at 8k×B16,
+and the `2x / 4x / 2x` context-scaling ladder for hidden activations / naive
+attention matrices / KV cache. A KiB-versus-GiB slip on the capacity exercise
+was repaired to **18,432 aggregate token slots**, or **4,608 at batch 4**.
+
+All three mandatory systems interview drills were completed and recorded in
+`interview-bank/systems-qa.md`. Next: **Week 8 Day 2**. Week 7 remains deferred
+and should be resumed later at Day 1.

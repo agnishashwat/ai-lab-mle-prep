@@ -653,3 +653,18 @@ verifier cannot be trusted" is about the **tail of the budget**, not the average
 - **diagnostic thresholds, measured:** dead budget **0.584583**, sensor mismatch **0.166659**,
   reward hacking **0.110000**, selector gap **0.150000**, KL runaway **0.430424**.
   Every rule is strict `measured > threshold`, reads a tail level, and is silent on health.
+
+## Week 8 Day 1 — GPU memory math (`code/gpu_memory.py`, **9 tests**)
+
+- 7B BF16 weights = **14 GB = 13.04 GiB**.
+- classic mixed-precision Adam = `2 + 2 + 4 + 8` = **16 bytes/parameter**:
+  **112 GB = 104.31 GiB** before saved activations, workspaces, communication, or runtime.
+- KV cache = `2·L·n_kv·d_head·B·T·bytes`; 32-layer MHA example =
+  **512 KiB/token**, **2 GiB at 4k×B1**, **64 GiB at 8k×B16**.
+- simplified 24 GiB budget: `24 − 13 − 2 = 9 GiB` for KV ⇒
+  **18,432 aggregate token slots**, or **4,608 tokens/sequence at B=4**.
+- at `B=8,T=4096,H=4096,L=32`, one saved BF16 `[B,T,H]` tensor per layer =
+  **8 GiB**; naive materialized attention matrices = **256 GiB**.
+  Doubling context gives the scaling ladder **2× hidden / 4× attention / 2× KV**.
+- global batch 128 on 8 workers at microbatch 2 ⇒ accumulation **8**; microbatch 1 ⇒
+  accumulation **16**, roughly half the batch-linear activation memory, unchanged model state.

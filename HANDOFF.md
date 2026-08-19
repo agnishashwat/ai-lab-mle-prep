@@ -127,6 +127,20 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
   **0.0021 → null**; leaky calibrated gold gain **−0.0051**, verifier–gold gap **0.2405**. Week
   summary and retrospective are written.
 
+- **Week 07 — DEFERRED (0/5), by explicit learner choice.** It has not been
+  completed or removed from the curriculum. Resume later at Week 7 Day 1.
+
+- **Week 08 — IN PROGRESS (Day 01 complete). Training & inference systems.**
+  Day 1 built `code/gpu_memory.py` with model-state, dense-tensor,
+  MHA/GQA/MQA KV-cache, activation-scenario, and KV-capacity accounting;
+  **9 tests pass**. The learner implemented all four TODOs. Required
+  dimensional-analysis repairs: model-state components multiply by parameter
+  count; KV cache does not. Stable numbers: 7B BF16 weights **14 GB = 13.0
+  GiB**; classic mixed-precision Adam **112 GB = 104.3 GiB** before
+  activations; KV **512 KiB/token**, **2 GiB at 4k×B1**, **64 GiB at
+  8k×B16**; simplified 24 GiB capacity **18,432 aggregate slots = 4,608 at
+  B4**. Three mandatory systems interview entries are filled.
+
 ## SESSION-FORMAT PREFERENCE (he stated this explicitly on W4 D1 — obey it)
 
 **Give FULL blocks every day, regardless of how long the session is taking**, unless he
@@ -168,10 +182,10 @@ it is never the block that gets dropped for time.**
 
 ## Next session
 
-Start with the prompt: **"Start Week 7 Day 1"**. Week 6 is closed: all five code artifacts,
-deliverables, the numbers card, interview bank, week summary, retrospective, progress, and this
-handoff are current. Begin Week 7 from its existing README/session template; do not reopen the
-Day 5 capstone unless a regression appears.
+Start with the prompt: **"Start Week 8 Day 2"**. Day 1 is closed: calculator,
+tests, deliverable, systems interview entries, progress, and this handoff are
+current. Week 7 remains explicitly deferred; when the learner returns to it,
+start at Week 7 Day 1 rather than treating it as complete.
 
 ### Historical session instructions
 
