@@ -2,16 +2,18 @@
 
 ## Current Status
 
-- Current week: **Week 08 — Training & Inference Systems — IN PROGRESS (1/5)**.
+- Current week: **Week 08 — Training & Inference Systems — IN PROGRESS (2/5)**.
   **Week 07 is intentionally deferred**, not skipped permanently.
-- Current day: **Week 8 Day 01 DONE** — *GPU memory math*. Built
-  `code/gpu_memory.py` with model-state, dense-tensor, MHA/GQA/MQA KV-cache,
-  activation-scenario, and KV-capacity accounting; **9 tests pass**.
-  **Thesis: a model fits only when its peak live bytes fit; parameter bytes are
-  one term, not the answer.**
-- Headline numbers: 7B BF16 weights = **14 GB = 13.0 GiB**; classic
-  mixed-precision Adam = **112 GB = 104.3 GiB** before activations; the
-  32-layer MHA example uses **512 KiB/token**, **2 GiB at 4k×B1**, and
+- Current day: **Week 8 Day 02 DONE** — *LoRA/QLoRA, FSDP/ZeRO, and gradient
+  checkpointing*. Built `code/finetuning_memory.py`; **31 staged checks pass**.
+  **Thesis: identify the binding bucket—trainable state, frozen weights,
+  replication, or saved activations—before naming a technique.**
+- Headline numbers: scoped 7B persistent state is **104.308 GiB full FT**,
+  **13.164 GiB LoRA**, and **3.385 GiB idealized QLoRA**. At world size eight,
+  ZeRO-0/1/2/3 gives **104.308 / 35.856 / 24.447 / 13.039 GiB per rank** before
+  activations and transient materialization.
+- Previous day: Week 8 Day 01 built the GPU memory calculator; **9 tests pass**.
+  Stable MHA numbers remain **512 KiB/token**, **2 GiB at 4k×B1**, and
   **64 GiB at 8k×B16**.
 - Historical Day 3: **pass@k is not a capability; it is a capability COMPOSED WITH A SELECTOR you do
   not have.** Three selectors, three limits, same policy: **oracle → 1**, **BoN/filter → the
@@ -1161,4 +1163,36 @@ was repaired to **18,432 aggregate token slots**, or **4,608 at batch 4**.
 
 All three mandatory systems interview drills were completed and recorded in
 `interview-bank/systems-qa.md`. Next: **Week 8 Day 2**. Week 7 remains deferred
+and should be resumed later at Day 1.
+
+## Week 08 Day 02 - Fine-tuning systems
+
+Built `week-08-training-inference-systems/code/finetuning_memory.py`, a
+component-wise estimator for LoRA target counts, full/LoRA/idealized-QLoRA
+persistent state, ZeRO stages, explicit frozen-base placement, and simplified
+checkpoint activation slots. The final staged harness passes **31/31 checks**.
+
+The scoped rank-16 `q_proj`/`v_proj` adapter has **8,388,608 parameters** and
+exactly **0.125 GiB** of classic trainable state. Persistent 7B totals are
+**104.308 GiB full FT**, **13.164 GiB LoRA**, and **3.385 GiB idealized QLoRA**.
+At world size eight, the full-FT ZeRO-0/1/2/3 ladder is
+**104.308 / 35.856 / 24.447 / 13.039 GiB per rank**. These are lower bounds:
+ZeRO-3/FSDP still materializes the current full wrapped unit and needs
+communication buffers, activations, temporaries, and runtime headroom.
+
+The private reference caught a useful discrete correction: although the
+continuous checkpoint optimum is near `sqrt(L)`, at `L=32` the exact
+`ceil(L/k)+k` objective has **five minimizers, k=4..8**, all with 12 slots.
+The learner also correctly challenged the implication that only random `A`,
+zero `B` can initialize LoRA: zero `A`, random `B` can also learn; only both
+zero stalls both factor gradients.
+
+Cold recall was **8.75/11 (79.5%)**; all arithmetic was right and omissions
+were named dimensions/buckets. All three mandatory interview drills were
+completed in `interview-bank/systems-qa.md`. TODOs 1 and 4 are learner-written
+after review. TODO 2's final implementation and TODO 3's final declarative
+refactor are tutor-written at the learner's request; the learner implemented
+TODO 3's stage semantics.
+
+Next: **Week 8 Day 3 — distributed training basics**. Week 7 remains deferred
 and should be resumed later at Day 1.

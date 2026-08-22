@@ -130,16 +130,17 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
 - **Week 07 — DEFERRED (0/5), by explicit learner choice.** It has not been
   completed or removed from the curriculum. Resume later at Week 7 Day 1.
 
-- **Week 08 — IN PROGRESS (Day 01 complete). Training & inference systems.**
-  Day 1 built `code/gpu_memory.py` with model-state, dense-tensor,
-  MHA/GQA/MQA KV-cache, activation-scenario, and KV-capacity accounting;
-  **9 tests pass**. The learner implemented all four TODOs. Required
-  dimensional-analysis repairs: model-state components multiply by parameter
-  count; KV cache does not. Stable numbers: 7B BF16 weights **14 GB = 13.0
-  GiB**; classic mixed-precision Adam **112 GB = 104.3 GiB** before
-  activations; KV **512 KiB/token**, **2 GiB at 4k×B1**, **64 GiB at
-  8k×B16**; simplified 24 GiB capacity **18,432 aggregate slots = 4,608 at
-  B4**. Three mandatory systems interview entries are filled.
+- **Week 08 — IN PROGRESS (Days 01-02 complete). Training & inference systems.**
+  Day 2 built `code/finetuning_memory.py`; **31 staged checks pass**. Its thesis
+  is a four-bucket decision: LoRA reduces trainable state, QLoRA also compresses
+  frozen weights, ZeRO/FSDP shards replicated state, and checkpointing reduces
+  saved activations. Scoped 7B persistent totals are **104.308 GiB full FT**,
+  **13.164 GiB LoRA**, and **3.385 GiB idealized QLoRA**. Full-FT world-size-8
+  ZeRO-0/1/2/3 is **104.308 / 35.856 / 24.447 / 13.039 GiB per rank**, before
+  activations and transient all-gathers. At `L=32`, the exact checkpoint model
+  has a flat **k=4..8** optimum at 12 slots. TODOs 1 and 4 are learner-written;
+  TODO 2's final body and TODO 3's final refactor are tutor-written at his
+  request. All three Day 2 systems interview entries are filled.
 
 ## SESSION-FORMAT PREFERENCE (he stated this explicitly on W4 D1 — obey it)
 
@@ -163,9 +164,8 @@ it is never the block that gets dropped for time.**
   every remaining day (W6 D2–D5, W7, W8, W9, W10 — 25 files). **When you flesh out a session
   plan, keep that order.** If something must be cut for time, cut coding depth, not the drill.
 - **`interview-bank/*.md` is the drill's deliverable, and after W6 D2 it is NO LONGER EMPTY.**
-  `rl-post-training-qa.md` now has **five filled entries (+233 lines)** — the first non-empty
-  bank in the project's history. The other three files (`evals-qa.md`, `systems-qa.md`,
-  `project-stories.md`) are still fully blank. **An empty entry means the block did not
+  `rl-post-training-qa.md` and `systems-qa.md` now contain completed entries; `evals-qa.md`
+  and `project-stories.md` remain blank. **An empty entry means the block did not
   happen.** At the end of each drill, write his answer into the matching file.
 - **Do NOT write the answers for him — and note that on W6 D2 this rule was BROKEN, at his
   request.** He answered the first three questions himself (**11.0/15**), then Q4/Q5 came back
@@ -182,10 +182,12 @@ it is never the block that gets dropped for time.**
 
 ## Next session
 
-Start with the prompt: **"Start Week 8 Day 2"**. Day 1 is closed: calculator,
-tests, deliverable, systems interview entries, progress, and this handoff are
-current. Week 7 remains explicitly deferred; when the learner returns to it,
-start at Week 7 Day 1 rather than treating it as complete.
+Start with the prompt: **"Start Week 8 Day 3"**. Day 2 is closed: estimator,
+31 checks, deliverable, three systems interview entries, numbers card, progress,
+and this handoff are current. Day 3 should connect ZeRO/FSDP's all-gather and
+reduce-scatter to collectives, then compare data, tensor, and pipeline
+parallelism. Week 7 remains explicitly deferred; when the learner returns to
+it, start at Week 7 Day 1 rather than treating it as complete.
 
 ### Historical session instructions
 

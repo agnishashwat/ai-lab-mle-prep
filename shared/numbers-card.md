@@ -668,3 +668,18 @@ verifier cannot be trusted" is about the **tail of the budget**, not the average
   Doubling context gives the scaling ladder **2× hidden / 4× attention / 2× KV**.
 - global batch 128 on 8 workers at microbatch 2 ⇒ accumulation **8**; microbatch 1 ⇒
   accumulation **16**, roughly half the batch-linear activation memory, unchanged model state.
+
+## Week 8 Day 2 — fine-tuning systems (`code/finetuning_memory.py`, **31 checks**)
+
+- four buckets: **LoRA → trainable state**; **QLoRA → frozen-base storage too**;
+  **ZeRO/FSDP → replicated state**; **checkpointing → saved activations**.
+- rank-16 `q_proj` + `v_proj` over 32 hidden-size-4096 layers =
+  **8,388,608 adapter parameters**; classic adapter state = **0.125 GiB**.
+- scoped 7B persistent state: full FT **104.308 GiB**; BF16-base LoRA
+  **13.164 GiB**; idealized 4-bit-base QLoRA **3.385 GiB**.
+- full-FT world-size-8 ZeRO-0/1/2/3 lower bounds =
+  **104.308 / 35.856 / 24.447 / 13.039 GiB per rank**.
+- `16P/N` is persistent ZeRO-3 state, **not peak**: add current full FSDP unit,
+  possible prefetch, communication buffers, activations, temporaries, and headroom.
+- checkpoint chain model `ceil(L/k)+k`: at `L=32`, minimum **12 slots** for the
+  entire interval **k=4..8**, not one rounded `sqrt(L)` answer.
