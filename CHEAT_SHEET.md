@@ -40,7 +40,7 @@ An autoregressive language model factorizes a sequence into next-token predictio
 ```math
 p_\theta(x_{1:T})
 =
-\prod_{t=1}^{T} p_\theta(x_t \mid x_{<t})
+\prod_{t=1}^{T} p_\theta(x_t \mid x_{1:t-1})
 ```
 
 Training is maximum likelihood, usually implemented as mean token cross-entropy:
@@ -50,7 +50,7 @@ Training is maximum likelihood, usually implemented as mean token cross-entropy:
 =
 -\frac{1}{N}
 \sum_{n=1}^{N}
-\log \operatorname{softmax}(z_n)_{y_n}
+\log \mathrm{softmax}(z_n)_{y_n}
 ```
 
 The central gradient is:
@@ -71,7 +71,7 @@ Interpretation:
 Perplexity is:
 
 ```math
-\operatorname{PPL}
+\mathrm{PPL}
 =
 \exp(\mathcal L_{\mathrm{CE}})
 ```
@@ -84,9 +84,9 @@ size V has PPL = V; a confidently wrong model can have PPL much larger than V.
 Stable log-softmax:
 
 ```math
-\log \operatorname{softmax}(z)
+\log \mathrm{softmax}(z)
 =
-z - \operatorname{logsumexp}(z)
+z - \mathrm{logsumexp}(z)
 ```
 
 Compute log-sum-exp after subtracting the maximum. Avoid `softmax(z).log()`, which can
@@ -234,9 +234,9 @@ ordering are part of model correctness, not implementation style."
 Scaled dot-product attention is:
 
 ```math
-\operatorname{Attn}(Q,K,V)
+\mathrm{Attn}(Q,K,V)
 =
-\operatorname{softmax}
+\mathrm{softmax}
 \left(
 \frac{QK^\top}{\sqrt{d_h}} + M
 \right)V
@@ -245,7 +245,7 @@ Scaled dot-product attention is:
 Why scale? If query and key components are independent with variance sigma squared:
 
 ```math
-\operatorname{Var}(q^\top k)
+\mathrm{Var}(q^\top k)
 =
 d_h \sigma^4
 ```
@@ -261,7 +261,7 @@ M_{ij}
 =
 \begin{cases}
 0, & j \le i \\
--\infty, & j > i
+-\infty, & j \gt i
 \end{cases}
 ```
 
@@ -286,11 +286,11 @@ Apply RoPE to Q and K, not V, after splitting heads and before score computation
 A pre-LN decoder block is:
 
 ```math
-x \leftarrow x + \operatorname{Attn}(\operatorname{Norm}(x))
+x \leftarrow x + \mathrm{Attn}(\mathrm{Norm}(x))
 ```
 
 ```math
-x \leftarrow x + \operatorname{MLP}(\operatorname{Norm}(x))
+x \leftarrow x + \mathrm{MLP}(\mathrm{Norm}(x))
 ```
 
 For a residual update `x_next = x + f(x)`, the Jacobian contains an identity term:
@@ -307,12 +307,12 @@ deep pre-LN networks can never diverge.
 RMSNorm rescales by root mean square without mean subtraction:
 
 ```math
-\operatorname{RMSNorm}(x)
+\mathrm{RMSNorm}(x)
 =
 \gamma
 \odot
 \frac{x}
-{\sqrt{\operatorname{mean}(x^2)+\epsilon}}
+{\sqrt{\mathrm{mean}(x^2)+\epsilon}}
 ```
 
 ### Decoding is an objective choice
@@ -322,7 +322,7 @@ Temperature:
 ```math
 p_i(T)
 =
-\operatorname{softmax}(z/T)_i
+\mathrm{softmax}(z/T)_i
 ```
 
 - T approaching zero concentrates on maxima.
@@ -715,7 +715,7 @@ L^{\mathrm{CLIP}}
 \min
 \left(
 \rho A,\;
-\operatorname{clip}(\rho,1-\epsilon,1+\epsilon)A
+\mathrm{clip}(\rho,1-\epsilon,1+\epsilon)A
 \right)
 \right]
 ```
@@ -1126,7 +1126,7 @@ both slow training and create difficulty-dependent false negatives.
 For independent samples:
 
 ```math
-\operatorname{pass@k}(p)
+\mathrm{pass}@k(p)
 =
 1-(1-p)^k
 ```
@@ -1137,7 +1137,7 @@ heterogeneous prompt difficulty.
 Given n sampled completions and c correct ones, the unbiased finite-sample estimator is:
 
 ```math
-\widehat{\operatorname{pass@k}}
+\widehat{\mathrm{pass}@k}
 =
 1
 -
@@ -1166,7 +1166,7 @@ For continuous tie-free scores, best-of-n itself moves the output distribution:
 
 ```math
 D_{\mathrm{KL}}
-(\operatorname{BoN}_n\Vert\pi)
+(\mathrm{BoN}_n\Vert\pi)
 =
 \log n-\frac{n-1}{n}
 ```
@@ -1335,7 +1335,7 @@ Gradient checkpointing trades compute for saved activations. In a simplified L-l
 chain checkpointed every k layers:
 
 ```math
-\operatorname{slots}(k)
+\mathrm{slots}(k)
 =
 \left\lceil\frac{L}{k}\right\rceil+k
 ```
