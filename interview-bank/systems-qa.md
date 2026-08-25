@@ -122,6 +122,68 @@ overhead 4-bit.
 
 ---
 
+### Q: Explain all-reduce, all-gather, and reduce-scatter, then connect them to DDP and FSDP.
+
+**Cold answer (3/5; semantic repair below was tutor-supplied):** A ring
+all-reduce sends `2M(N-1)/N` bytes per rank. All-gather maps `M/N -> M` so
+FSDP can materialize parameters, and reduce-scatter maps `M -> M/N` so FSDP
+can restore gradient shards. Scaling eventually stops improving when exposed
+communication overtakes the shrinking compute per rank.
+
+**Precision repair:** In all-reduce, every rank contributes a full local
+gradient tensor; corresponding elements are reduced, and every rank receives
+the same full reduced tensor. DDP uses that result so replicas apply the same
+aggregated gradient. In reduce-scatter, full local gradient contributions are
+reduced across ranks and each rank receives a different reduced shard. Plain
+gather/scatter are not interchangeable with these operations.
+
+**Watch out for:** FSDP can move the same or more leading-order bytes than DDP.
+With `c=(N-1)/N` and equal parameter/gradient sizes, DDP sends `2cM`; one FSDP
+parameter gather plus gradient reduce-scatter also sends `2cM`, while
+re-sharding after forward and gathering again for backward sends `3cM`.
+
+---
+
+### Q: A replica fits only with TP=8 on eight 8-GPU nodes. Propose a 64-GPU mesh.
+
+**Answer (4/5 after prompting; profiler criterion selected from choices):**
+Start with `DP=8, TP=8, PP=1`. Keep each eight-rank TP group inside one node
+because reductions inside every transformer layer are the highest-frequency
+collectives. This creates eight independent data replicas, so
+`global_batch = 8 * microbatch_per_replica * accumulation_steps`; TP ranks
+cooperate on the same examples and do not multiply the batch.
+
+**Deeper:** Reconsider `PP=1` if the complete layer stack still exceeds memory
+per TP rank or measured throughput favors a staged partition. Pipeline
+parallelism assigns subsets of layers to stages; it does not ordinarily solve
+one indivisible layer failing to fit. A falsifying measurement is exposed
+per-layer TP collective time dominating the step despite intra-node placement.
+
+**Watch out for:** `world_size` is not the data-parallel size. Using all 64
+ranks in the batch formula would overstate the effective global batch by `TP`.
+
+---
+
+### Q: A fixed workload takes 1.00 s on 8 GPUs and 0.42 s on 32 GPUs. Diagnose it.
+
+**Cold answer (3/5; diagnostic repair below was tutor-supplied):** The measured
+speedup is `1.00/0.42 = 2.381x`, versus an ideal `4x`; relative strong-scaling
+efficiency is `2.381/4 = 59.5%`. The four-way ideal step time is `0.25 s`.
+
+**Precision repair:** Inspect a per-rank timeline separating input wait,
+forward and backward compute, collective arrival/readiness, collective
+execution and exposed tail, and optimizer time. If many small gradient
+all-reduces create a long exposed tail, coalesce or retune buckets and launch
+ready buckets early enough to overlap backward. A non-communication hypothesis
+is one late input rank holding every synchronous collective behind a straggler.
+
+**Watch out for:** Total collective kernel time is not exposed communication
+time, and adding pipeline parallelism is not a generic communication fix. It
+adds activation transfers and pipeline bubbles and must address a measured
+memory or critical-path constraint.
+
+---
+
 ### Q: How does continuous batching + paged attention improve inference throughput?
 
 **Short answer:**

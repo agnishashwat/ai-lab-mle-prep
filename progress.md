@@ -2,19 +2,20 @@
 
 ## Current Status
 
-- Current week: **Week 08 — Training & Inference Systems — IN PROGRESS (2/5)**.
+- Current week: **Week 08 — Training & Inference Systems — IN PROGRESS (3/5)**.
   **Week 07 is intentionally deferred**, not skipped permanently.
-- Current day: **Week 8 Day 02 DONE** — *LoRA/QLoRA, FSDP/ZeRO, and gradient
-  checkpointing*. Built `code/finetuning_memory.py`; **31 staged checks pass**.
-  **Thesis: identify the binding bucket—trainable state, frozen weights,
-  replication, or saved activations—before naming a technique.**
-- Headline numbers: scoped 7B persistent state is **104.308 GiB full FT**,
-  **13.164 GiB LoRA**, and **3.385 GiB idealized QLoRA**. At world size eight,
-  ZeRO-0/1/2/3 gives **104.308 / 35.856 / 24.447 / 13.039 GiB per rank** before
-  activations and transient materialization.
-- Previous day: Week 8 Day 01 built the GPU memory calculator; **9 tests pass**.
-  Stable MHA numbers remain **512 KiB/token**, **2 GiB at 4k×B1**, and
-  **64 GiB at 8k×B16**.
+- Current day: **Week 8 Day 03 DONE** — *collectives and data/tensor/pipeline
+  parallelism*. Built `code/distributed_training.py`; **29 staged checks pass**.
+  **Thesis: parallelism only helps when partitioned work outweighs the bytes
+  and bubbles placed on the critical path.**
+- Headline numbers: at `N=8, M=1 GiB`, ring all-reduce sends
+  **1.75 GiB/rank**. One-gather FSDP matches DDP at `W=G`; two-gather FSDP
+  sends **2.625 GiB/rank**. Four equal stages at `m=8` reach **72.73%**
+  bubble-only efficiency; `[1,1,1,2]` stage times reduce utilization to
+  **45.45%**.
+- Previous day: Week 8 Day 02 built the fine-tuning memory estimator;
+  **31 staged checks pass**. Stable 7B persistent totals remain
+  **104.308 GiB full FT**, **13.164 GiB LoRA**, and **3.385 GiB QLoRA**.
 - Historical Day 3: **pass@k is not a capability; it is a capability COMPOSED WITH A SELECTOR you do
   not have.** Three selectors, three limits, same policy: **oracle → 1**, **BoN/filter → the
   verifier's PRECISION** (measured saturating at **0.321655** while pass@k → **1.000000**),
@@ -1196,3 +1197,30 @@ TODO 3's stage semantics.
 
 Next: **Week 8 Day 3 — distributed training basics**. Week 7 remains deferred
 and should be resumed later at Day 1.
+
+## Week 08 Day 03 - Distributed training
+
+Built `week-08-training-inference-systems/code/distributed_training.py`, a
+staged estimator for ring collective traffic/time, DP/PP/TP rank groups,
+DDP-versus-FSDP communication, and pipeline bubble/imbalance utilization. The
+final harness passes **29/29 checks**.
+
+For `N=8, M=1 GiB`, equal-chunk ring all-gather and reduce-scatter each send
+**896 MiB/rank**; all-reduce sends **1.75 GiB/rank**. At five microseconds per
+round and effective 100e9 bytes/s, the idealized all-reduce time is
+**18.860482 ms**. When `W=G=1 GiB`, DDP and one-gather FSDP both send
+**1.750 GiB/rank**, while re-sharding after forward and gathering again for
+backward raises FSDP to **2.625 GiB/rank**.
+
+The pipeline slot model gives **72.73%** bubble-only efficiency for four stages
+and eight microbatches, improving to **91.43%** at 32 microbatches. Stage times
+`[1,1,1,2]` have **62.5%** balance efficiency and only **45.45%** composed
+utilization at eight microbatches.
+
+Cold recall was **8/11 (72.7%)**. All three mandatory systems interview drills
+were recorded; scored responses total **10/15**, with tutor-supplied precision
+repairs explicitly labeled. TODOs 1 and 2 began learner-authored and were
+completed by the tutor at request; TODOs 3 and 4 are tutor-written at request.
+
+Next: **Week 8 Day 4 — inference systems**. Week 7 remains deferred and should
+be resumed later at Day 1.

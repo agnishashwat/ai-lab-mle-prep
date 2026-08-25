@@ -683,3 +683,20 @@ verifier cannot be trusted" is about the **tail of the budget**, not the average
   possible prefetch, communication buffers, activations, temporaries, and headroom.
 - checkpoint chain model `ceil(L/k)+k`: at `L=32`, minimum **12 slots** for the
   entire interval **k=4..8**, not one rounded `sqrt(L)` answer.
+
+## Week 8 Day 3 — distributed training (`code/distributed_training.py`, **29 checks**)
+
+- equal-chunk ring, `N=8, M=1 GiB`: chunk **128 MiB**; all-gather or
+  reduce-scatter **896 MiB sent/rank**; all-reduce **1.75 GiB sent/rank**.
+- ring time baseline at **5 us/round** and effective **100e9 bytes/s**:
+  1 GiB all-reduce over 8 ranks = **18.860482 ms**.
+- at `N=8, W=G=1 GiB`: DDP all-reduce **1.750 GiB/rank**; FSDP with one
+  parameter gather **1.750 GiB/rank**; FSDP with two gathers
+  **2.625 GiB/rank = 1.5x DDP**.
+- pipeline `S=4`: bubble-only efficiency **8/11 = 72.73%** at `m=8` and
+  **32/35 = 91.43%** at `m=32`.
+- stage times `[1,1,1,2]`: balance efficiency **62.5%**; at `m=8`, composed
+  utilization **45.45%**.
+- only **DP** multiplies independent examples:
+  `global_batch = DP * microbatch/replica * accumulation`; TP/PP ranks
+  cooperate on those examples.

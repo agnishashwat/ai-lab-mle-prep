@@ -130,17 +130,17 @@ file (plus `progress.md` and each day's `session.md`) carries context forward. T
 - **Week 07 — DEFERRED (0/5), by explicit learner choice.** It has not been
   completed or removed from the curriculum. Resume later at Week 7 Day 1.
 
-- **Week 08 — IN PROGRESS (Days 01-02 complete). Training & inference systems.**
-  Day 2 built `code/finetuning_memory.py`; **31 staged checks pass**. Its thesis
-  is a four-bucket decision: LoRA reduces trainable state, QLoRA also compresses
-  frozen weights, ZeRO/FSDP shards replicated state, and checkpointing reduces
-  saved activations. Scoped 7B persistent totals are **104.308 GiB full FT**,
-  **13.164 GiB LoRA**, and **3.385 GiB idealized QLoRA**. Full-FT world-size-8
-  ZeRO-0/1/2/3 is **104.308 / 35.856 / 24.447 / 13.039 GiB per rank**, before
-  activations and transient all-gathers. At `L=32`, the exact checkpoint model
-  has a flat **k=4..8** optimum at 12 slots. TODOs 1 and 4 are learner-written;
-  TODO 2's final body and TODO 3's final refactor are tutor-written at his
-  request. All three Day 2 systems interview entries are filled.
+- **Week 08 — IN PROGRESS (Days 01-03 complete). Training & inference systems.**
+  Day 3 built `code/distributed_training.py`; **29 staged checks pass**. Its
+  thesis is a critical-path test: partitioned compute must outweigh exposed
+  collectives, bubbles, and the slowest rank. At `N=8, M=1 GiB`, ring
+  all-reduce sends **1.75 GiB/rank**. DDP and one-gather FSDP have equal
+  leading bytes at `W=G`; two-gather FSDP sends **2.625 GiB/rank**. Four equal
+  stages at `m=8` reach **72.73%** bubble-only efficiency; `[1,1,1,2]` stage
+  times reduce composed utilization to **45.45%**. Cold recall was
+  **8/11**; interview drills scored **10/15** with assistance labeled. TODOs 1
+  and 2 began learner-authored and were completed by the tutor at request;
+  TODOs 3 and 4 are tutor-written at request.
 
 ## SESSION-FORMAT PREFERENCE (he stated this explicitly on W4 D1 — obey it)
 
@@ -175,6 +175,10 @@ it is never the block that gets dropped for time.**
   reference value is intact; the retrieval value of those five entries is spent.** Do not
   repeat this: next time, hold the line, or at most write ONE entry as a worked model and make
   him write the next. On W5 D5 the same request was granted and the block scored nothing.
+- **W8 D3 preserves assistance provenance.** The learner explicitly asked for
+  the answer to interview Q1 and Q3's missing precision slots; those repairs are
+  labeled tutor-supplied and the cold scores remain **3/5** each. Q2 is labeled
+  prompted/selected. Do not treat the polished entries as cold evidence.
 - **`rl-post-training-qa.md`'s Week 6 questions are all written.** The two outstanding Day 3
   entries (pass@64/pass@1 and BoN-64) and the Day 5 truth-boundary entry were completed from the
   learner's own answers on D5. Precision repairs are marked explicitly rather than substituted
@@ -182,12 +186,13 @@ it is never the block that gets dropped for time.**
 
 ## Next session
 
-Start with the prompt: **"Start Week 8 Day 3"**. Day 2 is closed: estimator,
-31 checks, deliverable, three systems interview entries, numbers card, progress,
-and this handoff are current. Day 3 should connect ZeRO/FSDP's all-gather and
-reduce-scatter to collectives, then compare data, tensor, and pipeline
-parallelism. Week 7 remains explicitly deferred; when the learner returns to
-it, start at Week 7 Day 1 rather than treating it as complete.
+Start with the prompt: **"Start Week 8 Day 4"**. Day 3 is closed: distributed
+training lab, 29 checks, deliverable, three systems interview entries, numbers
+card, progress, and this handoff are current. Day 4 should carry forward
+critical-path byte accounting into continuous batching, paged KV-cache
+management, quantization, and throughput-versus-latency tradeoffs. Week 7
+remains explicitly deferred; when the learner returns to it, start at Week 7
+Day 1 rather than treating it as complete.
 
 ### Historical session instructions
 
